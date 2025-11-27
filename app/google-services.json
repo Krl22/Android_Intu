@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "882060234231",
+    "firebase_url": "https://intu-e8403-default-rtdb.firebaseio.com",
+    "project_id": "intu-e8403",
+    "storage_bucket": "intu-e8403.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:882060234231:android:4c2a2e13685abee6f5f2f2",
+        "android_client_info": {
+          "package_name": "com.intu.taxi"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "882060234231-f0oj20408pvcq8uukv1bmofp2gcsako4.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.intu.taxi",
+            "certificate_hash": "69ca861bf6395db729a95d59f1ffb5a5261a2183"
+          }
+        },
+        {
+          "client_id": "882060234231-kunqgqgc8gs6k95nr1h751190idbotpe.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCwJQRapUtfys8G9SuXjj86KP_X197CUbw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "882060234231-kunqgqgc8gs6k95nr1h751190idbotpe.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
