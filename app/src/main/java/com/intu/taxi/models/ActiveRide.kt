@@ -53,7 +53,16 @@ data class ActiveRide(
     val destinationLatitude: Double = 0.0,
     
     @PropertyName("destinationLongitude")
-    val destinationLongitude: Double = 0.0
+    val destinationLongitude: Double = 0.0,
+    val paymentMethod: String = "efectivo",
+    val fare: Double = 0.0,
+    val driverName: String = "",
+    val driverPhone: String = "",
+    val riderName: String = "",
+    val riderPhone: String = "",
+    val vehiclePlate: String = "",
+    val vehicleDescription: String = "",
+    val paymentConfirmed: Boolean = false
 ) {
     companion object {
         private fun readGeoPoint(value: Any?): GeoPoint? {

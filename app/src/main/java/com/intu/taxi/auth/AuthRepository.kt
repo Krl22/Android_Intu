@@ -13,6 +13,7 @@ import com.google.firebase.auth.FirebaseAuthUserCollisionException
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.IgnoreExtraProperties
 import com.google.firebase.firestore.ktx.toObject
+import com.intu.taxi.data.SupabaseApi
 import kotlinx.coroutines.tasks.await
 import java.util.concurrent.TimeUnit
 
@@ -32,6 +33,7 @@ data class UserProfile(
     val vehicleYear: String? = null,
     val licensePlate: String? = null,
     val driverLicense: String? = null,
+    val documentNumber: String? = null,
     val isApproved: Boolean? = null,
     val approvalDate: String? = null
 )
@@ -44,6 +46,7 @@ data class DriverProfile(
     val vehicleYear: String = "",
     val licensePlate: String = "",
     val driverLicense: String = "",
+    val documentNumber: String = "",
     val isApproved: Boolean = false,
     val approvalDate: String? = null
 )
@@ -104,6 +107,13 @@ class AuthRepository(
 
     suspend fun saveUserProfile(uid: String, profile: UserProfile) {
         db.collection("users").document(uid).set(profile).await()
+        SupabaseApi.ensureCurrentProfile(
+            firstName = profile.firstName,
+            lastName = profile.lastName,
+            phone = profile.number.takeIf { it.startsWith("+") },
+            email = profile.email,
+            driverMode = profile.isDriver
+        )
     }
 
     suspend fun getUserProfile(uid: String): UserProfile? {
@@ -152,7 +162,8 @@ class AuthRepository(
                     vehicleYear = userProfile.vehicleYear ?: "",
                     licensePlate = userProfile.licensePlate ?: "",
                     driverLicense = userProfile.driverLicense ?: "",
-                    isApproved = userProfile.isApproved ?: false,
+                    documentNumber = userProfile.documentNumber ?: "",
+                    isApproved = getIsApprovedValue(uid) == true,
                     approvalDate = userProfile.approvalDate
                 )
             } else {
@@ -173,10 +184,20 @@ class AuthRepository(
             "vehicleYear" to driverProfile.vehicleYear,
             "licensePlate" to driverProfile.licensePlate,
             "driverLicense" to driverProfile.driverLicense,
+            "documentNumber" to driverProfile.documentNumber,
             "isApproved" to driverProfile.isApproved,
             "approvalDate" to driverProfile.approvalDate
         )
         db.collection("users").document(uid).update(driverData).await()
+        SupabaseApi.syncDriver(
+            documentNumber = driverProfile.documentNumber,
+            licenseNumber = driverProfile.driverLicense,
+            vehicleType = "mototaxi",
+            brand = driverProfile.vehicleBrand,
+            model = driverProfile.vehicleModel,
+            year = driverProfile.vehicleYear.toIntOrNull(),
+            plate = driverProfile.licensePlate
+        )
     }
 
     suspend fun hasCompleteDriverProfile(uid: String): Boolean {
@@ -188,7 +209,8 @@ class AuthRepository(
             driverProfile.vehicleModel.isNotBlank() &&
             driverProfile.vehicleYear.isNotBlank() &&
             driverProfile.licensePlate.isNotBlank() &&
-            driverProfile.driverLicense.isNotBlank()
+            driverProfile.driverLicense.isNotBlank() &&
+            driverProfile.documentNumber.matches(Regex("^[0-9]{8}$"))
         } catch (e: Exception) {
             // Si hay error al obtener el perfil de conductor, asumimos que no está completo
             false
@@ -197,6 +219,7 @@ class AuthRepository(
 
     suspend fun setDriverMode(uid: String, isDriver: Boolean) {
         db.collection("users").document(uid).update("isDriver", isDriver).await()
+        SupabaseApi.ensureCurrentProfile(driverMode = isDriver)
     }
 
     suspend fun getDriverMode(uid: String): Boolean {
@@ -210,52 +233,14 @@ class AuthRepository(
 
     // Función temporal para aprobar conductores (solo para pruebas)
     suspend fun approveDriver(uid: String): Boolean {
-        return try {
-            val updates = hashMapOf<String, Any>(
-                "isApproved" to true,
-                "approvalDate" to System.currentTimeMillis().toString()
-            )
-            db.collection("users").document(uid).update(updates).await()
-            println("DEBUG AuthRepository: Driver approved successfully for UID: $uid")
-            true
-        } catch (e: Exception) {
-            println("DEBUG AuthRepository: Error approving driver: ${e.message}")
-            false
-        }
+        // La aprobación es administrativa y se realiza fuera de la app.
+        return false
     }
 
     // Función para obtener el valor de isApproved con manejo de diferentes tipos y nombres
     suspend fun getIsApprovedValue(uid: String): Boolean? {
-        return try {
-            val snap = db.collection("users").document(uid).get().await()
-            if (snap.exists()) {
-                val data = snap.data
-                
-                // Intentar diferentes variaciones del nombre del campo
-                val isApprovedValue = data?.get("isApproved") 
-                    ?: data?.get("IsApproved") 
-                    ?: data?.get("isapproved")
-                
-                println("DEBUG AuthRepository: Found isApproved value: $isApprovedValue (type: ${isApprovedValue?.javaClass})")
-                
-                // Convertir a boolean según el tipo
-                when (isApprovedValue) {
-                    is Boolean -> isApprovedValue
-                    is String -> isApprovedValue.toBoolean()
-                    is Number -> isApprovedValue.toInt() != 0
-                    else -> {
-                        println("DEBUG AuthRepository: Unknown type for isApproved: ${isApprovedValue?.javaClass}")
-                        null
-                    }
-                }
-            } else {
-                println("DEBUG AuthRepository: Document does not exist for UID: $uid")
-                null
-            }
-        } catch (e: Exception) {
-            println("DEBUG AuthRepository: Error getting isApproved value: ${e.message}")
-            null
-        }
+        if (auth.currentUser?.uid != uid) return false
+        return runCatching { SupabaseApi.driverStatus() == "approved" }.getOrDefault(false)
     }
 
     // Función para verificar campos crudos en Firestore (debugging)

@@ -5,5 +5,11 @@
       "codebase": "default",
       "runtime": "nodejs22"
     }
-  ]
+  ],
+  "firestore": {
+    "rules": "../firestore_rules.txt"
+  },
+  "database": {
+    "rules": "../realtime_database_rules.json"
+  }
 }

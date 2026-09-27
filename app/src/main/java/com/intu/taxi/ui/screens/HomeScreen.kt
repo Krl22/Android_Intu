@@ -432,6 +432,9 @@ fun HomeScreen(
     // No persistir el modo pin entre recomposiciones/navegaciones para no ocultar el BottomBar al iniciar
     var isSelectingDestination by remember { mutableStateOf(false) }
     var selectedDestination by remember { mutableStateOf<Point?>(null) }
+    var pickupLocation by remember { mutableStateOf<Point?>(null) }
+    var isSelectingPickup by remember { mutableStateOf(false) }
+    var destinationBeforePickup by remember { mutableStateOf<Point?>(null) }
     var moveListenerRef by remember { mutableStateOf<OnMoveListener?>(null) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var pinSearchQuery by rememberSaveable { mutableStateOf("") }
@@ -477,6 +480,16 @@ fun HomeScreen(
     var lastValidZoom by remember { mutableStateOf<Double?>(null) }
     var isCameraLocked by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(Unit) {
+        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return@LaunchedEffect
+        runCatching { activeRideRepository.findOpenRideForRider(uid) }
+            .getOrNull()?.let { ride ->
+                currentRideRequestId = ride.rideId
+                isSearchingDriver = ride.status == "searching"
+                activeRide = if (ride.status == "searching") null else ride
+            }
+    }
 
     LaunchedEffect(activeRide) {
         if (activeRide != null) {
@@ -795,6 +808,7 @@ fun HomeScreen(
                                 isRideOptionsVisible = false
                                 routeOffsets = emptyList()
                                 routePoints = emptyList()
+                                pickupLocation = null
                                 routeDistanceMeters = null
                                 routeDurationSeconds = null
                         confirmedDestination = null
@@ -1623,19 +1637,8 @@ fun HomeScreen(
         ) {
             val km = (routeDistanceMeters ?: 0.0) / 1000.0
             val minutes = (routeDurationSeconds ?: 0.0) / 60.0
-            // Tarifas simples simuladas
-            val base = 3.0
-            val perKm = 1.2
-            val perMin = 0.2
-            // Tarifa base
-            val baseFare = base + perKm * km + perMin * minutes
-            // Ajustes según criterio de negocio
-            val hondaFare = baseFare * 1.5 // más costosa por espacio para equipaje
-            val bajajFare = baseFare       // tarifa base
-            val colectivoFare = baseFare * 0.75 // más económica por ser compartida
-            val esperaFare = baseFare * 0.65    // aún más económica a cambio de más espera
-            val entregaPaquete = baseFare
-            val esperaMinutes = minutes * 1.5   // mayor ETA por espera
+            // Vista previa de la misma fórmula que Supabase vuelve a calcular al crear el viaje.
+            val mototaxiFare = kotlin.math.round(maxOf(4.0, 2.5 + km + 0.1 * minutes) * 10.0) / 10.0
 
             Box(
                 modifier = Modifier.fillMaxSize(),
@@ -1692,7 +1695,7 @@ fun HomeScreen(
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    "Desliza para ver más opciones",
+                                    "Tarifa calculada por distancia y tiempo",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = Color(0xFF6E6E73)
                                 )
@@ -1702,74 +1705,18 @@ fun HomeScreen(
                         // Crear lista de opciones con colores dinámicos
                         val optionRows = listOf(
                             RideOptionData(
-                                name = "espera y ahorra",
-                                price = esperaFare,
-                                minutes = esperaMinutes,
-                                leadingContent = {
-                                    AsyncImage(
-                                        model = "https://media.istockphoto.com/id/1360356476/vector/man-waiting-icon-clock-sign-outline-vector-illustration.jpg?s=612x612&w=0&k=20&c=_XvfWkyQ0RFHtJdTOX4zg_VHR-LRGShHYofMkeKjvF4=",
-                                        contentDescription = null,
-                                        modifier = Modifier.size(60.dp).clip(RoundedCornerShape(12.dp)),
-                                        contentScale = ContentScale.Crop
-                                    )
-                                },
-                                colors = listOf(Color(0xFFF39C12), Color(0xFFE67E22))
-                            ),
-                            RideOptionData(
-                                name = "Intu Colectivo",
-                                price = colectivoFare,
+                                name = "Mototaxi",
+                                price = mototaxiFare,
                                 minutes = minutes,
                                 leadingContent = {
-                                    AsyncImage(
-                                        model = "https://cdn-icons-png.flaticon.com/512/4910/4910412.png",
-                                        contentDescription = null,
-                                        modifier = Modifier.size(60.dp).clip(RoundedCornerShape(12.dp)),
-                                        contentScale = ContentScale.Crop
+                                    Icon(
+                                        Icons.Filled.DirectionsCar,
+                                        contentDescription = "Mototaxi",
+                                        tint = Color(0xFF08817E),
+                                        modifier = Modifier.size(52.dp)
                                     )
                                 },
-                                colors = listOf(Color(0xFF27AE60), Color(0xFF2ECC71))
-                            ),
-                            RideOptionData(
-                                name = "Intu Honda",
-                                price = hondaFare,
-                                minutes = minutes,
-                                leadingContent = {
-                                    AsyncImage(
-                                        model = "https://cdn-motos-honda.b-cdn.net/wp-content/uploads/2023/06/Honda_FotosMotokar_874x658_NL125_01.webp",
-                                        contentDescription = null,
-                                        modifier = Modifier.size(60.dp).clip(RoundedCornerShape(12.dp)),
-                                        contentScale = ContentScale.Crop
-                                    )
-                                },
-                                colors = listOf(Color(0xFF08817E), Color(0xFF0FB9B1))
-                            ),
-                            RideOptionData(
-                                name = "Intu Bajaj",
-                                price = bajajFare,
-                                minutes = minutes,
-                                leadingContent = {
-                                    AsyncImage(
-                                        model = "https://negociacionesvaldivia.com/wp-content/uploads/2021/09/crom-ug-gasolinero-800x800-1.png",
-                                        contentDescription = null,
-                                        modifier = Modifier.size(60.dp).clip(RoundedCornerShape(12.dp)),
-                                        contentScale = ContentScale.Crop
-                                    )
-                                },
-                                colors = listOf(Color(0xFF1E1F47), Color(0xFF3A3B7B))
-                            ),
-                            RideOptionData(
-                                name = "entrega de paquete",
-                                price = entregaPaquete,
-                                minutes = minutes,
-                                leadingContent = {
-                                    AsyncImage(
-                                        model = "https://i.pinimg.com/474x/d1/61/bf/d161bfca3caefdf84c68feca646116af.jpg",
-                                        contentDescription = null,
-                                        modifier = Modifier.size(60.dp).clip(RoundedCornerShape(12.dp)),
-                                        contentScale = ContentScale.Crop
-                                    )
-                                },
-                                colors = listOf(Color(0xFF9B59B6), Color(0xFF8E44AD))
+                                colors = listOf(Color(0xFF08817E), Color(0xFF1E1F47))
                             )
                         )
 
@@ -1778,7 +1725,7 @@ fun HomeScreen(
                             options = optionRows,
                             selectedOptionName = selectedRideOptionName,
                             onOptionSelected = { selectedRideOptionName = it },
-                            initialSelectedIndex = 2 // Índice del Intu Honda (elemento del medio)
+                            initialSelectedIndex = 0
                         )
                         
                         Spacer(modifier = Modifier.height(8.dp))
@@ -1803,7 +1750,7 @@ fun HomeScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                // Icono más grande para efectivo o Yape/Plin
+                                // Icono más grande para efectivo o Yape
                                 if (selectedPaymentMethod == "efectivo") {
                                     com.intu.taxi.ui.components.CashIcon(
                                         size = 28.dp,
@@ -1827,7 +1774,7 @@ fun HomeScreen(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 Text(
-                                    text = if (selectedPaymentMethod == "efectivo") "Efectivo" else "Yape/Plin",
+                                    text = if (selectedPaymentMethod == "efectivo") "Efectivo" else "Yape",
                                     style = MaterialTheme.typography.titleSmall,
                                     color = Color(0xFF1C1C1E),
                                     fontWeight = FontWeight.Medium
@@ -1910,7 +1857,7 @@ fun HomeScreen(
                         Button(
                             onClick = {
                                 // Crear solicitud de viaje en Firebase y entrar en estado de búsqueda
-                                val origin = userLocation
+                                val origin = pickupLocation ?: userLocation
                                 val destination = confirmedDestination
                                 val rideType = selectedRideOptionName
                                 val distance = routeDistanceMeters ?: 0.0
@@ -1973,12 +1920,14 @@ fun HomeScreen(
                                                 }
                                                 
                                                 // Calcular precio estimado (tarifa base + por km + por tiempo)
-                                                val baseFare = 2.0
-                                                val perKmRate = 0.8
-                                                val perMinuteRate = 0.3
+                                                val baseFare = 2.5
+                                                val perKmRate = 1.0
+                                                val perMinuteRate = 0.1
                                                 val distanceKm = distance / 1000.0
                                                 val durationMinutes = duration / 60.0
-                                                estimatedPrice = baseFare + (distanceKm * perKmRate) + (durationMinutes * perMinuteRate)
+                                                estimatedPrice = kotlin.math.round(
+                                                    maxOf(4.0, baseFare + (distanceKm * perKmRate) + (durationMinutes * perMinuteRate)) * 10.0
+                                                ) / 10.0
                                                 
                                                 // Crear solicitud en Firebase
                                                 println("DEBUG: Creando solicitud en Firebase...")
@@ -2108,7 +2057,7 @@ fun HomeScreen(
                 Icon(
                     Icons.Outlined.Place,
                     contentDescription = null,
-                    tint = Color(0xFFFF3B30),
+                    tint = if (isSelectingPickup) Color(0xFF27AE60) else Color(0xFFFF3B30),
                     modifier = Modifier.size(42.dp)
                 )
             }
@@ -2121,11 +2070,42 @@ fun HomeScreen(
                         .padding(bottom = 80.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
+                    if (!isSelectingPickup) {
+                        Button(
+                            onClick = {
+                                destinationBeforePickup = selectedDestination
+                                isSelectingPickup = true
+                                userLocation?.let { current ->
+                                    mapView.mapboxMap.setCamera(CameraOptions.Builder().center(current).zoom(16.0).build())
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color(0xFF1E1F47)),
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        ) {
+                            Text(if (pickupLocation == null) "Elegir punto de recojo" else "Cambiar punto de recojo")
+                        }
+                    } else {
+                        Text(
+                            "Mueve el mapa hasta el punto de recojo",
+                            color = Color.White,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                    }
                     // Botón con gradient radial igual al header
                     Button(
                         onClick = {
+                            if (isSelectingPickup) {
+                                pickupLocation = selectedDestination
+                                isSelectingPickup = false
+                                destinationBeforePickup?.let { destination ->
+                                    selectedDestination = destination
+                                    mapView.mapboxMap.setCamera(CameraOptions.Builder().center(destination).zoom(15.0).build())
+                                }
+                                Toast.makeText(context, "Punto de recojo guardado", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
                             // Confirmar destino y mostrar ruta desde la ubicación actual
-                            val origin = userLocation
+                            val origin = pickupLocation ?: userLocation
                             val destination = selectedDestination
                             if (origin != null && destination != null) {
                                 scope.launch(Dispatchers.IO) {
@@ -2207,9 +2187,56 @@ fun HomeScreen(
                                 shape = RoundedCornerShape(24.dp)
                             )
                     ) {
-                        Text("Confirmar destino")
+                        Text(if (isSelectingPickup) "Confirmar punto de recojo" else "Confirmar destino")
                     }
                    
+                }
+            }
+        }
+
+        activeRide?.let { ride ->
+            Card(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 16.dp, bottom = 76.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        text = when (ride.status) {
+                            "accepted" -> "Tu mototaxi está en camino"
+                            "arrived" -> "Tu conductor llegó"
+                            "in_progress" -> "Viaje en curso"
+                            "completed" -> "Viaje finalizado"
+                            "cancelled" -> "Viaje cancelado"
+                            else -> "Buscando conductor"
+                        },
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    if (ride.driverName.isNotBlank()) Text("Conductor: ${ride.driverName}")
+                    if (ride.vehiclePlate.isNotBlank()) Text("Mototaxi: ${ride.vehicleDescription} · ${ride.vehiclePlate}")
+                    Text("Total: S/ ${String.format("%.2f", ride.fare)}")
+                    Text(
+                        if (ride.paymentMethod == "yape_plin") {
+                            "Pago por Yape al conductor${if (ride.driverPhone.isNotBlank()) ": ${ride.driverPhone}" else ""}"
+                        } else "Pago en efectivo al conductor"
+                    )
+                    if (ride.status == "completed") {
+                        Text("El conductor confirmó que recibió el pago.", color = Color(0xFF08817E))
+                        Button(
+                            onClick = {
+                                currentRideRequestId = null
+                                activeRide = null
+                                driverLocation = null
+                                routePoints = emptyList()
+                                pickupLocation = null
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("Listo") }
+                    }
                 }
             }
         }
@@ -2239,6 +2266,7 @@ fun HomeScreen(
                     // Limpiar el campo de búsqueda y destino para nueva búsqueda
                     searchQuery = ""
                     selectedDestination = null
+                    pickupLocation = null
                     confirmedDestination = null
                     confirmedDestOffset = null
                     routePoints = emptyList()

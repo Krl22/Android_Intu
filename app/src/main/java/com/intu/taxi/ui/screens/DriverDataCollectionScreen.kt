@@ -59,12 +59,13 @@ fun DriverDataCollectionScreen(
     onCancel: () -> Unit,
     isConversion: Boolean = true
 ) {
-    var vehicleType by remember { mutableStateOf("") }
+    var vehicleType by remember { mutableStateOf("Mototaxi") }
     var vehicleBrand by remember { mutableStateOf("") }
     var vehicleModel by remember { mutableStateOf("") }
     var vehicleYear by remember { mutableStateOf("") }
     var licensePlate by remember { mutableStateOf("") }
     var driverLicense by remember { mutableStateOf("") }
+    var documentNumber by remember { mutableStateOf("") }
     var expanded by remember { mutableStateOf(false) }
     var brandExpanded by remember { mutableStateOf(false) }
     var modelExpanded by remember { mutableStateOf(false) }
@@ -95,11 +96,7 @@ fun DriverDataCollectionScreen(
     }
 
     // Tipos de vehículo disponibles
-    val vehicleTypes = listOf(
-        "Carro" to Icons.Default.DirectionsCar,
-        "Moto" to Icons.Default.TwoWheeler,
-        "Mototaxi" to Icons.Default.LocalTaxi
-    )
+    val vehicleTypes = listOf("Mototaxi" to Icons.Default.LocalTaxi)
     
     // Marcas de vehículo por tipo
     val vehicleBrandsByType = mapOf(
@@ -610,6 +607,23 @@ fun DriverDataCollectionScreen(
 
                                 // Licencia de conducir
                                 TextField(
+                                    value = documentNumber,
+                                    onValueChange = { documentNumber = it.filter(Char::isDigit).take(8) },
+                                    label = { Text("DNI (8 dígitos)") },
+                                    leadingIcon = { Icon(Icons.Default.Badge, contentDescription = null, tint = Color(0xFF08817E)) },
+                                    singleLine = true,
+                                    colors = TextFieldDefaults.colors(
+                                        focusedContainerColor = Color.Transparent,
+                                        unfocusedContainerColor = Color.Transparent,
+                                        focusedIndicatorColor = Color(0xFF08817E),
+                                        unfocusedIndicatorColor = Color(0xFF08817E).copy(alpha = 0.5f)
+                                    ),
+                                    modifier = Modifier.fillMaxWidth(),
+                                    textStyle = MaterialTheme.typography.bodyMedium
+                                )
+
+                                // Licencia de conducir
+                                TextField(
                                     value = driverLicense,
                                     onValueChange = { driverLicense = it },
                                     label = { Text("Licencia de conducir") },
@@ -663,7 +677,7 @@ fun DriverDataCollectionScreen(
                                             onClick = {
                                                 if (vehicleType.isNotBlank() && vehicleBrand.isNotBlank() && 
                                                     vehicleModel.isNotBlank() && vehicleYear.isNotBlank() &&
-                                                    licensePlate.isNotBlank() && driverLicense.isNotBlank()) {
+                                                    licensePlate.isNotBlank() && driverLicense.isNotBlank() && documentNumber.length == 8) {
                                                     
                                                     val driverProfile = DriverProfile(
                                                         vehicleType = vehicleType,
@@ -671,14 +685,15 @@ fun DriverDataCollectionScreen(
                                                         vehicleModel = vehicleModel,
                                                         vehicleYear = vehicleYear,
                                                         licensePlate = licensePlate,
-                                                        driverLicense = driverLicense
+                                                        driverLicense = driverLicense,
+                                                        documentNumber = documentNumber
                                                     )
                                                     onSubmit(driverProfile)
                                                 }
                                             },
                                             enabled = vehicleType.isNotBlank() && vehicleBrand.isNotBlank() && 
                                                      vehicleModel.isNotBlank() && vehicleYear.isNotBlank() &&
-                                                     licensePlate.isNotBlank() && driverLicense.isNotBlank(),
+                                                     licensePlate.isNotBlank() && driverLicense.isNotBlank() && documentNumber.length == 8,
                                             modifier = Modifier.weight(1f),
                                             shape = RoundedCornerShape(12.dp),
                                             colors = ButtonDefaults.buttonColors(

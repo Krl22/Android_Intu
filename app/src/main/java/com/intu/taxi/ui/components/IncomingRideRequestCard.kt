@@ -103,7 +103,7 @@ fun IncomingRideRequestCard(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = if (request.paymentMethod == "efectivo") "Efectivo" else "Yape/Plin",
+                            text = if (request.paymentMethod == "efectivo") "Efectivo" else "Yape",
                             fontSize = 12.sp,
                             color = Color.DarkGray
                         )

@@ -282,7 +282,8 @@ fun AccountScreenEnhanced(
                     println("DEBUG: No UID available for Firestore fetch")
                 }
                 
-                val finalApproved = (profile?.isApproved == true) || (remoteApproved == true) || (actualIsApproved == true)
+                // Supabase es la única fuente de verdad para la aprobación manual.
+                val finalApproved = actualIsApproved == true
                 println("DEBUG: Validation -> emailEmpty=${displayEmail.isNullOrEmpty()}, emailVerified=$isEmailVerified, googleLinked=$hasGoogleAccount, hasDriverData=$hasDriverData")
                 println("DEBUG: Approval check -> profile.isApproved: ${profile?.isApproved}, remoteApproved: $remoteApproved, finalApproved: $finalApproved")
 
@@ -302,34 +303,7 @@ fun AccountScreenEnhanced(
                     !finalApproved -> {
                         println("DEBUG: APPROVAL ERROR - email=${displayEmail}, verified=$isEmailVerified, google=$hasGoogleAccount, driverData=$hasDriverData, profileApproved=${profile?.isApproved}, remoteApproved=$remoteApproved, actualIsApproved=$actualIsApproved, finalApproved=$finalApproved")
                         
-                        // Mensaje más específico basado en el estado
-                        val approvalStatus = when {
-                            remoteApproved == null -> "Pendiente de revisión"
-                            remoteApproved == false -> "Rechazado"
-                            else -> "Desconocido"
-                        }
-                        
-                        val debugInfo = buildString {
-                            append("Tu perfil de conductor aún no ha sido aprobado")
-                            append("\n\nEstado: $approvalStatus")
-                            append("\n\nDebug Info:")
-                            append("\n• Email: ${displayEmail ?: "null"}")
-                            append("\n• Email Verified: $isEmailVerified")
-                            append("\n• Google Linked: $hasGoogleAccount")
-                            append("\n• Has Driver Data: $hasDriverData")
-                            append("\n• Profile isApproved: ${profile?.isApproved}")
-                            append("\n• Remote isApproved: $remoteApproved")
-                            append("\n• Actual isApproved: $actualIsApproved")
-                            append("\n• Final isApproved: $finalApproved")
-                            append("\n• Profile isDriver: ${profile?.isDriver}")
-                            append("\n• Current isDriver: $isDriver")
-                            
-                            if (remoteApproved == null) {
-                                append("\n\nNota: El campo 'isApproved' es null en Firestore.")
-                                append("\nPara aprobar este conductor, cambia 'isApproved' a 'true' en Firestore.")
-                            }
-                        }
-                        profileError = debugInfo
+                        profileError = "Tu perfil de conductor está pendiente de aprobación manual. Te avisaremos cuando puedas conectarte."
                     }
                     else -> {
                         val uid2 = authUser?.uid
@@ -886,7 +860,7 @@ private fun SettingsSection(
                 title = "Métodos de pago",
                 subtitle = when (currentPaymentMethod) {
                     "efectivo" -> "Efectivo (predeterminado)"
-                    "yape_plin" -> "Yape/Plin"
+                    "yape_plin" -> "Yape"
                     else -> "Gestionar métodos de pago"
                 },
                 actionText = "Cambiar",

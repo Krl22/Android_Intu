@@ -40,6 +40,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     defaultConfig {
         // Access token de Mapbox en recursos para uso en runtime
@@ -48,6 +49,8 @@ android {
             ?: System.getenv("MAPBOX_ACCESS_TOKEN")
             ?: ""
         resValue("string", "mapbox_access_token", mapboxToken)
+        buildConfigField("String", "SUPABASE_URL", "\"https://vkguzpciwpfvaeyedepl.supabase.co\"")
+        buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", "\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZrZ3V6cGNpd3BmdmFleWVkZXBsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMwNzYxMjYsImV4cCI6MjA3ODY1MjEyNn0.gHosYEPeqBHMjkezz5b9wuMQ6-PRFONcYrUuO62TYBc\"")
     }
 }
 

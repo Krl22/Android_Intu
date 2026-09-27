@@ -15,7 +15,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -146,6 +145,7 @@ fun DriverHomeScreen(
     var incomingRideRequests by remember { mutableStateOf<List<DriverRideRequest>>(emptyList()) }
     var activeRideRequest by remember { mutableStateOf<DriverRideRequest?>(null) }
     var activeRideId by remember { mutableStateOf<String?>(null) }
+    var activeRideStatus by remember { mutableStateOf("accepted") }
     var clientLocationMarker by remember { mutableStateOf<GeoPoint?>(null) }
     var clientMarkerAnnotation by remember { mutableStateOf<com.mapbox.maps.plugin.annotation.generated.PointAnnotation?>(null) }
     var mapViewRef by remember { mutableStateOf<com.mapbox.maps.MapView?>(null) }
@@ -157,6 +157,30 @@ fun DriverHomeScreen(
     var routeDistance by remember { mutableStateOf(0.0) }
     var routeDuration by remember { mutableStateOf(0.0) }
     var isCalculatingRoute by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return@LaunchedEffect
+        runCatching { activeRideRepository.findOpenRideForDriver(uid) }
+            .getOrNull()?.let { ride ->
+                activeRideId = ride.rideId
+                activeRideStatus = ride.status
+                activeRideRequest = DriverRideRequest(
+                    requestId = ride.rideId,
+                    userId = ride.clientId,
+                    userName = ride.riderName,
+                    userPhone = ride.riderPhone,
+                    originLatitude = ride.originLatitude,
+                    originLongitude = ride.originLongitude,
+                    originAddress = ride.originAddress,
+                    destinationLatitude = ride.destinationLatitude,
+                    destinationLongitude = ride.destinationLongitude,
+                    destinationAddress = ride.destinationAddress,
+                    estimatedPrice = ride.fare,
+                    paymentMethod = ride.paymentMethod,
+                    status = ride.status
+                )
+            }
+    }
 
     // Función para limpiar la ruta y el marcador del pasajero del mapa
     val clearRouteAndPassengerMarker = remember {
@@ -474,6 +498,7 @@ fun DriverHomeScreen(
                 result.onSuccess { rideId ->
                     activeRideRequest = request
                     activeRideId = rideId
+                    activeRideStatus = "accepted"
                     incomingRideRequests = emptyList()
                     // Dejar de buscar nuevas solicitudes
                     isSearching = false
@@ -583,19 +608,20 @@ fun DriverHomeScreen(
         activeRideId?.let { rideId ->
             val job = scope.launch {
                 activeRideRepository.getActiveRide(rideId).collect { activeRide ->
-                    if (activeRide != null && activeRide.status == "active") {
+                    if (activeRide != null) {
+                        activeRideStatus = activeRide.status
                         // Actualizar ubicación del cliente si cambia
                         activeRide.clientLocation?.let { clientLoc ->
                             currentLocation?.let { driverLoc ->
                                 // Actualizar marcador del cliente en tiempo real
+                                val previousClientLoc = clientLocationMarker
                                 clientLocationMarker = clientLoc
                                 
                                 // Actualizar la ruta y el marcador si el mapView está disponible
                                 mapViewRef?.let { mapView ->
                                     // Solo redibujar si la ubicación cambió significativamente (más de 10 metros)
-                                    val currentClientLoc = clientLocationMarker
-                                    if (currentClientLoc == null || 
-                                        calculateDistance(currentClientLoc, clientLoc) > 10) {
+                                    if (previousClientLoc == null ||
+                                        calculateDistance(previousClientLoc, clientLoc) > 10) {
                                         drawRouteToClient(mapView, driverLoc, clientLoc)
                                     }
                                 }
@@ -881,46 +907,45 @@ fun DriverHomeScreen(
             ) {
                 EnhancedActiveRideCard(
                     request = request,
+                    status = activeRideStatus,
                     distance = routeDistance,
                     duration = routeDuration,
                     isCalculatingRoute = isCalculatingRoute,
                     onArrived = {
                         scope.launch {
-                            // Aquí puedes agregar la lógica para cuando el conductor llega
-                            Toast.makeText(context, "Has llegado al punto de recogida", Toast.LENGTH_SHORT).show()
+                            val rideId = activeRideId ?: return@launch
+                            val nextStatus = when (activeRideStatus) {
+                                "accepted" -> "arrived"
+                                "arrived" -> "in_progress"
+                                "in_progress" -> "completed"
+                                else -> return@launch
+                            }
+                            activeRideRepository.advanceRide(rideId, nextStatus)
+                                .onSuccess {
+                                    activeRideStatus = nextStatus
+                                    val message = when (nextStatus) {
+                                        "arrived" -> "Llegada confirmada"
+                                        "in_progress" -> "Viaje iniciado"
+                                        else -> "Pago confirmado. Viaje finalizado"
+                                    }
+                                    Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                                    if (nextStatus == "completed") {
+                                        activeRideRequest = null
+                                        activeRideId = null
+                                        clearRouteAndPassengerMarker()
+                                        onBottomBarVisibilityChanged(true)
+                                    }
+                                }
+                                .onFailure { Toast.makeText(context, it.message ?: "No se pudo actualizar el viaje", Toast.LENGTH_LONG).show() }
                         }
                     },
                     onCancel = {
                         scope.launch {
                             activeRideId?.let { rideId ->
                                 try {
-                                    // 1. Cancelar el viaje activo en la base de datos
+                                    // Cancelar el viaje en Supabase
                                     activeRideRepository.cancelRide(rideId)
-                                    println("DEBUG: Viaje activo $rideId cancelado en realtime database")
-                                    
-                                    // 2. Si existe el request original, también limpiarlo
-                                    activeRideRequest?.let { request ->
-                                        try {
-                                            // Obtener el requestId del request original
-                                            val requestId = request.requestId
-                                            
-                                            // Intentar eliminar el request original si aún existe
-                                            val database = com.google.firebase.database.FirebaseDatabase.getInstance("https://intu-e8403-default-rtdb.firebaseio.com/")
-                                            val requestsRef = database.getReference("rides/requests")
-                                            
-                                            // Verificar si el request existe antes de intentar eliminarlo
-                                            val snapshot = requestsRef.child(requestId).get().await()
-                                            if (snapshot.exists()) {
-                                                requestsRef.child(requestId).removeValue().await()
-                                                println("DEBUG: Request original $requestId también eliminado")
-                                            } else {
-                                                println("DEBUG: Request original $requestId ya no existe (probablemente fue eliminado al aceptar)")
-                                            }
-                                        } catch (e: Exception) {
-                                            println("DEBUG: Error al eliminar request original: ${e.message}")
-                                            // No detenemos el flujo por este error
-                                        }
-                                    }
+                                    println("DEBUG: Viaje activo $rideId cancelado en Supabase")
                                     
                                     // 3. Limpiar estado local
                                     activeRideRequest = null
@@ -1112,6 +1137,7 @@ fun createPassengerIcon(context: android.content.Context): android.graphics.Bitm
 @Composable
 fun EnhancedActiveRideCard(
     request: DriverRideRequest,
+    status: String,
     distance: Double,
     duration: Double,
     isCalculatingRoute: Boolean,
@@ -1119,6 +1145,11 @@ fun EnhancedActiveRideCard(
     onCancel: () -> Unit
 ) {
     var isMinimized by remember { mutableStateOf(true) } // Inicialmente minimizado
+    val primaryAction = when (status) {
+        "arrived" -> "Iniciar viaje"
+        "in_progress" -> "Confirmar pago y finalizar"
+        else -> "Llegué"
+    }
     
     Card(
         modifier = Modifier
@@ -1159,14 +1190,22 @@ fun EnhancedActiveRideCard(
                 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Viaje Aceptado",
+                        text = when (status) {
+                            "arrived" -> "En el punto de recojo"
+                            "in_progress" -> "Viaje en curso"
+                            else -> "Viaje aceptado"
+                        },
                         style = if (isMinimized) MaterialTheme.typography.bodySmall else MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF1E1F47)
                     )
                     if (!isMinimized) {
                         Text(
-                            text = "Dirígete al punto de recogida",
+                            text = when (status) {
+                                "arrived" -> "Recoge al pasajero e inicia el viaje"
+                                "in_progress" -> "Al terminar, confirma el pago recibido"
+                                else -> "Dirígete al punto de recogida"
+                            },
                             style = MaterialTheme.typography.bodySmall,
                             color = Color.Gray
                         )
@@ -1282,7 +1321,7 @@ fun EnhancedActiveRideCard(
                         )
                         Spacer(modifier = Modifier.width(12.dp))
                         Text(
-                            text = request.originAddress,
+                            text = if (status == "in_progress") request.destinationAddress else request.originAddress,
                             style = MaterialTheme.typography.bodyMedium,
                             color = Color(0xFF1E1F47),
                             maxLines = 2,
@@ -1293,6 +1332,14 @@ fun EnhancedActiveRideCard(
                 }
                 
                 Spacer(modifier = Modifier.height(20.dp))
+
+                Text(
+                    text = "Cobrar S/ ${String.format("%.2f", request.estimatedPrice)} · ${if (request.paymentMethod == "yape_plin") "Yape" else "Efectivo"}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF08817E)
+                )
+                Spacer(modifier = Modifier.height(12.dp))
             }
             
             // Botones de acción (siempre visibles)
@@ -1319,7 +1366,7 @@ fun EnhancedActiveRideCard(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "Llegue",
+                            text = primaryAction,
                             fontWeight = FontWeight.Medium,
                             fontSize = 12.sp
                         )
@@ -1351,7 +1398,7 @@ fun EnhancedActiveRideCard(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Llegue",
+                                text = primaryAction,
                                 fontWeight = FontWeight.Medium,
                                 fontSize = 14.sp
                             )

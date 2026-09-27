@@ -1,16 +1,37 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Reglas para usuarios (incluye datos de conductor)
-    match /users/{uid} {
-      allow read: if request.auth != null && (request.auth.uid == uid || request.auth.token.driver == true);
-      allow write: if request.auth != null && request.auth.uid == uid;
+    function signedIn() { return request.auth != null; }
+    function owner(uid) { return signedIn() && request.auth.uid == uid; }
+    function admin() {
+      return signedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
-    
-    // Reglas para viajes
-  match /rides/{rideId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null; // o restringe a rider/driver según tu modelo
+
+    match /users/{uid} {
+      allow read: if owner(uid) || admin();
+      allow create: if owner(uid)
+        && request.resource.data.get('isApproved', false) != true;
+      allow update: if admin() || (owner(uid)
+        && !request.resource.data.diff(resource.data).affectedKeys()
+          .hasAny(['isApproved', 'approvalDate']));
+      allow delete: if owner(uid) || admin();
+    }
+    match /topups/{topupId} {
+      allow read: if signedIn() && (resource.data.uid == request.auth.uid || admin());
+      allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if admin();
+    }
+    match /saved_addresses/{addressId} {
+      allow read, create, update, delete: if signedIn()
+        && (resource.data.userId == request.auth.uid || request.resource.data.userId == request.auth.uid);
+    }
+    match /rides/{rideId} {
+      allow read: if signedIn()
+        && request.auth.uid in [resource.data.riderId, resource.data.driverId];
+      allow write: if false;
+    }
+    match /users/{uid}/{document=**} {
+      allow read, write: if owner(uid);
     }
   }
 }

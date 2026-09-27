@@ -1,183 +1,67 @@
 package com.intu.taxi.repositories
 
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.database.FirebaseDatabase
-import com.google.firebase.database.ServerValue
-import com.google.firebase.database.DataSnapshot
-import com.google.firebase.database.DatabaseError
-import com.google.firebase.database.ValueEventListener
+import com.intu.taxi.data.SupabaseApi
 import com.intu.taxi.models.RideRequest
-import kotlinx.coroutines.tasks.await
-import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.callbackFlow
-import java.util.UUID
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.isActive
+import org.json.JSONObject
+import java.time.Instant
 
 class RideRequestRepository {
-    
-    private val database = FirebaseDatabase.getInstance("https://intu-e8403-default-rtdb.firebaseio.com/")
-    private val rideRequestsRef = database.getReference("rides/requests")
-    private val auth = FirebaseAuth.getInstance()
-    
     suspend fun createRideRequest(
-        originLatitude: Double,
-        originLongitude: Double,
-        originAddress: String,
-        destinationLatitude: Double,
-        destinationLongitude: Double,
-        destinationAddress: String,
-        distanceMeters: Double,
-        durationSeconds: Double,
-        estimatedPrice: Double,
-        rideType: String,
-        paymentMethod: String = "efectivo"
-    ): Result<String> {
-        return try {
-            val currentUser = auth.currentUser
-            if (currentUser == null) {
-                println("DEBUG REPO: ERROR - Usuario no autenticado")
-                return Result.failure(Exception("Usuario no autenticado"))
-            }
-            
-            println("DEBUG REPO: Usuario autenticado: ${currentUser.uid}")
-            val requestId = UUID.randomUUID().toString()
-            println("DEBUG REPO: Creando solicitud con ID: $requestId")
-            
-            val rideRequest = RideRequest(
-                requestId = requestId,
-                userId = currentUser.uid,
-                userName = currentUser.displayName ?: "Usuario",
-                userPhone = currentUser.phoneNumber ?: "",
-                userPhotoUrl = currentUser.photoUrl?.toString(),
-                originLatitude = originLatitude,
-                originLongitude = originLongitude,
-                originAddress = originAddress,
-                destinationLatitude = destinationLatitude,
-                destinationLongitude = destinationLongitude,
-                destinationAddress = destinationAddress,
-                distanceMeters = distanceMeters,
-                durationSeconds = durationSeconds,
-                estimatedPrice = estimatedPrice,
-                rideType = rideType,
-                paymentMethod = paymentMethod,
-                status = "searching",
-                createdAt = System.currentTimeMillis(),
-                updatedAt = System.currentTimeMillis()
-            )
-            
-            // Create the ride request in Firebase
-            println("DEBUG REPO: Guardando en Firebase RTDB...")
-            val rideRequestMap = rideRequest.toMap()
-            println("DEBUG REPO: RideRequest data COMPLETO: $rideRequestMap")
-            println("DEBUG REPO: Coordenadas específicas - originLat: ${rideRequestMap["originLatitude"]}, originLng: ${rideRequestMap["originLongitude"]}")
-            println("DEBUG REPO: Coordenadas destino - destLat: ${rideRequestMap["destinationLatitude"]}, destLng: ${rideRequestMap["destinationLongitude"]}")
+        originLatitude: Double, originLongitude: Double, originAddress: String,
+        destinationLatitude: Double, destinationLongitude: Double, destinationAddress: String,
+        distanceMeters: Double, durationSeconds: Double, estimatedPrice: Double,
+        rideType: String, paymentMethod: String
+    ): Result<String> = runCatching {
+        SupabaseApi.ensureCurrentProfile()
+        val body = JSONObject()
+            .put("vehicle_type", "mototaxi")
+            .put("origin_lat", originLatitude).put("origin_lng", originLongitude)
+            .put("origin_address", originAddress)
+            .put("destination_lat", destinationLatitude).put("destination_lng", destinationLongitude)
+            .put("destination_address", destinationAddress)
+            .put("distance_meters", distanceMeters.toInt())
+            .put("duration_seconds", durationSeconds.toInt())
+            .put("payment_method", if (paymentMethod == "yape_plin") "yape_plin" else "efectivo")
+        val response = SupabaseApi.request("POST", "rides", body, "return=representation")
+        org.json.JSONArray(response).getJSONObject(0).getString("id")
+    }
+
+    fun listenToRideRequest(requestId: String): Flow<RideRequest?> = flow {
+        while (currentCoroutineContext().isActive) {
             try {
-                rideRequestsRef.child(requestId).setValue(rideRequestMap).await()
-                println("DEBUG REPO: Solicitud guardada exitosamente en Firebase")
-                Result.success(requestId)
-            } catch (e: Exception) {
-                println("DEBUG REPO: ERROR de Firebase: ${e.message}")
-                println("DEBUG REPO: Tipo de error: ${e.javaClass.simpleName}")
-                throw e // Re-lanzar para que sea capturado por el catch externo
-            }
-        } catch (e: Exception) {
-            println("DEBUG REPO: ERROR en createRideRequest: ${e.message}")
-            Result.failure(e)
+                val rows = SupabaseApi.rows("rides?id=eq.${SupabaseApi.encode(requestId)}&select=*&limit=1")
+                emit(rows.optJSONObject(0)?.toRideRequest())
+            } catch (_: Exception) { }
+            delay(1_500)
         }
     }
 
-    // Escuchar cambios en una solicitud específica
-    fun listenToRideRequest(requestId: String): Flow<RideRequest?> = callbackFlow {
-        val listener = object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                if (snapshot.exists()) {
-                    val data = snapshot.value as? Map<String, Any>
-                    val rideRequest = data?.let { RideRequest.fromMap(it) }
-                    trySend(rideRequest)
-                } else {
-                    trySend(null)
-                }
-            }
-            
-            override fun onCancelled(error: DatabaseError) {
-                println("DEBUG: Error al escuchar solicitud: ${error.message}")
-                trySend(null)
-            }
-        }
-        
-        rideRequestsRef.child(requestId).addValueEventListener(listener)
-        
-        awaitClose {
-            rideRequestsRef.child(requestId).removeEventListener(listener)
-        }
+    suspend fun cancelRideRequest(requestId: String): Result<Unit> = runCatching {
+        SupabaseApi.rpc("cancel_ride", JSONObject().put("p_ride_id", requestId).put("p_reason", "cancelled_by_rider"))
+        Unit
     }
-    
-    suspend fun updateRideRequestStatus(requestId: String, status: String): Result<Unit> {
-        return try {
-            val updates = mapOf(
-                "status" to status,
-                "updatedAt" to ServerValue.TIMESTAMP
-            )
-            
-            rideRequestsRef.child(requestId).updateChildren(updates).await()
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
-    
-    suspend fun cancelRideRequest(requestId: String): Result<Unit> {
-        return try {
-            println("DEBUG REPO: Cancelando ride request: $requestId")
-            
-            // Eliminar completamente el documento de Realtime Database
-            rideRequestsRef.child(requestId).removeValue().await()
-            println("DEBUG REPO: Solicitud eliminada exitosamente de Firebase RTDB")
-            
-            Result.success(Unit)
-        } catch (e: Exception) {
-            println("DEBUG REPO: Error al cancelar ride request: ${e.message}")
-            Result.failure(e)
-        }
-    }
-    
-    suspend fun acceptRideRequest(requestId: String, driverId: String, driverName: String, driverPhone: String): Result<Unit> {
-        return try {
-            val updates = mapOf(
-                "status" to "accepted",
-                "driverId" to driverId,
-                "driverName" to driverName,
-                "driverPhone" to driverPhone,
-                "updatedAt" to ServerValue.TIMESTAMP
-            )
-            
-            rideRequestsRef.child(requestId).updateChildren(updates).await()
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
-    
-    // Función para limpiar rides antiguos de Realtime DB (útil cuando migres a PostgreSQL)
-    suspend fun cleanupOldRideRequests(olderThanMillis: Long = 24 * 60 * 60 * 1000): Result<Int> {
-        return try {
-            println("DEBUG REPO: Limpiando rides antiguos...")
-            val cutoffTime = System.currentTimeMillis() - olderThanMillis
-            val snapshot = rideRequestsRef.orderByChild("updatedAt").endAt(cutoffTime.toDouble()).get().await()
-            
-            var deletedCount = 0
-            snapshot.children.forEach { child ->
-                child.ref.removeValue().await()
-                deletedCount++
-            }
-            
-            println("DEBUG REPO: Se eliminaron $deletedCount rides antiguos")
-            Result.success(deletedCount)
-        } catch (e: Exception) {
-            println("DEBUG REPO: Error al limpiar rides antiguos: ${e.message}")
-            Result.failure(e)
-        }
-    }
-    
-    fun getRideRequestReference(requestId: String) = rideRequestsRef.child(requestId)
+
+    private fun JSONObject.toRideRequest() = RideRequest(
+        requestId = getString("id"), userId = optString("rider_id"), userName = optString("rider_name"),
+        userPhone = optString("rider_phone"), userPhotoUrl = nullable("rider_photo_url"),
+        originLatitude = optDouble("origin_lat"), originLongitude = optDouble("origin_lng"),
+        originAddress = optString("origin_address"), destinationLatitude = optDouble("destination_lat"),
+        destinationLongitude = optDouble("destination_lng"), destinationAddress = optString("destination_address"),
+        distanceMeters = optDouble("distance_meters"), durationSeconds = optDouble("duration_seconds"),
+        estimatedPrice = optDouble("estimated_fare"), rideType = optString("vehicle_type"),
+        paymentMethod = optString("payment_method", "efectivo"), status = optString("status", "searching"),
+        createdAt = millis(nullable("requested_at")), updatedAt = millis(nullable("updated_at")),
+        driverId = nullable("driver_id"), driverName = nullable("driver_name"),
+        driverPhone = nullable("driver_phone"), driverPhotoUrl = nullable("driver_photo_url")
+    )
+
+    private fun JSONObject.nullable(key: String): String? =
+        if (isNull(key)) null else optString(key).takeIf { it.isNotBlank() }
+    private fun millis(value: String?): Long =
+        runCatching { Instant.parse(value).toEpochMilli() }.getOrDefault(System.currentTimeMillis())
 }

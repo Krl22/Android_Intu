@@ -1,35 +1,6 @@
 {
   "rules": {
     ".read": false,
-    ".write": false,
-    "rides": {
-      "requests": {
-        ".read": "auth != null",
-        ".write": "auth != null",
-        ".indexOn": ["status", "createdAt"],
-        "$reqId": {
-          ".read": "auth != null",
-          ".write": "auth != null && (auth.uid == newData.child('userId').val() || !data.exists() || auth.uid == data.child('userId').val())",
-          ".validate": "newData.hasChildren(['requestId','userId','status','createdAt','updatedAt']) && newData.child('requestId').val() == $reqId && newData.child('userId').isString() && newData.child('status').isString() && newData.child('createdAt').isNumber() && newData.child('updatedAt').isNumber()"
-        }
-      },
-      "AvailableDrivers": {
-        ".indexOn": ["timestamp", "vehicleType"],
-        "$driverId": {
-          ".read": "auth != null",
-          ".write": "auth != null && auth.uid == $driverId",
-          ".validate": "newData.hasChildren(['driverId','latitude','longitude','vehicleType','vehicleModel','vehiclePlate','driverName','rating','isAvailable','timestamp']) && newData.child('driverId').val() == $driverId && newData.child('isAvailable').isBoolean() && newData.child('timestamp').isNumber() && newData.child('rating').isNumber() && newData.child('rating').val() >= 0 && newData.child('rating').val() <= 5 && newData.child('latitude').isNumber() && newData.child('latitude').val() >= -90 && newData.child('latitude').val() <= 90 && newData.child('longitude').isNumber() && newData.child('longitude').val() >= -180 && newData.child('longitude').val() <= 180"
-        }
-      },
-      "activeRides": {
-        ".read": "auth != null",
-        ".write": "auth != null",
-        "$rideId": {
-          ".read": "auth != null",
-          ".write": "auth != null && (auth.uid == newData.child('driverId').val() || auth.uid == newData.child('clientId').val() || !data.exists() || auth.uid == data.child('driverId').val() || auth.uid == data.child('clientId').val())",
-          ".validate": "newData.hasChildren(['rideId','requestId','driverId','clientId','driverLocation','clientLocation','destination','status','originAddress','destinationAddress','originLatitude','originLongitude','destinationLatitude','destinationLongitude','createdAt','updatedAt']) && newData.child('rideId').val() == $rideId && newData.child('driverId').isString() && newData.child('clientId').isString() && newData.child('status').isString() && newData.child('createdAt').isNumber() && newData.child('updatedAt').isNumber() && newData.child('originLatitude').isNumber() && newData.child('originLongitude').isNumber() && newData.child('destinationLatitude').isNumber() && newData.child('destinationLongitude').isNumber()"
-        }
-      }
-    }
+    ".write": false
   }
 }
