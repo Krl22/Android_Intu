@@ -77,8 +77,8 @@ dependencies {
     // Firebase BOM y módulos necesarios
     implementation(platform("com.google.firebase:firebase-bom:33.3.0"))
     implementation("com.google.firebase:firebase-auth-ktx")
+    // Firestore solo se lee para copiar perfiles antiguos a Supabase
     implementation("com.google.firebase:firebase-firestore-ktx")
-    implementation("com.google.firebase:firebase-database-ktx")
     // Fotos de perfil de pasajeros y conductores
     implementation("com.google.firebase:firebase-storage-ktx")
     // Google Sign-In para proveedor Google

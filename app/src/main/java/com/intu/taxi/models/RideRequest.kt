@@ -1,101 +1,70 @@
 package com.intu.taxi.models
 
-import com.google.firebase.database.PropertyName
-import com.google.firebase.database.Exclude
 import com.mapbox.geojson.Point
 
 data class RideRequest(
-    @PropertyName("requestId")
     val requestId: String = "",
     
-    @PropertyName("userId")
     val userId: String = "",
     
-    @PropertyName("userName")
     val userName: String = "",
     
-    @PropertyName("userPhone")
     val userPhone: String = "",
     
-    @PropertyName("userPhotoUrl")
     val userPhotoUrl: String? = null,
     
-    @PropertyName("originLatitude")
     val originLatitude: Double = 0.0,
     
-    @PropertyName("originLongitude")
     val originLongitude: Double = 0.0,
     
-    @PropertyName("originAddress")
     val originAddress: String = "",
     
-    @PropertyName("destinationLatitude")
     val destinationLatitude: Double = 0.0,
     
-    @PropertyName("destinationLongitude")
     val destinationLongitude: Double = 0.0,
     
-    @PropertyName("destinationAddress")
     val destinationAddress: String = "",
     
-    @PropertyName("distanceMeters")
     val distanceMeters: Double = 0.0,
     
-    @PropertyName("durationSeconds")
     val durationSeconds: Double = 0.0,
     
-    @PropertyName("estimatedPrice")
     val estimatedPrice: Double = 0.0,
     
-    @PropertyName("rideType")
     val rideType: String = "",
     
-    @PropertyName("paymentMethod")
     val paymentMethod: String = "efectivo", // efectivo, yape_plin
     
-    @PropertyName("status")
     val status: String = "searching", // searching, accepted, cancelled, completed
     
-    @PropertyName("createdAt")
     val createdAt: Long = System.currentTimeMillis(),
     
-    @PropertyName("updatedAt")
     val updatedAt: Long = System.currentTimeMillis(),
     
-    @PropertyName("driverId")
     val driverId: String? = null,
     
-    @PropertyName("driverName")
     val driverName: String? = null,
     
-    @PropertyName("driverPhone")
     val driverPhone: String? = null,
     
-    @PropertyName("driverPhotoUrl")
     val driverPhotoUrl: String? = null,
     
-    @PropertyName("driverLatitude")
     val driverLatitude: Double? = null,
     
-    @PropertyName("driverLongitude")
     val driverLongitude: Double? = null
 ) {
     // Helper function to get origin as Point
-    @Exclude
     fun getOriginPoint(): Point = Point.fromLngLat(originLongitude, originLatitude)
     
     // Helper function to get destination as Point
-    @Exclude
     fun getDestinationPoint(): Point = Point.fromLngLat(destinationLongitude, destinationLatitude)
     
     // Helper function to get driver location as Point
-    @Exclude
     fun getDriverPoint(): Point? = if (driverLatitude != null && driverLongitude != null) {
         Point.fromLngLat(driverLongitude, driverLatitude)
     } else null
     
     // Convert to Map for Firebase serialization
-    @Exclude
     fun toMap(): Map<String, Any?> {
         return mapOf(
             "requestId" to requestId,

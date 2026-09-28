@@ -2257,6 +2257,25 @@ fun HomeScreen(
                     }
                     if (ride.status == "completed") {
                         Text("El conductor confirmó que recibió el pago.", color = Color(0xFF08817E))
+                        // Calificar al conductor (también se puede después en la pestaña Viajes)
+                        var givenStars by remember(ride.rideId) { mutableStateOf(0) }
+                        Text("¿Cómo estuvo tu viaje?", fontWeight = FontWeight.SemiBold)
+                        com.intu.taxi.ui.components.StarRating(
+                            stars = givenStars,
+                            size = 36.dp,
+                            onRate = if (givenStars == 0) { stars ->
+                                scope.launch {
+                                    runCatching { com.intu.taxi.repositories.RideHistoryRepository().rate(ride.rideId, stars) }
+                                        .onSuccess {
+                                            givenStars = stars
+                                            Toast.makeText(context, "¡Gracias por calificar!", Toast.LENGTH_SHORT).show()
+                                        }
+                                        .onFailure {
+                                            Toast.makeText(context, it.message ?: "No se pudo guardar la calificación", Toast.LENGTH_LONG).show()
+                                        }
+                                }
+                            } else null
+                        )
                         Button(
                             onClick = { resetRideState() },
                             modifier = Modifier.fillMaxWidth()

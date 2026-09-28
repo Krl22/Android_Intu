@@ -14,6 +14,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.IgnoreExtraProperties
 import com.google.firebase.firestore.ktx.toObject
 import com.intu.taxi.data.SupabaseApi
+import com.intu.taxi.data.str
 import kotlinx.coroutines.tasks.await
 import java.util.concurrent.TimeUnit
 
@@ -105,28 +106,29 @@ class AuthRepository(
         return result.user
     }
 
+    /** Guarda el perfil en Supabase, la única fuente de datos del perfil. */
     suspend fun saveUserProfile(uid: String, profile: UserProfile) {
-        db.collection("users").document(uid).set(profile).await()
         SupabaseApi.ensureCurrentProfile(
             firstName = profile.firstName,
             lastName = profile.lastName,
-            phone = profile.number.takeIf { it.startsWith("+") },
+            phone = profile.number,
             email = profile.email,
-            driverMode = profile.isDriver
+            driverMode = profile.isDriver,
+            birthdate = profile.birthdate,
+            termsAccepted = profile.termsAccepted
         )
     }
 
     /**
-     * Copia nombre, teléfono y correo del perfil de Firestore a Supabase.
-     * Los viajes toman de ahí el nombre del pasajero y del chofer; sin esto llegaban vacíos.
-     * Siempre deja creada la fila del perfil, aunque no haya datos en Firestore.
+     * Deja creado y al día el perfil de Supabase (los viajes toman de ahí nombre y foto).
+     * getUserProfile ya copia los datos antiguos de Firestore si hace falta.
      */
     suspend fun syncProfileToSupabase(uid: String) {
         val profile = runCatching { getUserProfile(uid) }.getOrNull()
         SupabaseApi.ensureCurrentProfile(
             firstName = profile?.firstName.orEmpty(),
             lastName = profile?.lastName.orEmpty(),
-            phone = profile?.number?.takeIf { it.startsWith("+") },
+            phone = profile?.number,
             email = profile?.email
         )
     }
@@ -199,79 +201,81 @@ class AuthRepository(
         }
     }
 
+    /**
+     * Perfil del usuario desde Supabase. Las cuentas creadas antes de unificar los datos tenían el
+     * perfil en Firestore: si en Supabase falta algo y Firestore lo tiene, se copia una sola vez.
+     */
     suspend fun getUserProfile(uid: String): UserProfile? {
-        return try {
-            val snap = db.collection("users").document(uid).get().await()
-            println("DEBUG AuthRepository: Document exists: ${snap.exists()}")
-            if (snap.exists()) {
-                val profile = snap.toObject<com.intu.taxi.auth.UserProfile>()
-                println("DEBUG AuthRepository: Profile loaded - email: ${profile?.email}, firstName: ${profile?.firstName}, isApproved: ${profile?.isApproved}")
-                println("DEBUG AuthRepository: Raw document data: ${snap.data}")
-                
-                // Verificar campo por campo
-                println("DEBUG AuthRepository: Checking individual fields:")
-                println("DEBUG AuthRepository: - email field: ${snap.getString("email")}")
-                println("DEBUG AuthRepository: - firstName field: ${snap.getString("firstName")}")
-                println("DEBUG AuthRepository: - isApproved field: ${snap.getBoolean("isApproved")}")
-                println("DEBUG AuthRepository: - isDriver field: ${snap.getBoolean("isDriver")}")
-                
-                // Verificar TODOS los campos disponibles en el documento
-                println("DEBUG AuthRepository: ALL AVAILABLE FIELDS:")
-                snap.data?.forEach { (key, value) ->
-                    println("DEBUG AuthRepository: - $key: $value (type: ${value?.javaClass?.simpleName})")
-                }
-                
-                profile
-            } else {
-                // El documento no existe, es normal para usuarios nuevos
-                println("DEBUG AuthRepository: Document does not exist for user: $uid")
-                null
+        val remote = SupabaseApi.currentProfile()?.toUserProfile()
+        if (remote != null && remote.isComplete()) return remote
+
+        val legacy = legacyFirestoreProfile(uid) ?: return remote
+        val merged = UserProfile(
+            firstName = remote?.firstName?.ifBlank { null } ?: legacy.firstName,
+            lastName = remote?.lastName?.ifBlank { null } ?: legacy.lastName,
+            birthdate = remote?.birthdate?.ifBlank { null } ?: legacy.birthdate,
+            number = remote?.number?.ifBlank { null } ?: legacy.number,
+            email = remote?.email ?: legacy.email,
+            termsAccepted = remote?.termsAccepted == true || legacy.termsAccepted,
+            isDriver = remote?.isDriver == true || legacy.isDriver
+        )
+        runCatching { saveUserProfile(uid, merged) }
+        // Datos del vehículo que solo estaban en Firestore
+        if (!legacy.vehicleBrand.isNullOrBlank() && SupabaseApi.currentDriver() == null) {
+            runCatching {
+                SupabaseApi.syncDriver(
+                    documentNumber = legacy.documentNumber.orEmpty(),
+                    licenseNumber = legacy.driverLicense.orEmpty(),
+                    vehicleType = "mototaxi",
+                    brand = legacy.vehicleBrand.orEmpty(),
+                    model = legacy.vehicleModel.orEmpty(),
+                    year = legacy.vehicleYear?.toIntOrNull(),
+                    plate = legacy.licensePlate.orEmpty(),
+                    markDriverMode = false
+                )
             }
-        } catch (e: Exception) {
-            // Error al obtener el documento
-            println("DEBUG AuthRepository: Error loading profile: ${e.message}")
-            throw Exception("Error al obtener perfil: ${e.message}")
         }
+        return merged
     }
 
+    /** Perfil antiguo guardado en Firestore (solo para copiarlo a Supabase). */
+    private suspend fun legacyFirestoreProfile(uid: String): UserProfile? = runCatching {
+        val snap = db.collection("users").document(uid).get().await()
+        if (snap.exists()) snap.toObject<UserProfile>() else null
+    }.getOrNull()
+
+    private fun org.json.JSONObject.toUserProfile() = UserProfile(
+        firstName = str("first_name"),
+        lastName = str("last_name"),
+        birthdate = str("birthdate"),
+        number = str("phone"),
+        email = str("email").ifBlank { null },
+        termsAccepted = !isNull("terms_accepted_at"),
+        isDriver = optBoolean("driver_mode", false)
+    )
+
+    private fun UserProfile.isComplete() =
+        firstName.isNotBlank() && lastName.isNotBlank() && birthdate.isNotBlank() && number.isNotBlank()
+
+    /** Datos de conductor desde Supabase (drivers + vehículo activo). */
     suspend fun getDriverProfile(uid: String): DriverProfile? {
-        return try {
-            val userProfile = getUserProfile(uid)
-            if (userProfile != null && !userProfile.vehicleType.isNullOrBlank()) {
-                DriverProfile(
-                    vehicleType = userProfile.vehicleType ?: "",
-                    vehicleBrand = userProfile.vehicleBrand ?: "",
-                    vehicleModel = userProfile.vehicleModel ?: "",
-                    vehicleYear = userProfile.vehicleYear ?: "",
-                    licensePlate = userProfile.licensePlate ?: "",
-                    driverLicense = userProfile.driverLicense ?: "",
-                    documentNumber = userProfile.documentNumber ?: "",
-                    isApproved = getIsApprovedValue(uid) == true,
-                    approvalDate = userProfile.approvalDate
-                )
-            } else {
-                null
-            }
-        } catch (e: Exception) {
-            // Error al obtener el documento
-            throw Exception("Error al obtener perfil de conductor: ${e.message}")
-        }
+        if (auth.currentUser?.uid != uid) return null
+        getUserProfile(uid) // copia datos antiguos de Firestore si aún no están en Supabase
+        val (driver, vehicle) = SupabaseApi.currentDriver() ?: return null
+        vehicle ?: return null
+        return DriverProfile(
+            vehicleType = vehicle.str("vehicle_type"),
+            vehicleBrand = vehicle.str("brand"),
+            vehicleModel = vehicle.str("model"),
+            vehicleYear = if (vehicle.isNull("year")) "" else vehicle.optInt("year").toString(),
+            licensePlate = vehicle.str("plate"),
+            driverLicense = driver.str("license_number"),
+            documentNumber = driver.str("document_number"),
+            isApproved = driver.str("status") == "approved"
+        )
     }
 
     suspend fun saveDriverProfile(uid: String, driverProfile: DriverProfile) {
-        // Actualizar solo los campos del conductor en el documento del usuario
-        val driverData = mapOf(
-            "vehicleType" to driverProfile.vehicleType,
-            "vehicleBrand" to driverProfile.vehicleBrand,
-            "vehicleModel" to driverProfile.vehicleModel,
-            "vehicleYear" to driverProfile.vehicleYear,
-            "licensePlate" to driverProfile.licensePlate,
-            "driverLicense" to driverProfile.driverLicense,
-            "documentNumber" to driverProfile.documentNumber,
-            "isApproved" to driverProfile.isApproved,
-            "approvalDate" to driverProfile.approvalDate
-        )
-        db.collection("users").document(uid).update(driverData).await()
         SupabaseApi.syncDriver(
             documentNumber = driverProfile.documentNumber,
             licenseNumber = driverProfile.driverLicense,
@@ -301,7 +305,6 @@ class AuthRepository(
     }
 
     suspend fun setDriverMode(uid: String, isDriver: Boolean) {
-        db.collection("users").document(uid).update("isDriver", isDriver).await()
         SupabaseApi.ensureCurrentProfile(driverMode = isDriver)
     }
 
@@ -326,42 +329,6 @@ class AuthRepository(
         return runCatching { SupabaseApi.driverStatus() == "approved" }.getOrDefault(false)
     }
 
-    // Función para verificar campos crudos en Firestore (debugging)
-    suspend fun checkRawFirestoreData(uid: String): Map<String, Any>? {
-        return try {
-            val snap = db.collection("users").document(uid).get().await()
-            if (snap.exists()) {
-                val data = snap.data
-                println("DEBUG AuthRepository: Raw Firestore data for UID $uid: $data")
-                
-                // Verificar específicamente el campo isApproved
-                val isApprovedValue = data?.get("isApproved")
-                println("DEBUG AuthRepository: Raw isApproved value: $isApprovedValue (type: ${isApprovedValue?.javaClass})")
-                
-                // Verificar también con diferentes capitalizaciones
-                println("DEBUG AuthRepository: Checking different field name variations:")
-                println("DEBUG AuthRepository: - 'isapproved' (lowercase): ${data?.get("isapproved")}")
-                println("DEBUG AuthRepository: - 'IsApproved' (PascalCase): ${data?.get("IsApproved")}")
-                println("DEBUG AuthRepository: - 'ISAPPROVED' (uppercase): ${data?.get("ISAPPROVED")}")
-                
-                // Si el valor es booleano, verificar su valor real
-                if (isApprovedValue is Boolean) {
-                    println("DEBUG AuthRepository: Boolean isApproved value: $isApprovedValue")
-                } else if (isApprovedValue is String) {
-                    println("DEBUG AuthRepository: String isApproved value: '$isApprovedValue'")
-                    println("DEBUG AuthRepository: String to boolean conversion: ${isApprovedValue.toBoolean()}")
-                }
-                
-                data
-            } else {
-                println("DEBUG AuthRepository: Document does not exist for UID: $uid")
-                null
-            }
-        } catch (e: Exception) {
-            println("DEBUG AuthRepository: Error checking raw data: ${e.message}")
-            null
-        }
-    }
 
     fun sendEmailVerification(): Boolean {
         val user = auth.currentUser ?: return false

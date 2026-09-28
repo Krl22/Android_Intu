@@ -7,10 +7,10 @@
     }
   ],
   "firestore": {
-    "rules": "../firestore_rules.txt"
+    "rules": "firestore.rules"
   },
   "database": {
-    "rules": "../realtime_database_rules.json"
+    "rules": "database.rules.json"
   },
   "storage": {
     "rules": "storage.rules"

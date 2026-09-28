@@ -13,3 +13,8 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Registros de fallos de la JVM y de Kotlin (pueden incluir rutas y variables de entorno)
+hs_err_pid*.log
+replay_pid*.log
+.kotlin/

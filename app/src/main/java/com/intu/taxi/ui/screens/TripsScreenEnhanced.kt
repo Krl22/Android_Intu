@@ -1,1217 +1,385 @@
 package com.intu.taxi.ui.screens
 
-import androidx.compose.foundation.*
-import androidx.compose.foundation.layout.*
+import android.widget.Toast
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.automirrored.filled.StarHalf
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.*
-import androidx.compose.material3.*
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.*
-import androidx.compose.ui.graphics.*
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.animation.*
-import androidx.compose.animation.core.*
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
-import com.intu.taxi.R
+import com.intu.taxi.repositories.EarningsSummary
+import com.intu.taxi.repositories.RideHistoryItem
+import com.intu.taxi.repositories.RideHistoryRepository
+import com.intu.taxi.ui.components.Avatar
+import com.intu.taxi.ui.components.StarRating
+import com.intu.taxi.ui.formatSoles
+import kotlinx.coroutines.launch
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+
+private val Teal = Color(0xFF08817E)
+private val Indigo = Color(0xFF1E1F47)
+private val Muted = Color(0xFF5F6570)
+private val DateLabel = DateTimeFormatter.ofPattern("d 'de' MMMM, HH:mm", Locale("es", "PE"))
 
 /**
- * Enhanced Trips Screen with modern design principles:
- * - Glassmorphism effects
- * - Smooth animations and transitions
- * - Better visual hierarchy
- * - Consistent color scheme
- * - Improved typography
- * - Interactive elements
+ * Pestaña Viajes con datos reales de Supabase.
+ * Pasajero: sus viajes y calificar al conductor. Conductor: ganancias, calificación e historial.
  */
-
-// Enhanced data classes with more properties
-sealed class TripItem {
-    data class ClientTrip(
-        val id: String,
-        val driverName: String,
-        val driverPhoto: String? = null,
-        val plate: String,
-        val price: Double,
-        val currency: String = "$",
-        val rating: Float,
-        val date: String,
-        val from: String,
-        val to: String,
-        val distance: String,
-        val duration: String,
-        val status: TripStatus = TripStatus.COMPLETED
-    ) : TripItem()
-    
-    data class DriverTrip(
-        val id: String,
-        val passengerName: String,
-        val passengerPhoto: String? = null,
-        val pickup: String,
-        val dropoff: String,
-        val fare: Double,
-        val currency: String = "$",
-        val status: TripStatus,
-        val eta: String,
-        val distance: String,
-        val duration: String
-    ) : TripItem()
-}
-
-enum class TripStatus {
-    PENDING, IN_PROGRESS, COMPLETED, CANCELLED
-}
-
-// Enhanced sample data
-private val enhancedClientTrips = listOf(
-    TripItem.ClientTrip(
-        id = "1",
-        driverName = "Carlos Rodriguez",
-        plate = "ABC-123",
-        price = 12.50,
-        rating = 4.8f,
-        date = "Hoy, 10:20 AM",
-        from = "Intu Plaza",
-        to = "Av. Central 120",
-        distance = "8.2 km",
-        duration = "15 min"
-    ),
-    TripItem.ClientTrip(
-        id = "2", 
-        driverName = "Maria Gonzalez",
-        plate = "XYZ-456",
-        price = 15.00,
-        rating = 4.7f,
-        date = "Ayer, 7:05 PM",
-        from = "Mercado 9",
-        to = "Intu Mall",
-        distance = "6.5 km",
-        duration = "12 min"
-    ),
-    TripItem.ClientTrip(
-        id = "3",
-        driverName = "Juan Perez", 
-        plate = "DEF-789",
-        price = 11.80,
-        rating = 4.6f,
-        date = "Ayer, 1:40 PM",
-        from = "Parque Sur",
-        to = "Estación Norte",
-        distance = "9.1 km",
-        duration = "18 min"
-    )
-)
-
-private val enhancedDriverTrips = listOf(
-    TripItem.DriverTrip(
-        id = "1",
-        passengerName = "Ana Patricia",
-        pickup = "Intu Plaza",
-        dropoff = "Av. Centro 77",
-        fare = 4.20,
-        status = TripStatus.COMPLETED,
-        eta = "—",
-        distance = "3.2 km",
-        duration = "8 min"
-    ),
-    TripItem.DriverTrip(
-        id = "2",
-        passengerName = "Luis Roberto",
-        pickup = "Parque Norte",
-        dropoff = "Clínica Central",
-        fare = 3.60,
-        status = TripStatus.IN_PROGRESS,
-        eta = "5 min",
-        distance = "2.8 km",
-        duration = "6 min"
-    ),
-    TripItem.DriverTrip(
-        id = "3",
-        passengerName = "Maria Teresa",
-        pickup = "Mercado 9",
-        dropoff = "Intu Mall",
-        fare = 5.10,
-        status = TripStatus.PENDING,
-        eta = "8 min",
-        distance = "4.5 km",
-        duration = "10 min"
-    )
-)
-
-// Enhanced earnings data
-private val earningsData = mapOf(
-    "Día" to listOf(
-        "08:00" to 5.8f, "09:00" to 12.3f, "10:00" to 9.4f,
-        "11:00" to 7.1f, "12:00" to 15.2f, "13:00" to 11.0f,
-        "14:00" to 8.5f, "15:00" to 13.7f, "16:00" to 10.2f
-    ),
-    "Semana" to listOf(
-        "Lun" to 52.5f, "Mar" to 68.3f, "Mié" to 47.9f,
-        "Jue" to 72.6f, "Vie" to 81.2f, "Sáb" to 95.4f, "Dom" to 63.0f
-    ),
-    "Mes" to listOf(
-        "Sem 1" to 280f, "Sem 2" to 310f, "Sem 3" to 265f, "Sem 4" to 325f
-    )
-)
-
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TripsScreenEnhanced(
-    padding: PaddingValues,
-    isDriver: Boolean
-) {
-    var selectedTab by remember { mutableStateOf(0) }
-    var selectedTimeRange by remember { mutableStateOf("Día") }
-    
-    // Animation states
-    var headerVisible by remember { mutableStateOf(false) }
-    var contentVisible by remember { mutableStateOf(false) }
-    
-    LaunchedEffect(Unit) {
-        headerVisible = true
-        kotlinx.coroutines.delay(200)
-        contentVisible = true
+fun TripsScreenEnhanced(padding: PaddingValues, isDriver: Boolean) {
+    val repo = remember { RideHistoryRepository() }
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    var rides by remember { mutableStateOf<List<RideHistoryItem>?>(null) }
+    var loadError by remember { mutableStateOf<String?>(null) }
+    var driverRating by remember { mutableStateOf<Pair<Double, Int>?>(null) }
+    var reloadKey by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(isDriver, reloadKey) {
+        loadError = null
+        runCatching { if (isDriver) repo.driverHistory() else repo.riderHistory() }
+            .onSuccess { rides = it }
+            .onFailure {
+                loadError = it.message ?: "No se pudieron cargar tus viajes"
+                if (rides == null) rides = emptyList()
+            }
+        if (isDriver) driverRating = runCatching { repo.driverRating() }.getOrNull()
     }
-    
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFF08817E).copy(alpha = 0.1f), // teal
-                        Color(0xFF1E1F47).copy(alpha = 0.05f), // indigo
-                        MaterialTheme.colorScheme.surface
-                    )
-                )
-            )
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-        ) {
-            // Enhanced Header
-            AnimatedVisibility(
-                visible = headerVisible,
-                enter = fadeIn() + slideInVertically(initialOffsetY = { -it })
-            ) {
-                EnhancedTripsHeader(isDriver = isDriver)
-            }
-            
-            // Content
-            AnimatedVisibility(
-                visible = contentVisible,
-                enter = fadeIn() + slideInVertically(initialOffsetY = { it / 3 })
-            ) {
-                if (isDriver) {
-                    DriverContent(
-                        selectedTab = selectedTab,
-                        onTabSelected = { selectedTab = it },
-                        selectedTimeRange = selectedTimeRange,
-                        onTimeRangeSelected = { selectedTimeRange = it }
-                    )
-                } else {
-                    ClientContent()
+
+    fun rate(ride: RideHistoryItem, stars: Int) {
+        scope.launch {
+            runCatching { repo.rate(ride.id, stars) }
+                .onSuccess {
+                    rides = rides?.map {
+                        when {
+                            it.id != ride.id -> it
+                            isDriver -> it.copy(ratingForRider = stars)
+                            else -> it.copy(ratingForDriver = stars)
+                        }
+                    }
+                    Toast.makeText(context, "¡Gracias por calificar!", Toast.LENGTH_SHORT).show()
                 }
-            }
+                .onFailure {
+                    Toast.makeText(context, it.message ?: "No se pudo guardar la calificación", Toast.LENGTH_LONG).show()
+                }
         }
     }
-}
 
-@Composable
-private fun EnhancedTripsHeader(isDriver: Boolean) {
-    Card(
+    LazyColumn(
         modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            .shadow(
-                elevation = 12.dp,
-                shape = RoundedCornerShape(20.dp),
-                ambientColor = Color.Black.copy(alpha = 0.1f)
-            ),
-        colors = CardDefaults.cardColors(
-            containerColor = Color.White.copy(alpha = 0.9f)
+            .fillMaxSize()
+            .background(Color(0xFFF6F7F9)),
+        contentPadding = PaddingValues(
+            start = 16.dp,
+            end = 16.dp,
+            top = padding.calculateTopPadding() + 20.dp,
+            bottom = padding.calculateBottomPadding() + 16.dp
         ),
-        shape = RoundedCornerShape(20.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(20.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Column {
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = if (isDriver) "Mis Servicios" else "Mis Viajes",
+                    if (isDriver) "Mis servicios" else "Mis viajes",
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF1C1C1E)
+                    color = Indigo,
+                    modifier = Modifier.weight(1f)
                 )
-                Text(
-                    text = "${if (isDriver) "12 servicios" else "3 viajes"} este mes",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color(0xFF6B7280)
-                )
-            }
-            
-            Box(
-                modifier = Modifier
-                    .size(56.dp)
-                    .clip(CircleShape)
-                    .background(
-                        Brush.radialGradient(
-                            colors = listOf(
-                                Color(0xFF08817E), // teal
-                                Color(0xFF1E1F47)  // indigo
-                            )
-                        )
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = if (isDriver) Icons.Default.DirectionsCar else Icons.Default.DirectionsWalk,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(28.dp)
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun ClientContent() {
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-        contentPadding = PaddingValues(vertical = 8.dp)
-    ) {
-        items(enhancedClientTrips) { trip ->
-            EnhancedClientTripCard(trip as TripItem.ClientTrip)
-        }
-    }
-}
-
-@Composable
-private fun DriverContent(
-    selectedTab: Int,
-    onTabSelected: (Int) -> Unit,
-    selectedTimeRange: String,
-    onTimeRangeSelected: (String) -> Unit
-) {
-    Column {
-        // Enhanced Tab Row
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .shadow(
-                    elevation = 8.dp,
-                    shape = RoundedCornerShape(16.dp),
-                    ambientColor = Color.Black.copy(alpha = 0.1f)
-                ),
-            colors = CardDefaults.cardColors(
-                containerColor = Color.White.copy(alpha = 0.8f)
-            ),
-            shape = RoundedCornerShape(16.dp)
-        ) {
-            TabRow(
-                selectedTabIndex = selectedTab,
-                containerColor = Color.Transparent,
-                contentColor = Color(0xFF08817E), // teal
-                indicator = { tabPositions ->
-                    Box(
-                        modifier = Modifier
-                            .tabIndicatorOffset(tabPositions[selectedTab])
-                            .height(3.dp)
-                            .background(
-                                Brush.horizontalGradient(
-                                    colors = listOf(Color(0xFF08817E), Color(0xFF1E1F47)) // teal to indigo
-                                ),
-                                RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp)
-                            )
-                    )
+                IconButton(onClick = { reloadKey++ }) {
+                    Icon(Icons.Default.Refresh, contentDescription = "Actualizar", tint = Teal)
                 }
-            ) {
-                Tab(
-                    selected = selectedTab == 0,
-                    onClick = { onTabSelected(0) },
-                    text = {
-                        Text(
-                            "Servicios",
-                            fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal
-                        )
-                    }
+            }
+        }
+
+        if (isDriver) {
+            item { EarningsCard(rides.orEmpty(), driverRating) }
+        }
+
+        val list = rides
+        when {
+            list == null -> item {
+                Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = Teal)
+                }
+            }
+            loadError != null && list.isEmpty() -> item {
+                MessageCard(
+                    title = "No se pudieron cargar tus viajes",
+                    body = loadError.orEmpty(),
+                    actionLabel = "Reintentar",
+                    onAction = { reloadKey++ }
                 )
-                Tab(
-                    selected = selectedTab == 1,
-                    onClick = { onTabSelected(1) },
-                    text = {
-                        Text(
-                            "Dashboard",
-                            fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal
-                        )
+            }
+            list.isEmpty() -> item {
+                MessageCard(
+                    title = if (isDriver) "Aún no tienes servicios" else "Aún no tienes viajes",
+                    body = if (isDriver) {
+                        "Pulsa \"Empezar ahora\" en Inicio para recibir solicitudes."
+                    } else {
+                        "Cuando pidas un mototaxi, tus viajes aparecerán aquí."
                     }
                 )
             }
-        }
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        when (selectedTab) {
-            0 -> DriverServicesTab()
-            1 -> DriverDashboardTab(selectedTimeRange, onTimeRangeSelected)
-        }
-    }
-}
-
-@Composable
-private fun DriverServicesTab() {
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-        contentPadding = PaddingValues(vertical = 8.dp)
-    ) {
-        items(enhancedDriverTrips) { trip ->
-            EnhancedDriverTripCard(trip as TripItem.DriverTrip)
-        }
-    }
-}
-
-@Composable
-private fun DriverDashboardTab(
-    selectedTimeRange: String,
-    onTimeRangeSelected: (String) -> Unit
-) {
-    val timeRanges = listOf("Día", "Semana", "Mes")
-    val currentData = earningsData[selectedTimeRange] ?: emptyList()
-    
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        // Time Range Selector
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = Color.White.copy(alpha = 0.9f)
-            ),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(8.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                timeRanges.forEach { range ->
-                    Surface(
-                        selected = selectedTimeRange == range,
-                        onClick = { onTimeRangeSelected(range) },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(8.dp),
-                        color = if (selectedTimeRange == range) {
-                            Color(0xFF667eea).copy(alpha = 0.1f)
-                        } else {
-                            Color.Transparent
-                        }
-                    ) {
-                        Text(
-                            text = range,
-                            modifier = Modifier.padding(vertical = 12.dp),
-                            textAlign = TextAlign.Center,
-                            fontWeight = if (selectedTimeRange == range) FontWeight.Bold else FontWeight.Normal,
-                            color = if (selectedTimeRange == range) Color(0xFF08817E) else Color(0xFF6B7280) // teal
-                        )
-                    }
+            else -> {
+                item {
+                    Text("Historial", style = MaterialTheme.typography.titleSmall, color = Muted)
+                }
+                items(list, key = { it.id }) { ride ->
+                    RideHistoryCard(ride = ride, isDriver = isDriver, onRate = { stars -> rate(ride, stars) })
                 }
             }
         }
-        
-        // Summary Cards
-        DriverSummaryCards(selectedTimeRange)
-        
-        // Earnings Chart
-        EnhancedEarningsChart(currentData, selectedTimeRange)
-        
-        // Trip Status Distribution
-        TripStatusDistribution(selectedTimeRange)
     }
 }
 
+/** Ganancias del conductor (solo viajes completados) y su calificación promedio. */
 @Composable
-private fun DriverSummaryCards(timeRange: String) {
-    val summaryData = when (timeRange) {
-        "Día" -> listOf("Viajes" to "8", "Ganancias" to "S/ 62.30", "Horas" to "4h 15m", "Promedio" to "S/ 7.79")
-        "Semana" -> listOf("Viajes" to "42", "Ganancias" to "S/ 310.80", "Horas" to "26h", "Promedio" to "S/ 7.40")
-        else -> listOf("Viajes" to "180", "Ganancias" to "S/ 1,280.00", "Horas" to "110h", "Promedio" to "S/ 7.11")
-    }
-    
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        summaryData.take(2).forEach { (label, value) ->
-            SummaryCard(
-                label = label,
-                value = value,
-                modifier = Modifier.weight(1f),
-                icon = when (label) {
-                    "Viajes" -> Icons.Default.DirectionsCar
-                    "Ganancias" -> Icons.Default.AttachMoney
-                    "Horas" -> Icons.Default.AccessTime
-                    else -> Icons.Default.TrendingUp
-                }
-            )
-        }
-    }
-    
-    Spacer(modifier = Modifier.height(12.dp))
-    
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        summaryData.takeLast(2).forEach { (label, value) ->
-            SummaryCard(
-                label = label,
-                value = value,
-                modifier = Modifier.weight(1f),
-                icon = when (label) {
-                    "Viajes" -> Icons.Default.DirectionsCar
-                    "Ganancias" -> Icons.Default.AttachMoney
-                    "Horas" -> Icons.Default.AccessTime
-                    else -> Icons.Default.TrendingUp
-                }
-            )
-        }
-    }
-}
-
-@Composable
-private fun SummaryCard(
-    label: String,
-    value: String,
-    modifier: Modifier = Modifier,
-    icon: ImageVector = Icons.Default.Info
-) {
+private fun EarningsCard(rides: List<RideHistoryItem>, rating: Pair<Double, Int>?) {
+    val (today, week, month) = RideHistoryRepository.earnings(rides)
     Card(
-        modifier = modifier,
-        colors = CardDefaults.cardColors(
-            containerColor = Color.White.copy(alpha = 0.9f)
-        ),
-        shape = RoundedCornerShape(12.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        modifier = Modifier.fillMaxWidth()
     ) {
         Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .background(Brush.linearGradient(listOf(Teal, Indigo)))
+                .padding(18.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFF08817E).copy(alpha = 0.1f)), // teal
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = Color(0xFF08817E), // teal
-                    modifier = Modifier.size(18.dp)
-                )
+            Text("Ganancias", color = Color.White, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                EarningsTile("Hoy", today, Modifier.weight(1f))
+                EarningsTile("7 días", week, Modifier.weight(1f))
+                EarningsTile("Este mes", month, Modifier.weight(1f))
             }
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                value,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF1C1C1E)
-            )
-            Text(
-                label,
-                style = MaterialTheme.typography.bodySmall,
-                color = Color(0xFF6B7280)
-            )
-        }
-    }
-}
-
-@Composable
-private fun EnhancedEarningsChart(data: List<Pair<String, Float>>, timeRange: String) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = Color.White.copy(alpha = 0.9f)
-        ),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            Spacer(Modifier.height(14.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFFF5A524), modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(6.dp))
                 Text(
-                    "Ingresos por ${timeRange.lowercase()}",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    "Total: ${com.intu.taxi.ui.formatSoles(data.sumOf { it.second.toDouble() })}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color(0xFF08817E), // teal
-                    fontWeight = FontWeight.Medium
+                    text = when {
+                        rating == null || rating.second == 0 -> "Aún no tienes calificaciones"
+                        else -> String.format(Locale.US, "%.2f", rating.first) +
+                            " · ${rating.second} ${if (rating.second == 1) "calificación" else "calificaciones"}"
+                    },
+                    color = Color.White
                 )
             }
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            val maxValue = data.maxOf { it.second }
-            
-            data.forEach { (label, value) ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        label,
-                        modifier = Modifier.width(60.dp),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFF6B7280)
-                    )
-                    
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(8.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(Color(0xFFE5E7EB))
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxHeight()
-                                .fillMaxWidth((value / maxValue).coerceIn(0f, 1f))
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(
-                                    Brush.horizontalGradient(
-                                        colors = listOf(Color(0xFF08817E), Color(0xFF1E1F47)) // teal to indigo
-                                    )
-                                )
-                                .animateContentSize()
-                        )
-                    }
-                    
-                    Spacer(modifier = Modifier.width(8.dp))
-                    
-                    Text(
-                        com.intu.taxi.ui.formatSoles(value.toDouble()),
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.Medium,
-                        color = Color(0xFF1C1C1E)
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun TripStatusDistribution(timeRange: String) {
-    val statusData = when (timeRange) {
-        "Día" -> listOf(
-            Triple("Completado", 5, Color(0xFF08817E)), // teal
-            Triple("En curso", 2, Color(0xFF1E1F47)), // indigo
-            Triple("Pendiente", 1, Color(0xFF08817E)) // teal
-        )
-        "Semana" -> listOf(
-            Triple("Completado", 32, Color(0xFF08817E)), // teal
-            Triple("En curso", 7, Color(0xFF1E1F47)), // indigo
-            Triple("Pendiente", 3, Color(0xFF08817E)) // teal
-        )
-        else -> listOf(
-            Triple("Completado", 145, Color(0xFF08817E)), // teal
-            Triple("En curso", 25, Color(0xFF1E1F47)), // indigo
-            Triple("Pendiente", 10, Color(0xFF08817E)) // teal
-        )
-    }
-    
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = Color.White.copy(alpha = 0.9f)
-        ),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
+            Spacer(Modifier.height(6.dp))
             Text(
-                "Distribución de servicios",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
+                "Cuenta solo viajes completados. El pago lo recibes directo del pasajero.",
+                color = Color.White.copy(alpha = 0.75f),
+                style = MaterialTheme.typography.bodySmall
             )
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            val total = statusData.sumOf { it.second }
-            
-            statusData.forEach { (status, count, color) ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(12.dp)
-                            .clip(CircleShape)
-                            .background(color)
-                    )
-                    
-                    Spacer(modifier = Modifier.width(12.dp))
-                    
-                    Text(
-                        status,
-                        modifier = Modifier.weight(1f),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFF6B7280)
-                    )
-                    
-                    Text(
-                        "$count (${"%.1f".format(count * 100f / total)}%)",
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.Medium,
-                        color = Color(0xFF1C1C1E)
-                    )
-                }
-            }
         }
     }
 }
 
 @Composable
-private fun EnhancedClientTripCard(trip: TripItem.ClientTrip) {
-    var expanded by remember { mutableStateOf(false) }
-    
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { expanded = !expanded }
-            .animateContentSize(),
-        colors = CardDefaults.cardColors(
-            containerColor = Color.White.copy(alpha = 0.95f)
-        ),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = if (expanded) 12.dp else 4.dp
-        )
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            // Header with driver info
-            Row(
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Driver avatar
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(CircleShape)
-                        .background(
-                            Brush.radialGradient(
-                                colors = listOf(
-                                    Color(0xFF08817E), // teal
-                                    Color(0xFF1E1F47)  // indigo
-                                )
-                            )
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Person,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-                
-                Spacer(modifier = Modifier.width(12.dp))
-                
-                Column(
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(
-                        trip.driverName,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF1C1C1E)
-                    )
-                    Text(
-                        "Placa: ${trip.plate}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFF6B7280)
-                    )
-                }
-                
-                // Price
-                Column(
-                    horizontalAlignment = Alignment.End
-                ) {
-                    Text(
-                        "${trip.currency} ${"%.2f".format(trip.price)}",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF10B981)
-                    )
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.StarHalf,
-                            contentDescription = null,
-                            tint = Color(0xFFFFB300),
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Spacer(modifier = Modifier.width(2.dp))
-                        Text(
-                            "${trip.rating}",
-                            style = MaterialTheme.typography.bodySmall,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
-            }
-            
-            Spacer(modifier = Modifier.height(12.dp))
-            
-            // Trip details
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                TripDetailItem(
-                    icon = Icons.Default.CalendarToday,
-                    label = "Fecha",
-                    value = trip.date
-                )
-                TripDetailItem(
-                    icon = Icons.Default.SocialDistance,
-                    label = "Distancia",
-                    value = trip.distance
-                )
-                TripDetailItem(
-                    icon = Icons.Default.AccessTime,
-                    label = "Duración",
-                    value = trip.duration
-                )
-            }
-            
-            Spacer(modifier = Modifier.height(12.dp))
-            
-            // Route
-            EnhancedRouteDisplay(trip.from, trip.to)
-            
-            // Expanded content
-            AnimatedVisibility(visible = expanded) {
-                Column {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Divider(color = Color(0xFFE5E7EB))
-                    Spacer(modifier = Modifier.height(12.dp))
-                    
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Button(
-                            onClick = { /* Repeat trip */ },
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFF08817E), // teal
-                            ),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Replay,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Repetir viaje")
-                        }
-                        
-                        OutlinedButton(
-                            onClick = { /* Report issue */ },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Report,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Reportar")
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun EnhancedDriverTripCard(trip: TripItem.DriverTrip) {
-    var expanded by remember { mutableStateOf(false) }
-    
-    val statusColor = when (trip.status) {
-        TripStatus.PENDING -> Color(0xFF08817E) // teal
-        TripStatus.IN_PROGRESS -> Color(0xFF1E1F47) // indigo
-        TripStatus.COMPLETED -> Color(0xFF08817E) // teal
-        TripStatus.CANCELLED -> Color(0xFF6B7280) // gray
-    }
-    
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { expanded = !expanded }
-            .animateContentSize(),
-        colors = CardDefaults.cardColors(
-            containerColor = Color.White.copy(alpha = 0.95f)
-        ),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = if (expanded) 12.dp else 4.dp
-        ),
-        border = BorderStroke(1.dp, statusColor.copy(alpha = 0.3f))
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            // Header with passenger info
-            Row(
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Passenger avatar
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(CircleShape)
-                        .background(statusColor.copy(alpha = 0.1f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Person,
-                        contentDescription = null,
-                        tint = statusColor,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-                
-                Spacer(modifier = Modifier.width(12.dp))
-                
-                Column(
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(
-                        trip.passengerName,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF1C1C1E)
-                    )
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .clip(CircleShape)
-                                .background(statusColor)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            trip.status.name.replace("_", " "),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = statusColor,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
-                
-                Column(
-                    horizontalAlignment = Alignment.End
-                ) {
-                    Text(
-                        "${trip.currency} ${"%.2f".format(trip.fare)}",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF10B981)
-                    )
-                    if (trip.status != TripStatus.COMPLETED) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.AccessTime,
-                                contentDescription = null,
-                                tint = Color(0xFF6B7280),
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Spacer(modifier = Modifier.width(2.dp))
-                            Text(
-                                trip.eta,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color(0xFF6B7280)
-                            )
-                        }
-                    }
-                }
-            }
-            
-            Spacer(modifier = Modifier.height(12.dp))
-            
-            // Trip details
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                TripDetailItem(
-                    icon = Icons.Default.SocialDistance,
-                    label = "Distancia",
-                    value = trip.distance
-                )
-                TripDetailItem(
-                    icon = Icons.Default.AccessTime,
-                    label = "Duración",
-                    value = trip.duration
-                )
-                TripDetailItem(
-                    icon = Icons.Default.CalendarToday,
-                    label = "Estado",
-                    value = trip.status.name.replace("_", " ")
-                )
-            }
-            
-            Spacer(modifier = Modifier.height(12.dp))
-            
-            // Route
-            EnhancedRouteDisplay(trip.pickup, trip.dropoff)
-            
-            // Expanded content
-            AnimatedVisibility(visible = expanded) {
-                Column {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Divider(color = Color(0xFFE5E7EB))
-                    Spacer(modifier = Modifier.height(12.dp))
-                    
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        when (trip.status) {
-                            TripStatus.PENDING -> {
-                                Button(
-                                    onClick = { /* Accept trip */ },
-                                    modifier = Modifier.weight(1f),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = Color(0xFF08817E) // teal
-                                    ),
-                                    shape = RoundedCornerShape(8.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.CheckCircle,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Aceptar")
-                                }
-                                
-                                OutlinedButton(
-                                    onClick = { /* Reject trip */ },
-                                    modifier = Modifier.weight(1f),
-                                    shape = RoundedCornerShape(8.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Cancel,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Rechazar")
-                                }
-                            }
-                            TripStatus.IN_PROGRESS -> {
-                                Button(
-                                    onClick = { /* Complete trip */ },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = Color(0xFF1E1F47) // indigo
-                                    ),
-                                    shape = RoundedCornerShape(8.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Flag,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Completar viaje")
-                                }
-                            }
-                            TripStatus.COMPLETED -> {
-                                OutlinedButton(
-                                    onClick = { /* View details */ },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(8.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Info,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Ver detalles")
-                                }
-                            }
-                            else -> {}
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun TripDetailItem(
-    icon: ImageVector,
-    label: String,
-    value: String
-) {
+private fun EarningsTile(label: String, summary: EarningsSummary, modifier: Modifier) {
     Column(
-        horizontalAlignment = Alignment.CenterHorizontally
+        modifier = modifier
+            .background(Color.White.copy(alpha = 0.15f), RoundedCornerShape(14.dp))
+            .padding(horizontal = 10.dp, vertical = 10.dp)
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = Color(0xFF667eea),
-            modifier = Modifier.size(20.dp)
-        )
-        Spacer(modifier = Modifier.height(4.dp))
+        Text(label, color = Color.White.copy(alpha = 0.85f), style = MaterialTheme.typography.bodySmall)
         Text(
-            value,
-            style = MaterialTheme.typography.bodySmall,
-            fontWeight = FontWeight.Medium,
-            color = Color(0xFF1C1C1E)
+            formatSoles(summary.total),
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.titleMedium,
+            maxLines = 1
         )
         Text(
-            label,
-            style = MaterialTheme.typography.labelSmall,
-            color = Color(0xFF6B7280)
+            "${summary.rides} ${if (summary.rides == 1) "viaje" else "viajes"}",
+            color = Color.White.copy(alpha = 0.85f),
+            style = MaterialTheme.typography.bodySmall
         )
     }
 }
 
 @Composable
-private fun EnhancedRouteDisplay(from: String, to: String) {
+private fun RideHistoryCard(ride: RideHistoryItem, isDriver: Boolean, onRate: (Int) -> Unit) {
+    val completed = ride.status == "completed"
     Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = Color(0xFFF8FAFC)
-        ),
-        shape = RoundedCornerShape(12.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        modifier = Modifier.fillMaxWidth()
     ) {
-        Column(
-            modifier = Modifier.padding(12.dp)
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(8.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFF08817E)) // teal
-                )
-                Spacer(modifier = Modifier.width(8.dp))
+        Column(Modifier.padding(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    from,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium
+                    ride.requestedAt?.atZone(ZoneId.systemDefault())?.format(DateLabel).orEmpty(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Muted,
+                    modifier = Modifier.weight(1f)
                 )
+                StatusChip(completed)
             }
-            
-            Spacer(modifier = Modifier.height(4.dp))
-            
-            Box(
-                modifier = Modifier
-                    .padding(start = 3.dp)
-                    .width(2.dp)
-                    .height(8.dp)
-                    .background(Color(0xFFE5E7EB))
+            Spacer(Modifier.height(10.dp))
+            RoutePoint(Color(0xFF16A34A), ride.originAddress.ifBlank { "Punto de recojo" })
+            Spacer(Modifier.height(4.dp))
+            RoutePoint(Color(0xFFDC2626), ride.destinationAddress.ifBlank { "Destino" })
+            Spacer(Modifier.height(12.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Avatar(
+                    url = if (isDriver) ride.riderPhotoUrl else ride.driverPhotoUrl,
+                    size = 36.dp,
+                    zoomable = true
+                )
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        (if (isDriver) ride.riderName else ride.driverName)
+                            .ifBlank { if (isDriver) "Pasajero" else "Sin conductor" },
+                        fontWeight = FontWeight.SemiBold,
+                        color = Indigo,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (!isDriver && ride.vehiclePlate.isNotBlank()) {
+                        Text(
+                            "Mototaxi ${listOf(ride.vehicleDescription, ride.vehiclePlate).filter { it.isNotBlank() }.joinToString(" · ")}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Muted,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        formatSoles(ride.fare),
+                        fontWeight = FontWeight.Bold,
+                        color = if (completed) Indigo else Muted
+                    )
+                    Text(
+                        if (ride.paymentMethod == "yape_plin") "Yape" else "Efectivo",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Muted
+                    )
+                }
+            }
+            if (completed) {
+                val myRating = if (isDriver) ride.ratingForRider else ride.ratingForDriver
+                HorizontalDivider(Modifier.padding(vertical = 10.dp), color = Color(0xFFECEEF1))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        when {
+                            myRating != null -> "Tu calificación"
+                            isDriver -> "Califica al pasajero"
+                            else -> "Califica a tu conductor"
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Muted,
+                        modifier = Modifier.weight(1f)
+                    )
+                    StarRating(
+                        stars = myRating ?: 0,
+                        size = 24.dp,
+                        onRate = if (myRating == null) onRate else null
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatusChip(completed: Boolean) {
+    Text(
+        if (completed) "Completado" else "Cancelado",
+        style = MaterialTheme.typography.labelMedium,
+        color = if (completed) Color(0xFF067647) else Color(0xFFB42318),
+        modifier = Modifier
+            .background(
+                if (completed) Color(0xFFE8F6EE) else Color(0xFFFDECEA),
+                RoundedCornerShape(50)
             )
-            
-            Spacer(modifier = Modifier.height(4.dp))
-            
-            Row(
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(8.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFF6B7280)) // gray
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    to,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium
-                )
+            .padding(horizontal = 10.dp, vertical = 3.dp)
+    )
+}
+
+@Composable
+private fun RoutePoint(color: Color, text: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            Modifier
+                .size(8.dp)
+                .background(color, CircleShape)
+        )
+        Spacer(Modifier.width(10.dp))
+        Text(
+            text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color(0xFF1C1C1E),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun MessageCard(title: String, body: String, actionLabel: String? = null, onAction: () -> Unit = {}) {
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(title, fontWeight = FontWeight.SemiBold, color = Indigo)
+            Spacer(Modifier.height(6.dp))
+            Text(body, style = MaterialTheme.typography.bodyMedium, color = Muted)
+            if (actionLabel != null) {
+                Spacer(Modifier.height(12.dp))
+                Button(onClick = onAction, colors = ButtonDefaults.buttonColors(containerColor = Teal)) {
+                    Text(actionLabel)
+                }
             }
         }
     }

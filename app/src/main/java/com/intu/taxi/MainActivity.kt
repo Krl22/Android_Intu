@@ -253,17 +253,33 @@ fun IntuApp() {
             composable("profile_completion_phone") {
                 bottomBarVisible = false
                 val user = auth.currentUser
+                val ctx = LocalContext.current
                 ProfileCompletionScreen(
                     prefilledPhoneE164 = user?.phoneNumber,
                     requireEmail = true,
                     onSubmit = { profile: UserProfile ->
                         scope.launch {
                             val uid = auth.currentUser?.uid ?: return@launch
-                            repo.saveUserProfile(uid, profile)
-                            navController.navigate(NavItem.Home.route) {
-                                popUpTo("login") { inclusive = true }
+                            // Sin un teléfono válido el perfil quedaría incompleto y volvería a pedirse
+                            if (com.intu.taxi.data.SupabaseApi.normalizePhone(profile.number) == null && user?.phoneNumber == null) {
+                                android.widget.Toast.makeText(ctx, "Ingresa un teléfono válido, por ejemplo 987 654 321", android.widget.Toast.LENGTH_LONG).show()
+                                return@launch
                             }
-                            bottomBarVisible = true
+                            // Si el servidor falla, se avisa y se queda en la pantalla (antes la app se cerraba)
+                            runCatching { repo.saveUserProfile(uid, profile) }
+                                .onSuccess {
+                                    navController.navigate(NavItem.Home.route) {
+                                        popUpTo("login") { inclusive = true }
+                                    }
+                                    bottomBarVisible = true
+                                }
+                                .onFailure {
+                                    android.widget.Toast.makeText(
+                                        ctx,
+                                        it.message ?: "No se pudo guardar tu perfil. Intenta de nuevo.",
+                                        android.widget.Toast.LENGTH_LONG
+                                    ).show()
+                                }
                         }
                     },
                     onVerifyEmail = { repo.sendEmailVerification() }

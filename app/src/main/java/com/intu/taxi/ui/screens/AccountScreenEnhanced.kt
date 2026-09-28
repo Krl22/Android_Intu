@@ -241,45 +241,18 @@ fun AccountScreenEnhanced(
                 val hasDriverData = hasCompleteDriverProfile
                 val uid = authUser?.uid
                 
-                // Fetch fresh profile data from Firestore
-                var remoteProfile: UserProfile? = null
+                // Perfil y aprobación actualizados desde Supabase
                 var remoteApproved: Boolean? = null
                 var actualIsApproved: Boolean? = null
                 if (uid != null) {
-                    try { 
-                        println("DEBUG: About to fetch user profile from Firestore for UID: $uid")
-                        
-                        // Primero verificar datos crudos en Firestore
-                        println("DEBUG: Checking raw Firestore data...")
-                        val rawData = repo.checkRawFirestoreData(uid)
-                        
-                        // Luego obtener el perfil mapeado
-                        remoteProfile = repo.getUserProfile(uid)
-                        
-                        // Usar la nueva función para obtener el valor correcto de isApproved
+                    try {
+                        val remoteProfile = repo.getUserProfile(uid)
                         actualIsApproved = repo.getIsApprovedValue(uid)
-                        println("DEBUG: Actual isApproved value from Firestore: $actualIsApproved")
-                        
                         remoteApproved = actualIsApproved
-                        profile = remoteProfile // Update local profile with fresh data
-                        
-                        println("DEBUG: Comparison - Raw isApproved: ${rawData?.get("isApproved")} vs Mapped isApproved: $remoteApproved")
-                        println("DEBUG: Complete profile data: $remoteProfile")
-                        
-                        // Verificación adicional - si el perfil trae datos pero isApproved es null
-                        if (remoteProfile != null && remoteApproved == null) {
-                            println("DEBUG: WARNING - Profile exists but isApproved is null. This might indicate:")
-                            println("DEBUG: 1. Field doesn't exist in Firestore")
-                            println("DEBUG: 2. Field has different name/capitalization")
-                            println("DEBUG: 3. Field has wrong data type")
-                            println("DEBUG: 4. Mapping issue between Firestore and data class")
-                        }
+                        profile = remoteProfile
                     } catch (e: Exception) {
-                        println("DEBUG: Firestore fetch failed: ${e.message}")
-                        e.printStackTrace()
+                        println("DEBUG: No se pudo actualizar el perfil: ${e.message}")
                     }
-                } else {
-                    println("DEBUG: No UID available for Firestore fetch")
                 }
                 
                 // Supabase es la única fuente de verdad para la aprobación manual.
@@ -752,12 +725,29 @@ private fun EnhancedHeaderSection(
 
 @Composable
 private fun DriverStatsSection() {
+    // Ganancias y calificación reales del conductor (antes eran montos de ejemplo)
+    val historyRepo = remember { com.intu.taxi.repositories.RideHistoryRepository() }
+    var todayTotal by remember { mutableStateOf<Double?>(null) }
+    var weekTotal by remember { mutableStateOf<Double?>(null) }
+    var rating by remember { mutableStateOf<Pair<Double, Int>?>(null) }
+    LaunchedEffect(Unit) {
+        runCatching { historyRepo.driverHistory() }.onSuccess { rides ->
+            val (today, week, _) = com.intu.taxi.repositories.RideHistoryRepository.earnings(rides)
+            todayTotal = today.total
+            weekTotal = week.total
+        }
+        rating = runCatching { historyRepo.driverRating() }.getOrNull()
+    }
     val stats = listOf(
-        Triple("Hoy", "S/ 120.00", Icons.Default.TrendingUp),
-        Triple("Semana", "S/ 540.50", Icons.Default.CalendarToday),
-        Triple("Calificación", "4.8", Icons.Default.Star)
+        Triple("Hoy", todayTotal?.let { com.intu.taxi.ui.formatSoles(it) } ?: "—", Icons.Default.TrendingUp),
+        Triple("7 días", weekTotal?.let { com.intu.taxi.ui.formatSoles(it) } ?: "—", Icons.Default.CalendarToday),
+        Triple(
+            "Calificación",
+            rating?.takeIf { it.second > 0 }?.let { String.format(java.util.Locale.US, "%.1f", it.first) } ?: "—",
+            Icons.Default.Star
+        )
     )
-    
+
     Card(
         modifier = Modifier
             .fillMaxWidth()

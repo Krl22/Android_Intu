@@ -158,6 +158,8 @@ fun DriverHomeScreen(
     var activeRideRequest by remember { mutableStateOf<DriverRideRequest?>(null) }
     var activeRideId by remember { mutableStateOf<String?>(null) }
     var activeRideStatus by remember { mutableStateOf("accepted") }
+    // Viaje recién terminado, para que el conductor califique al pasajero
+    var rideToRate by remember { mutableStateOf<Pair<String, DriverRideRequest>?>(null) }
     // Siguiente viaje, aceptado mientras lleva a otro pasajero (como Uber)
     var queuedRideRequest by remember { mutableStateOf<DriverRideRequest?>(null) }
     var queuedRideId by remember { mutableStateOf<String?>(null) }
@@ -944,7 +946,10 @@ fun DriverHomeScreen(
                                     }
                                     Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
                                     // Al terminar sigue en línea: pasa al siguiente viaje o vuelve a recibir solicitudes
-                                    if (nextStatus == "completed") moveToNextRideOrClear()
+                                    if (nextStatus == "completed") {
+                                        activeRideRequest?.let { rideToRate = rideId to it }
+                                        moveToNextRideOrClear()
+                                    }
                                 }
                                 .onFailure { Toast.makeText(context, it.message ?: "No se pudo actualizar el viaje", Toast.LENGTH_LONG).show() }
                         }
@@ -1038,6 +1043,32 @@ fun DriverHomeScreen(
                     )
                 }
             }
+        }
+
+        // Al terminar un viaje: calificar al pasajero (se puede omitir y hacerlo luego en Viajes)
+        rideToRate?.let { (ratedRideId, rider) ->
+            AlertDialog(
+                onDismissRequest = { rideToRate = null },
+                title = { Text("¿Cómo fue el pasajero?") },
+                text = {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                        com.intu.taxi.ui.components.Avatar(url = rider.userPhotoUrl, size = 64.dp)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(rider.userName.ifBlank { "Pasajero" }, fontWeight = FontWeight.SemiBold)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        com.intu.taxi.ui.components.StarRating(stars = 0, size = 40.dp, onRate = { stars ->
+                            rideToRate = null
+                            scope.launch {
+                                runCatching { com.intu.taxi.repositories.RideHistoryRepository().rate(ratedRideId, stars) }
+                                    .onSuccess { Toast.makeText(context, "¡Gracias por calificar!", Toast.LENGTH_SHORT).show() }
+                                    .onFailure { Toast.makeText(context, it.message ?: "No se pudo guardar la calificación", Toast.LENGTH_LONG).show() }
+                            }
+                        })
+                    }
+                },
+                confirmButton = {},
+                dismissButton = { TextButton(onClick = { rideToRate = null }) { Text("Omitir") } }
+            )
         }
 
         // PIN de seguridad: el viaje solo inicia si el pasajero le dicta al conductor el PIN correcto

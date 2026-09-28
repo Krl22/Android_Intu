@@ -1,58 +1,40 @@
 package com.intu.taxi.models
 
 import com.google.firebase.firestore.GeoPoint
-import com.google.firebase.database.PropertyName
 
 data class ActiveRide(
-    @PropertyName("rideId")
     val rideId: String = "",
     
-    @PropertyName("driverId")
     val driverId: String = "",
     
-    @PropertyName("clientId")
     val clientId: String = "",
     
-    @PropertyName("requestId")
     val requestId: String = "",
     
-    @PropertyName("driverLocation")
     val driverLocation: GeoPoint? = null,
     
-    @PropertyName("clientLocation")
     val clientLocation: GeoPoint? = null,
     
-    @PropertyName("destination")
     val destination: GeoPoint? = null,
     
-    @PropertyName("originAddress")
     val originAddress: String = "",
     
-    @PropertyName("destinationAddress")
     val destinationAddress: String = "",
     
-    @PropertyName("status")
     val status: String = "active", // active, completed, cancelled
     
-    @PropertyName("createdAt")
     val createdAt: Long = System.currentTimeMillis(),
     
-    @PropertyName("updatedAt")
     val updatedAt: Long = System.currentTimeMillis(),
     
-    @PropertyName("routeGeometry")
     val routeGeometry: String? = null,
     
-    @PropertyName("originLatitude")
     val originLatitude: Double = 0.0,
     
-    @PropertyName("originLongitude")
     val originLongitude: Double = 0.0,
     
-    @PropertyName("destinationLatitude")
     val destinationLatitude: Double = 0.0,
     
-    @PropertyName("destinationLongitude")
     val destinationLongitude: Double = 0.0,
     val paymentMethod: String = "efectivo",
     val fare: Double = 0.0,

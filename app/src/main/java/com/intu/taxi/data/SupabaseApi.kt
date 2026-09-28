@@ -82,6 +82,8 @@ object SupabaseApi {
         message == "ride_not_available" -> "Este viaje ya no está disponible."
         message == "driver_not_approved" -> "Tu cuenta de conductor aún no está aprobada."
         message == "invalid_transition" -> "El viaje ya cambió de estado. Intenta de nuevo."
+        message == "cannot_rate" -> "Ya calificaste este viaje."
+        message == "invalid_rating" -> "Elige de 1 a 5 estrellas."
         message == "pin_required" -> "Ingresa el PIN del pasajero para iniciar el viaje."
         message == "pin_locked" -> "Demasiados intentos con PIN incorrecto. Cancela el viaje por seguridad."
         message == "ride_not_found" -> "No se encontró el viaje."
@@ -124,17 +126,43 @@ object SupabaseApi {
         phone: String? = null,
         email: String? = null,
         photoUrl: String? = null,
-        driverMode: Boolean? = null
+        driverMode: Boolean? = null,
+        birthdate: String? = null,
+        termsAccepted: Boolean? = null
     ) {
-        val user = FirebaseAuth.getInstance().currentUser ?: error("Usuario no autenticado")
+        val user = FirebaseAuth.getInstance().currentUser ?: error("Inicia sesión para continuar.")
         val body = JSONObject().put("id", user.uid)
         if (firstName.isNotBlank()) body.put("first_name", firstName)
         if (lastName.isNotBlank()) body.put("last_name", lastName)
-        (phone ?: user.phoneNumber)?.takeIf { it.startsWith("+") }?.let { body.put("phone", it) }
-        (email ?: user.email)?.let { body.put("email", it) }
+        (normalizePhone(phone) ?: user.phoneNumber)?.let { body.put("phone", it) }
+        (email?.takeIf { it.isNotBlank() } ?: user.email)?.let { body.put("email", it) }
         (photoUrl ?: user.photoUrl?.toString())?.let { body.put("photo_url", it) }
         if (driverMode != null) body.put("driver_mode", driverMode)
+        birthdate?.trim()?.takeIf { Regex("^\\d{4}-\\d{2}-\\d{2}$").matches(it) }?.let { body.put("birthdate", it) }
+        if (termsAccepted == true) body.put("terms_accepted_at", java.time.Instant.now().toString())
         upsert("profiles", body)
+    }
+
+    /** Perfil del usuario con sesión en Supabase, o null si todavía no existe. */
+    suspend fun currentProfile(): JSONObject? {
+        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return null
+        return rows("profiles?id=eq.${encode(uid)}&select=*&limit=1").optJSONObject(0)
+    }
+
+    /**
+     * Teléfono en formato internacional (+51999888777) como exige Supabase. Acepta números con
+     * espacios o guiones y, si faltan el + y el código de país, asume Perú para 9 dígitos.
+     */
+    fun normalizePhone(raw: String?): String? {
+        if (raw.isNullOrBlank()) return null
+        val digits = raw.filter(Char::isDigit)
+        val e164 = when {
+            raw.trim().startsWith("+") -> "+$digits"
+            digits.length == 9 -> "+51$digits"
+            digits.length == 11 && digits.startsWith("51") -> "+$digits"
+            else -> return null
+        }
+        return e164.takeIf { Regex("^\\+[1-9][0-9]{6,14}$").matches(it) }
     }
 
     suspend fun syncDriver(
@@ -144,10 +172,12 @@ object SupabaseApi {
         brand: String,
         model: String,
         year: Int?,
-        plate: String
+        plate: String,
+        // Al registrarse como conductor se activa el modo conductor; al migrar datos antiguos, no
+        markDriverMode: Boolean = true
     ) {
-        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: error("Usuario no autenticado")
-        ensureCurrentProfile(driverMode = true)
+        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: error("Inicia sesión para continuar.")
+        ensureCurrentProfile(driverMode = if (markDriverMode) true else null)
         upsert("drivers", JSONObject()
             .put("id", uid)
             .put("document_type", "dni")
@@ -169,6 +199,16 @@ object SupabaseApi {
         } else {
             request("POST", "vehicles", vehicle, "return=minimal")
         }
+    }
+
+    /** Datos de conductor (documentos, estado y vehículo activo) del usuario con sesión, o null. */
+    suspend fun currentDriver(): Pair<JSONObject, JSONObject?>? {
+        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return null
+        val driver = rows("drivers?id=eq.${encode(uid)}&select=document_number,license_number,status&limit=1")
+            .optJSONObject(0) ?: return null
+        val vehicle = rows("vehicles?driver_id=eq.${encode(uid)}&is_active=eq.true&select=vehicle_type,brand,model,year,plate&limit=1")
+            .optJSONObject(0)
+        return driver to vehicle
     }
 
     suspend fun driverStatus(): String? {
