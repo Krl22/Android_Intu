@@ -1,24 +1,45 @@
 package com.intu.taxi.repositories
 
+import com.intu.taxi.data.PostgresChangeFilter
 import com.intu.taxi.data.SupabaseApi
+import com.intu.taxi.data.SupabaseRealtime
 import com.intu.taxi.data.str
 import com.intu.taxi.models.DriverRideRequest
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
 import java.time.Instant
 
 class DriverRideRequestRepository {
-    fun getActiveRideRequests(): Flow<List<DriverRideRequest>> = flow {
+    /**
+     * Solicitudes abiertas. Una nueva llega al instante por Supabase Realtime (la RLS solo deja ver
+     * al conductor las de su tipo de vehículo); además se consulta cada 8 s como respaldo, o cada
+     * 2 s si Realtime no está conectado.
+     */
+    fun getActiveRideRequests(): Flow<List<DriverRideRequest>> = channelFlow {
+        var realtimeReady = false
+        val refresh = Channel<Unit>(Channel.CONFLATED)
+        launch {
+            SupabaseRealtime.changes("driver-requests", listOf(PostgresChangeFilter("rides")))
+                .collect { event ->
+                    when (event.type) {
+                        "joined" -> realtimeReady = true
+                        "error" -> realtimeReady = false
+                        "change" -> refresh.trySend(Unit)
+                    }
+                }
+        }
         while (currentCoroutineContext().isActive) {
-            try {
+            runCatching {
                 val rows = SupabaseApi.rows("rides?status=eq.searching&select=*&order=requested_at.asc&limit=30")
-                emit((0 until rows.length()).map { rows.getJSONObject(it).toRequest() })
-            } catch (_: Exception) { }
-            delay(2_000)
+                (0 until rows.length()).map { rows.getJSONObject(it).toRequest() }
+            }.onSuccess { send(it) }
+            withTimeoutOrNull(if (realtimeReady) 8_000L else 2_000L) { refresh.receive() }
         }
     }
 

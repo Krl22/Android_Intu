@@ -86,6 +86,8 @@ dependencies {
     // DataStore para preferencias
     implementation("androidx.datastore:datastore-preferences:1.0.0")
     testImplementation(libs.junit)
+    // org.json real para pruebas en la JVM (en Android lo trae el sistema)
+    testImplementation("org.json:json:20240303")
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))

@@ -1,20 +1,28 @@
 package com.intu.taxi.repositories
 
 import com.google.firebase.firestore.GeoPoint
+import com.intu.taxi.data.PostgresChangeFilter
 import com.intu.taxi.data.SupabaseApi
+import com.intu.taxi.data.SupabaseRealtime
 import com.intu.taxi.data.str
 import com.intu.taxi.models.ActiveRide
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
 import java.time.Instant
 
 class ActiveRideRepository {
-    fun getActiveRideByRequestId(requestId: String): Flow<ActiveRide?> = pollRide(requestId)
-    fun getActiveRide(rideId: String): Flow<ActiveRide?> = pollRide(rideId)
+    fun getActiveRideByRequestId(requestId: String): Flow<ActiveRide?> = liveRide(requestId)
+    fun getActiveRide(rideId: String): Flow<ActiveRide?> = liveRide(rideId)
 
     suspend fun findOpenRideForRider(userId: String): ActiveRide? {
         val rows = SupabaseApi.rows(
@@ -63,22 +71,71 @@ class ActiveRideRepository {
         }
     }
 
-    private fun pollRide(rideId: String): Flow<ActiveRide?> = flow {
-        while (currentCoroutineContext().isActive) {
-            try {
-                val rows = SupabaseApi.rows("rides?id=eq.${SupabaseApi.encode(rideId)}&select=*&limit=1")
-                val ride = rows.optJSONObject(0)?.toActiveRide()
-                if (ride != null && ride.driverId.isNotBlank() && ride.status in setOf("accepted", "arrived", "in_progress")) {
-                    val location = runCatching {
-                        SupabaseApi.rpc("ride_driver_location", JSONObject().put("p_ride_id", rideId))
-                    }.getOrNull()
-                    emit(ride.copy(driverLocation = location?.let {
-                        if (it.has("latitude")) GeoPoint(it.getDouble("latitude"), it.getDouble("longitude")) else null
-                    }))
-                } else emit(ride)
-            } catch (_: Exception) { }
-            delay(1_500)
+    /**
+     * Viaje en vivo. Por Supabase Realtime llegan al instante los cambios del viaje y cada
+     * movimiento del conductor; además se consulta cada 8 s como respaldo (cada 1.5 s si
+     * Realtime no está conectado), así que funciona igual aunque se caiga la conexión.
+     */
+    private fun liveRide(rideId: String): Flow<ActiveRide?> = channelFlow {
+        var last: ActiveRide? = null
+        var realtimeReady = false
+        val refresh = Channel<Unit>(Channel.CONFLATED)
+        val activeDriverId = MutableStateFlow<String?>(null)
+
+        // Cambios de la fila del viaje: estado, conductor asignado, cancelación…
+        launch {
+            SupabaseRealtime.changes("ride-$rideId", listOf(PostgresChangeFilter("rides", "id=eq.$rideId")))
+                .collect { event ->
+                    when (event.type) {
+                        "joined" -> realtimeReady = true
+                        "error" -> realtimeReady = false
+                        "change" -> refresh.trySend(Unit)
+                    }
+                }
         }
+
+        // Ubicación del conductor mientras dura el viaje (la RLS solo la deja ver a su pasajero)
+        launch {
+            activeDriverId.collectLatest { driverId ->
+                if (driverId == null) return@collectLatest
+                SupabaseRealtime.changes(
+                    "ride-$rideId-location",
+                    listOf(PostgresChangeFilter("driver_locations", "driver_id=eq.$driverId"))
+                ).collect { event ->
+                    val record = event.record ?: return@collect
+                    val current = last ?: return@collect
+                    if (event.type == "change" && record.has("latitude")) {
+                        val moved = current.copy(driverLocation = GeoPoint(record.getDouble("latitude"), record.getDouble("longitude")))
+                        last = moved
+                        send(moved)
+                    }
+                }
+            }
+        }
+
+        while (currentCoroutineContext().isActive) {
+            runCatching { fetchRide(rideId) }.getOrNull()?.let { ride ->
+                last = ride
+                send(ride)
+                activeDriverId.value = ride.driverId.takeIf {
+                    it.isNotBlank() && ride.status in setOf("accepted", "arrived", "in_progress")
+                }
+            }
+            withTimeoutOrNull(if (realtimeReady) 8_000L else 1_500L) { refresh.receive() }
+        }
+    }
+
+    /** Fila del viaje y, si hay conductor en camino o en viaje, su última ubicación. */
+    private suspend fun fetchRide(rideId: String): ActiveRide? {
+        val rows = SupabaseApi.rows("rides?id=eq.${SupabaseApi.encode(rideId)}&select=*&limit=1")
+        val ride = rows.optJSONObject(0)?.toActiveRide() ?: return null
+        if (ride.driverId.isBlank() || ride.status !in setOf("accepted", "arrived", "in_progress")) return ride
+        val location = runCatching {
+            SupabaseApi.rpc("ride_driver_location", JSONObject().put("p_ride_id", rideId))
+        }.getOrNull()
+        return ride.copy(driverLocation = location?.let {
+            if (it.has("latitude")) GeoPoint(it.getDouble("latitude"), it.getDouble("longitude")) else null
+        })
     }
 
     suspend fun updateDriverLocation(rideId: String, location: GeoPoint): Result<Unit> = runCatching {
