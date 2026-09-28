@@ -360,7 +360,7 @@ fun IntuApp() {
                     isDriver = isDriverMode,
                     onDriverChange = { newDriverMode ->
                         isDriverMode = newDriverMode
-                        // Guardar el estado en Firestore
+                        // Guardar el modo en Supabase
                         val uid = auth.currentUser?.uid
                         if (uid != null) {
                             scope.launch {
@@ -383,7 +383,17 @@ fun IntuApp() {
                     },
                     onNavigateToDriverDataCollection = {
                         navController.navigate("driver_data_collection")
-                    }
+                    },
+                    onOpenAdmin = { navController.navigate("admin") }
+                )
+            }
+            // Panel de administración (el servidor rechaza todo si la cuenta no es admin)
+            composable("admin") {
+                LaunchedEffect(Unit) { bottomBarVisible = false }
+                DisposableEffect(Unit) { onDispose { bottomBarVisible = true } }
+                com.intu.taxi.ui.screens.AdminScreen(
+                    padding = innerPadding,
+                    onBack = { navController.popBackStack() }
                 )
             }
         }

@@ -219,10 +219,11 @@ class AuthRepository(
             termsAccepted = remote?.termsAccepted == true || legacy.termsAccepted,
             isDriver = remote?.isDriver == true || legacy.isDriver
         )
-        runCatching { saveUserProfile(uid, merged) }
+        val profileSaved = runCatching { saveUserProfile(uid, merged) }.isSuccess
         // Datos del vehículo que solo estaban en Firestore
+        var driverSaved = true
         if (!legacy.vehicleBrand.isNullOrBlank() && SupabaseApi.currentDriver() == null) {
-            runCatching {
+            driverSaved = runCatching {
                 SupabaseApi.syncDriver(
                     documentNumber = legacy.documentNumber.orEmpty(),
                     licenseNumber = legacy.driverLicense.orEmpty(),
@@ -233,7 +234,12 @@ class AuthRepository(
                     plate = legacy.licensePlate.orEmpty(),
                     markDriverMode = false
                 )
-            }
+            }.isSuccess
+        }
+        // Copiado todo a Supabase, el perfil antiguo se borra: así la copia ocurre una sola vez
+        // y un reinicio de cuenta desde el panel de administración no lo vuelve a traer.
+        if (profileSaved && driverSaved) {
+            runCatching { db.collection("users").document(uid).delete().await() }
         }
         return merged
     }

@@ -67,10 +67,16 @@ fun AccountScreenEnhanced(
     isDriver: Boolean,
     onDriverChange: (Boolean) -> Unit,
     onLogout: (() -> Unit)? = null,
-    onNavigateToDriverDataCollection: (() -> Unit)? = null
+    onNavigateToDriverDataCollection: (() -> Unit)? = null,
+    onOpenAdmin: (() -> Unit)? = null
 ) {
     val repo = remember { AuthRepository() }
     val auth = FirebaseAuth.getInstance()
+    // El panel de administración solo aparece para cuentas admin (lo decide el servidor)
+    var isAdmin by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        isAdmin = runCatching { com.intu.taxi.repositories.AdminRepository().isAdmin() }.getOrDefault(false)
+    }
     val authUser = auth.currentUser
     
     var profile by remember { mutableStateOf<UserProfile?>(null) }
@@ -364,6 +370,35 @@ fun AccountScreenEnhanced(
                     val showDriverStats = isDriver || (hasCompleteDriverProfile && profile?.isDriver == true)
                     if (showDriverStats) {
                         DriverStatsSection()
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
+
+                    if (isAdmin && onOpenAdmin != null) {
+                        Card(
+                            onClick = onOpenAdmin,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1F47)),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.AdminPanelSettings, contentDescription = null, tint = Color.White)
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("Panel de administración", color = Color.White, fontWeight = FontWeight.SemiBold)
+                                    Text(
+                                        "Aprobar conductores y reiniciar cuentas de prueba",
+                                        color = Color.White.copy(alpha = 0.75f),
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
+                                Icon(Icons.AutoMirrored.Filled.ArrowForwardIos, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                            }
+                        }
                         Spacer(modifier = Modifier.height(16.dp))
                     }
                     
