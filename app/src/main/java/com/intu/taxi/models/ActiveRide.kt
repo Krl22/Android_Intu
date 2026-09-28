@@ -64,7 +64,9 @@ data class ActiveRide(
     val vehicleDescription: String = "",
     val paymentConfirmed: Boolean = false,
     val driverPhotoUrl: String = "",
-    val riderPhotoUrl: String = ""
+    val riderPhotoUrl: String = "",
+    // El conductor aceptó este viaje mientras terminaba otro; irá por el pasajero al acabarlo
+    val driverOnOtherTrip: Boolean = false
 ) {
     companion object {
         private fun readGeoPoint(value: Any?): GeoPoint? {

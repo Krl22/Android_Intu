@@ -850,7 +850,7 @@ fun HomeScreen(
         }
 
         // Marcador del conductor: se crea una vez y luego se desliza hasta cada nueva posición.
-        // Las posiciones llegan cada ~1.5 s; la animación dura casi lo mismo para que el
+        // El conductor envía su ubicación cada 2 s; la animación dura casi lo mismo para que el
         // movimiento se vea continuo en vez de saltar.
         LaunchedEffect(driverLocation, mapViewRef, isStyleLoaded) {
             val pam = driverAnnotationManager ?: return@LaunchedEffect
@@ -873,7 +873,7 @@ fun HomeScreen(
                 return@LaunchedEffect
             }
             val start = marker.point
-            val durationMs = 1300f
+            val durationMs = 1800f
             val startTime = withFrameMillis { it }
             while (true) {
                 val t = ((withFrameMillis { it } - startTime) / durationMs).coerceIn(0f, 1f)
@@ -2183,6 +2183,13 @@ fun HomeScreen(
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
+                    if (ride.status == "accepted" && ride.driverOnOtherTrip) {
+                        Text(
+                            "Tu conductor está terminando un viaje cercano y luego irá por ti.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color(0xFFB45309)
+                        )
+                    }
                     ridePin?.let { pin ->
                         if (ride.status == "accepted" || ride.status == "arrived") {
                             Row(

@@ -147,12 +147,22 @@ fun DriverHomeScreen(
     val activeRideRepository = remember { ActiveRideRepository() }
 
     var hasLocationPermission by rememberSaveable { mutableStateOf(false) }
-    var isSearching by rememberSaveable { mutableStateOf(false) }
+    // "En línea": se mantiene entre viajes y al reabrir la app, hasta que el conductor pulse "Parar"
+    val driverPrefs = remember { context.getSharedPreferences("intu_driver", android.content.Context.MODE_PRIVATE) }
+    var isSearching by rememberSaveable { mutableStateOf(driverPrefs.getBoolean("online", false)) }
+    LaunchedEffect(isSearching) { driverPrefs.edit().putBoolean("online", isSearching).apply() }
     var currentLocation by remember { mutableStateOf<GeoPoint?>(null) }
     var incomingRideRequests by remember { mutableStateOf<List<DriverRideRequest>>(emptyList()) }
+    // Solicitudes que el conductor rechazó: no se le vuelven a mostrar
+    var declinedRequestIds by remember { mutableStateOf(setOf<String>()) }
     var activeRideRequest by remember { mutableStateOf<DriverRideRequest?>(null) }
     var activeRideId by remember { mutableStateOf<String?>(null) }
     var activeRideStatus by remember { mutableStateOf("accepted") }
+    // Siguiente viaje, aceptado mientras lleva a otro pasajero (como Uber)
+    var queuedRideRequest by remember { mutableStateOf<DriverRideRequest?>(null) }
+    var queuedRideId by remember { mutableStateOf<String?>(null) }
+    // Último envío de ubicación a Supabase (sin estado de Compose para no recomponer en cada GPS)
+    val lastLocationSentMs = remember { longArrayOf(0L) }
     // PIN de seguridad que el pasajero le dicta al conductor para iniciar el viaje
     var showPinDialog by remember { mutableStateOf(false) }
     var pinInput by remember { mutableStateOf("") }
@@ -170,29 +180,20 @@ fun DriverHomeScreen(
     var routeDuration by remember { mutableStateOf(0.0) }
     var isCalculatingRoute by remember { mutableStateOf(false) }
 
+    // Al abrir la app retoma los viajes abiertos: el actual y, si lo hay, el siguiente en espera
     LaunchedEffect(Unit) {
         val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return@LaunchedEffect
-        runCatching { activeRideRepository.findOpenRideForDriver(uid) }
-            .getOrNull()?.let { ride ->
-                activeRideId = ride.rideId
-                activeRideStatus = ride.status
-                activeRideRequest = DriverRideRequest(
-                    requestId = ride.rideId,
-                    userId = ride.clientId,
-                    userName = ride.riderName,
-                    userPhone = ride.riderPhone,
-                    userPhotoUrl = ride.riderPhotoUrl.ifBlank { null },
-                    originLatitude = ride.originLatitude,
-                    originLongitude = ride.originLongitude,
-                    originAddress = ride.originAddress,
-                    destinationLatitude = ride.destinationLatitude,
-                    destinationLongitude = ride.destinationLongitude,
-                    destinationAddress = ride.destinationAddress,
-                    estimatedPrice = ride.fare,
-                    paymentMethod = ride.paymentMethod,
-                    status = ride.status
-                )
+        val rides = runCatching { activeRideRepository.findOpenRidesForDriver(uid) }.getOrDefault(emptyList())
+        val current = rides.firstOrNull { it.status == "in_progress" } ?: rides.firstOrNull() ?: return@LaunchedEffect
+        activeRideId = current.rideId
+        activeRideStatus = current.status
+        activeRideRequest = current.toDriverRequest()
+        if (current.status == "in_progress") {
+            rides.firstOrNull { it.rideId != current.rideId }?.let { next ->
+                queuedRideId = next.rideId
+                queuedRideRequest = next.toDriverRequest()
             }
+        }
     }
 
     // Función para limpiar la ruta y el marcador del pasajero del mapa
@@ -504,44 +505,62 @@ fun DriverHomeScreen(
     }
 
     // Funciones para manejar solicitudes
+    // Sin viaje: el aceptado pasa a ser el actual. Con un pasajero a bordo: queda como siguiente viaje.
+    // El conductor sigue en línea en ambos casos.
     fun handleAcceptRideRequest(request: DriverRideRequest) {
         scope.launch {
-            try {
-                val result = driverRideRequestRepository.acceptRideRequest(request.requestId)
-                result.onSuccess { rideId ->
-                    activeRideRequest = request
-                    activeRideId = rideId
-                    activeRideStatus = "accepted"
+            driverRideRequestRepository.acceptRideRequest(request.requestId)
+                .onSuccess { rideId ->
                     incomingRideRequests = emptyList()
-                    // Dejar de buscar nuevas solicitudes
-                    isSearching = false
-                    // NO ocultar el BottomNavigationBar durante viajes activos
-                    // onBottomBarVisibilityChanged(false)
-                    
-                    // Dibujar ruta hacia el cliente
-                    currentLocation?.let { driverLoc ->
-                        val clientLoc = com.google.firebase.firestore.GeoPoint(request.originLatitude, request.originLongitude)
-                        // Llamar a drawRouteToClient inmediatamente si el mapView está disponible
-                        val mapView = mapViewRef
-                        if (mapView != null) {
-                            drawRouteToClient(mapView, driverLoc, clientLoc)
+                    if (activeRideRequest == null) {
+                        activeRideRequest = request
+                        activeRideId = rideId
+                        activeRideStatus = "accepted"
+                        currentLocation?.let { driverLoc ->
+                            mapViewRef?.let { view ->
+                                drawRouteToClient(view, driverLoc, GeoPoint(request.originLatitude, request.originLongitude))
+                            }
                         }
+                        Toast.makeText(context, "Viaje aceptado", Toast.LENGTH_SHORT).show()
+                    } else {
+                        queuedRideRequest = request
+                        queuedRideId = rideId
+                        Toast.makeText(context, "Siguiente viaje aceptado. Irás por este pasajero al terminar el viaje actual.", Toast.LENGTH_LONG).show()
                     }
-                    
-                    Toast.makeText(context, "Viaje aceptado exitosamente", Toast.LENGTH_SHORT).show()
-                }.onFailure { error ->
-                    Toast.makeText(context, "Error: ${error.message}", Toast.LENGTH_LONG).show()
-                    println("DEBUG: Error al aceptar viaje - ${error.message}")
                 }
-            } catch (e: Exception) {
-                Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
-                println("DEBUG: Excepción al aceptar viaje - ${e.message}")
-            }
+                .onFailure { error ->
+                    Toast.makeText(context, error.message ?: "No se pudo aceptar el viaje", Toast.LENGTH_LONG).show()
+                }
         }
     }
 
     fun handleDeclineRideRequest(request: DriverRideRequest) {
+        declinedRequestIds = declinedRequestIds + request.requestId
         incomingRideRequests = incomingRideRequests.filter { it.requestId != request.requestId }
+    }
+
+    // Termina el viaje actual en pantalla: pasa al siguiente en espera o queda libre (y en línea)
+    fun moveToNextRideOrClear() {
+        clearRouteAndPassengerMarker()
+        routeDistance = 0.0
+        routeDuration = 0.0
+        routeGeometry = null
+        val next = queuedRideRequest
+        if (next != null) {
+            activeRideRequest = next
+            activeRideId = queuedRideId
+            activeRideStatus = "accepted"
+            queuedRideRequest = null
+            queuedRideId = null
+            currentLocation?.let { driverLoc ->
+                mapViewRef?.let { view ->
+                    drawRouteToClient(view, driverLoc, GeoPoint(next.originLatitude, next.originLongitude))
+                }
+            }
+        } else {
+            activeRideRequest = null
+            activeRideId = null
+        }
     }
 
     // Estados de animación para el header
@@ -574,77 +593,61 @@ fun DriverHomeScreen(
         contentVisible = true
     }
 
-    // Actualizar header cuando cambie el estado del viaje activo
-    LaunchedEffect(activeRideRequest) {
-        // Forzar actualización del header cuando cambie el estado
+    // Barra inferior solo fuera de línea y sin viaje
+    val hasActiveRide = activeRideRequest != null
+    LaunchedEffect(isSearching, hasActiveRide) {
         headerVisible = true
-        
-        // Controlar visibilidad del BottomNavigationBar basado en el estado del viaje
-        if (activeRideRequest != null) {
-            // Hay un viaje activo - ocultar BottomNavigationBar
-            onBottomBarVisibilityChanged(false)
-        } else {
-            // No hay viaje activo - mostrar BottomNavigationBar solo si no está buscando
-            if (!isSearching) {
-                onBottomBarVisibilityChanged(true)
-            }
-        }
+        onBottomBarVisibilityChanged(!isSearching && !hasActiveRide)
     }
 
-    // Listener para solicitudes entrantes cuando esté buscando
-    LaunchedEffect(isSearching) {
-        if (isSearching) {
-            // Asegurar que BottomNavigationBar esté oculto cuando está buscando
-            onBottomBarVisibilityChanged(false)
-            
-            // Iniciar escucha de solicitudes
-            val job = scope.launch {
-                driverRideRequestRepository.getActiveRideRequests().collect { requests ->
-                    incomingRideRequests = requests
-                    println("DEBUG: Se encontraron ${requests.size} solicitudes activas")
-                }
-            }
-            // Esperar a que se detenga la búsqueda
-            awaitCancellation()
-            job.cancel()
-        } else {
+    // Recibe solicitudes mientras está en línea y libre, o llevando a un pasajero sin siguiente viaje
+    val canReceiveRequests = isSearching &&
+        (!hasActiveRide || (activeRideStatus == "in_progress" && queuedRideRequest == null))
+    LaunchedEffect(canReceiveRequests) {
+        if (!canReceiveRequests) {
             incomingRideRequests = emptyList()
-            // Solo mostrar BottomNavigationBar si no hay viaje activo
-            if (activeRideRequest == null) {
-                onBottomBarVisibilityChanged(true)
+            return@LaunchedEffect
+        }
+        driverRideRequestRepository.getActiveRideRequests().collect { requests ->
+            incomingRideRequests = requests.filter { it.requestId !in declinedRequestIds }
+        }
+    }
+
+    // El siguiente viaje en espera: si el pasajero cancela, se quita
+    LaunchedEffect(queuedRideId) {
+        val rideId = queuedRideId ?: return@LaunchedEffect
+        activeRideRepository.watchRide(rideId).collect { ride ->
+            if (ride != null && ride.status in setOf("cancelled", "searching")) {
+                queuedRideRequest = null
+                queuedRideId = null
+                Toast.makeText(context, "El pasajero del siguiente viaje canceló", Toast.LENGTH_LONG).show()
             }
         }
     }
 
-    // Listener para viaje activo
+    // Seguimiento del viaje actual. Se recolecta dentro del efecto para que se detenga al cambiar
+    // de viaje (antes se lanzaba aparte y seguía consultando Supabase para viajes ya terminados).
     LaunchedEffect(activeRideId) {
-        activeRideId?.let { rideId ->
-            val job = scope.launch {
-                activeRideRepository.getActiveRide(rideId).collect { activeRide ->
-                    if (activeRide != null) {
-                        activeRideStatus = activeRide.status
-                        // Actualizar ubicación del cliente si cambia
-                        activeRide.clientLocation?.let { clientLoc ->
-                            currentLocation?.let { driverLoc ->
-                                // Actualizar marcador del cliente en tiempo real
-                                val previousClientLoc = clientLocationMarker
-                                clientLocationMarker = clientLoc
-                                
-                                // Actualizar la ruta y el marcador si el mapView está disponible
-                                mapViewRef?.let { mapView ->
-                                    // Solo redibujar si la ubicación cambió significativamente (más de 10 metros)
-                                    if (previousClientLoc == null ||
-                                        calculateDistance(previousClientLoc, clientLoc) > 10) {
-                                        drawRouteToClient(mapView, driverLoc, clientLoc)
-                                    }
-                                }
-                            }
-                        }
-                    }
+        val rideId = activeRideId ?: return@LaunchedEffect
+        activeRideRepository.getActiveRide(rideId).collect { activeRide ->
+            if (activeRide == null) return@collect
+            if (activeRide.status == "cancelled") {
+                // El pasajero canceló: pasa al siguiente viaje o queda libre
+                moveToNextRideOrClear()
+                Toast.makeText(context, "El pasajero canceló el viaje", Toast.LENGTH_LONG).show()
+                return@collect
+            }
+            activeRideStatus = activeRide.status
+            // Redibuja la ruta si el punto objetivo (recojo o destino) cambió más de 10 m
+            val clientLoc = activeRide.clientLocation ?: return@collect
+            val driverLoc = currentLocation ?: return@collect
+            val previousClientLoc = clientLocationMarker
+            clientLocationMarker = clientLoc
+            mapViewRef?.let { mapView ->
+                if (previousClientLoc == null || calculateDistance(previousClientLoc, clientLoc) > 10) {
+                    drawRouteToClient(mapView, driverLoc, clientLoc)
                 }
             }
-            awaitCancellation()
-            job.cancel()
         }
     }
 
@@ -710,31 +713,23 @@ fun DriverHomeScreen(
                     val continuousPositionListener = object : OnIndicatorPositionChangedListener {
                         override fun onIndicatorPositionChanged(point: Point) {
                             // Actualizar ubicación actual
-                            currentLocation = GeoPoint(point.latitude(), point.longitude())
-                            
-                            // Si está buscando clientes, actualizar ubicación en tiempo real
-                            if (isSearching) {
+                            val location = GeoPoint(point.latitude(), point.longitude())
+                            currentLocation = location
+
+                            // El GPS avisa varias veces por segundo; a Supabase se envía cada 2 s en viaje
+                            // (el pasajero lo sigue en el mapa) y cada 10 s en línea sin viaje.
+                            val rideId = activeRideId
+                            val interval = if (rideId != null) 2_000L else 10_000L
+                            val now = System.currentTimeMillis()
+                            if ((rideId != null || isSearching) && now - lastLocationSentMs[0] >= interval) {
+                                lastLocationSentMs[0] = now
                                 scope.launch {
-                                    try {
-                                        currentLocation?.let { location ->
+                                    runCatching {
+                                        if (rideId != null) {
+                                            activeRideRepository.updateDriverLocation(rideId, location)
+                                        } else {
                                             driverAvailabilityRepository.updateDriverLocation(location)
                                         }
-                                    } catch (e: Exception) {
-                                        // Silencioso para no interrumpir la experiencia del usuario
-                                        e.printStackTrace()
-                                    }
-                                }
-                            }
-                            
-                            // Si hay un viaje activo, actualizar ubicación del conductor en el viaje
-                            if (activeRideRequest != null && activeRideId != null) {
-                                scope.launch {
-                                    try {
-                                        currentLocation?.let { location ->
-                                            activeRideRepository.updateDriverLocation(activeRideId!!, location)
-                                        }
-                                    } catch (e: Exception) {
-                                        e.printStackTrace()
                                     }
                                 }
                             }
@@ -825,7 +820,7 @@ fun DriverHomeScreen(
                         )
                         
                         // Mostrar solicitudes entrantes cuando esté buscando (ahora arriba)
-                        if (isSearching && incomingRideRequests.isNotEmpty() && activeRideRequest == null) {
+                        if (canReceiveRequests && incomingRideRequests.isNotEmpty() && activeRideRequest == null) {
                             Spacer(modifier = Modifier.height(16.dp))
                             
                             // Mostrar todas las solicitudes disponibles, apiladas verticalmente
@@ -942,18 +937,14 @@ fun DriverHomeScreen(
                             activeRideRepository.advanceRide(rideId, nextStatus)
                                 .onSuccess {
                                     activeRideStatus = nextStatus
-                                    val message = when (nextStatus) {
-                                        "arrived" -> "Llegada confirmada"
-                                        "in_progress" -> "Viaje iniciado"
+                                    val message = when {
+                                        nextStatus == "arrived" -> "Llegada confirmada"
+                                        queuedRideRequest != null -> "Pago confirmado. Ahora ve por tu siguiente pasajero"
                                         else -> "Pago confirmado. Viaje finalizado"
                                     }
                                     Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
-                                    if (nextStatus == "completed") {
-                                        activeRideRequest = null
-                                        activeRideId = null
-                                        clearRouteAndPassengerMarker()
-                                        onBottomBarVisibilityChanged(true)
-                                    }
+                                    // Al terminar sigue en línea: pasa al siguiente viaje o vuelve a recibir solicitudes
+                                    if (nextStatus == "completed") moveToNextRideOrClear()
                                 }
                                 .onFailure { Toast.makeText(context, it.message ?: "No se pudo actualizar el viaje", Toast.LENGTH_LONG).show() }
                         }
@@ -964,13 +955,7 @@ fun DriverHomeScreen(
                                 // cancelRide devuelve Result: solo se limpia la pantalla si el servidor aceptó
                                 activeRideRepository.cancelRide(rideId)
                                     .onSuccess {
-                                        activeRideRequest = null
-                                        activeRideId = null
-                                        routeDistance = 0.0
-                                        routeDuration = 0.0
-                                        routeGeometry = null
-                                        clearRouteAndPassengerMarker()
-                                        onBottomBarVisibilityChanged(true)
+                                        moveToNextRideOrClear()
                                         Toast.makeText(context, "Viaje cancelado", Toast.LENGTH_SHORT).show()
                                     }
                                     .onFailure {
@@ -980,6 +965,78 @@ fun DriverHomeScreen(
                         }
                     }
                 )
+            }
+        }
+
+        // Durante un viaje: solicitud disponible para el siguiente viaje, o el siguiente ya aceptado
+        if (hasActiveRide) {
+            Column(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .padding(top = 96.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                val next = queuedRideRequest
+                if (next != null) {
+                    Row(
+                        modifier = Modifier
+                            .padding(horizontal = 16.dp)
+                            .fillMaxWidth()
+                            .background(Color.White, RoundedCornerShape(14.dp))
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        com.intu.taxi.ui.components.Avatar(url = next.userPhotoUrl, size = 36.dp, zoomable = true)
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "Siguiente: ${next.userName.ifBlank { "Pasajero" }}",
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF1E1F47)
+                            )
+                            Text(
+                                next.originAddress,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.Gray,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        TextButton(onClick = {
+                            val rideId = queuedRideId ?: return@TextButton
+                            scope.launch {
+                                activeRideRepository.cancelRide(rideId)
+                                    .onSuccess {
+                                        queuedRideRequest = null
+                                        queuedRideId = null
+                                        Toast.makeText(context, "Siguiente viaje cancelado", Toast.LENGTH_SHORT).show()
+                                    }
+                                    .onFailure {
+                                        Toast.makeText(context, it.message ?: "No se pudo cancelar", Toast.LENGTH_LONG).show()
+                                    }
+                            }
+                        }) { Text("Cancelar", color = Color(0xFFB42318)) }
+                    }
+                } else if (canReceiveRequests && incomingRideRequests.isNotEmpty()) {
+                    Text(
+                        "Solicitud para tu siguiente viaje",
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelLarge,
+                        modifier = Modifier
+                            .align(Alignment.CenterHorizontally)
+                            .background(Color(0xFF1E1F47).copy(alpha = 0.85f), RoundedCornerShape(50))
+                            .padding(horizontal = 12.dp, vertical = 4.dp)
+                    )
+                    val request = incomingRideRequests.first()
+                    IncomingRideRequestCard(
+                        request = request,
+                        currentLatitude = currentLocation?.latitude ?: 0.0,
+                        currentLongitude = currentLocation?.longitude ?: 0.0,
+                        onAccept = { handleAcceptRideRequest(request) },
+                        onDecline = { handleDeclineRideRequest(request) }
+                    )
+                }
             }
         }
 
@@ -1164,6 +1221,24 @@ fun AnimatedGradientButton(
         }
     }
 }
+
+/** Datos de un viaje abierto en el formato de solicitud que usan las tarjetas del conductor. */
+private fun com.intu.taxi.models.ActiveRide.toDriverRequest() = DriverRideRequest(
+    requestId = rideId,
+    userId = clientId,
+    userName = riderName,
+    userPhone = riderPhone,
+    userPhotoUrl = riderPhotoUrl.ifBlank { null },
+    originLatitude = originLatitude,
+    originLongitude = originLongitude,
+    originAddress = originAddress,
+    destinationLatitude = destinationLatitude,
+    destinationLongitude = destinationLongitude,
+    destinationAddress = destinationAddress,
+    estimatedPrice = fare,
+    paymentMethod = paymentMethod,
+    status = status
+)
 
 // Función para crear icono de pasajero con diseño moderno similar a HomeScreen
 fun createPassengerIcon(context: android.content.Context): android.graphics.Bitmap {

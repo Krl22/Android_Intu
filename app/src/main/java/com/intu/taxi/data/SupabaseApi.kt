@@ -75,7 +75,9 @@ object SupabaseApi {
     private fun spanishError(status: Int, code: String, message: String): String = when {
         status == 401 || code.startsWith("PGRST3") -> "Tu sesión no es válida. Cierra sesión y vuelve a entrar."
         "rides_one_open_per_rider" in message -> "Ya tienes un viaje en curso."
-        "rides_one_open_per_driver" in message || message == "driver_busy" -> "Ya estás atendiendo otro viaje."
+        "rides_one_pickup_per_driver" in message || message == "driver_busy" -> "Ya tienes un pasajero por recoger."
+        "rides_one_trip_per_driver" in message || message == "finish_current_trip" ->
+            "Termina el viaje actual antes de ir por el siguiente pasajero."
         "drivers_document_type_document_number_key" in message -> "Ese DNI ya está registrado por otro conductor."
         message == "ride_not_available" -> "Este viaje ya no está disponible."
         message == "driver_not_approved" -> "Tu cuenta de conductor aún no está aprobada."

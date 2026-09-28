@@ -30,6 +30,27 @@ class ActiveRideRepository {
         return rows.optJSONObject(0)?.toActiveRide()
     }
 
+    /**
+     * Viajes abiertos del conductor. Pueden ser dos: uno en curso y el siguiente que aceptó
+     * mientras llevaba al pasajero (como Uber).
+     */
+    suspend fun findOpenRidesForDriver(userId: String): List<ActiveRide> {
+        val rows = SupabaseApi.rows(
+            "rides?driver_id=eq.${SupabaseApi.encode(userId)}&status=in.(accepted,arrived,in_progress)&select=*&order=accepted_at.asc"
+        )
+        return (0 until rows.length()).map { rows.getJSONObject(it).toActiveRide() }
+    }
+
+    /** Estado de un viaje cada 3 s, sin la ubicación del conductor (para el siguiente viaje en espera). */
+    fun watchRide(rideId: String): Flow<ActiveRide?> = flow {
+        while (currentCoroutineContext().isActive) {
+            try {
+                emit(SupabaseApi.rows("rides?id=eq.${SupabaseApi.encode(rideId)}&select=*&limit=1").optJSONObject(0)?.toActiveRide())
+            } catch (_: Exception) { }
+            delay(3_000)
+        }
+    }
+
     fun getUserActiveRide(userId: String): Flow<ActiveRide?> = flow {
         while (currentCoroutineContext().isActive) {
             try {
@@ -118,6 +139,7 @@ class ActiveRideRepository {
         riderName = str("rider_name"), riderPhone = str("rider_phone"),
         vehiclePlate = str("vehicle_plate"), vehicleDescription = str("vehicle_description"),
         driverPhotoUrl = str("driver_photo_url"), riderPhotoUrl = str("rider_photo_url"),
+        driverOnOtherTrip = optBoolean("driver_on_other_trip", false),
         paymentConfirmed = !isNull("payment_confirmed_at")
         )
     }

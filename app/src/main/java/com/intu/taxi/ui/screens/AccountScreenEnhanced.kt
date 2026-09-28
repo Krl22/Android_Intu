@@ -551,13 +551,19 @@ private fun EnhancedHeaderSection(
     val cardTotalHeight = 240.dp
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    // La foto se sube a Storage y queda en la cuenta; así el otro la ve en cada viaje
+    // La foto se sube a Storage y queda en la cuenta; así el otro la ve en cada viaje.
+    // Solo con la cámara (no galería), para que sea una foto real y actual de la persona.
     var photoUrl by remember { mutableStateOf(authUser?.photoUrl?.toString()) }
     var isUploadingPhoto by remember { mutableStateOf(false) }
-    val pickImageLauncher = rememberLauncherForActivityResult(
-        androidx.activity.result.contract.ActivityResultContracts.GetContent()
-    ) { uri ->
-        if (uri == null || isUploadingPhoto) return@rememberLauncherForActivityResult
+    val captureUri = remember {
+        val dir = java.io.File(context.cacheDir, "profile_photos").apply { mkdirs() }
+        androidx.core.content.FileProvider.getUriForFile(
+            context, "${context.packageName}.fileprovider", java.io.File(dir, "profile.jpg")
+        )
+    }
+    val takePhotoLauncher = rememberLauncherForActivityResult(FrontCameraTakePicture()) { saved ->
+        if (!saved || isUploadingPhoto) return@rememberLauncherForActivityResult
+        val uri = captureUri
         isUploadingPhoto = true
         scope.launch {
             runCatching { com.intu.taxi.auth.AuthRepository().uploadProfilePhoto(context, uri) }
@@ -649,7 +655,7 @@ private fun EnhancedHeaderSection(
                         modifier = Modifier
                             .size(100.dp)
                             .clip(CircleShape)
-                            .clickable { pickImageLauncher.launch("image/*") }
+                            .clickable { takePhotoLauncher.launch(captureUri) }
                             .background(
                                 Brush.radialGradient(
                                     colors = listOf(
@@ -697,7 +703,7 @@ private fun EnhancedHeaderSection(
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Edit,
+                                imageVector = Icons.Default.PhotoCamera,
                                 contentDescription = null,
                                 modifier = Modifier.size(16.dp),
                                 tint = Color(0xFF08817E)
@@ -1128,4 +1134,17 @@ private fun DriverModeToggleEnhanced(
             )
         }
     }
+}
+
+/**
+ * Toma la foto con la cámara pidiendo la frontal (selfie). Estos extras no son oficiales, pero la
+ * mayoría de apps de cámara los respetan; si no, se abre la cámara trasera.
+ */
+private class FrontCameraTakePicture : androidx.activity.result.contract.ActivityResultContracts.TakePicture() {
+    override fun createIntent(context: android.content.Context, input: android.net.Uri): android.content.Intent =
+        super.createIntent(context, input).apply {
+            putExtra("android.intent.extras.CAMERA_FACING", 1)
+            putExtra("android.intent.extras.LENS_FACING_FRONT", 1)
+            putExtra("android.intent.extra.USE_FRONT_CAMERA", true)
+        }
 }
