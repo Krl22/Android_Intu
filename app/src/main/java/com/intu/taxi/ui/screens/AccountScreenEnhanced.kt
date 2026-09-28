@@ -550,21 +550,28 @@ private fun EnhancedHeaderSection(
     val totalHeight = 280.dp
     val cardTotalHeight = 240.dp
     val context = LocalContext.current
-    var profileUri by remember { mutableStateOf<android.net.Uri?>(null) }
+    val scope = rememberCoroutineScope()
+    // La foto se sube a Storage y queda en la cuenta; así el otro la ve en cada viaje
+    var photoUrl by remember { mutableStateOf(authUser?.photoUrl?.toString()) }
+    var isUploadingPhoto by remember { mutableStateOf(false) }
     val pickImageLauncher = rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.GetContent()
-    ) { uri -> profileUri = uri }
-    
-    val profileBitmap: androidx.compose.ui.graphics.ImageBitmap? = remember(profileUri) {
-        profileUri?.let {
-            try {
-                context.contentResolver.openInputStream(it)?.use { input ->
-                    android.graphics.BitmapFactory.decodeStream(input)?.asImageBitmap()
+    ) { uri ->
+        if (uri == null || isUploadingPhoto) return@rememberLauncherForActivityResult
+        isUploadingPhoto = true
+        scope.launch {
+            runCatching { com.intu.taxi.auth.AuthRepository().uploadProfilePhoto(context, uri) }
+                .onSuccess {
+                    photoUrl = it
+                    android.widget.Toast.makeText(context, "Foto actualizada", android.widget.Toast.LENGTH_SHORT).show()
                 }
-            } catch (_: Exception) { null }
+                .onFailure {
+                    android.widget.Toast.makeText(context, it.message ?: "No se pudo subir la foto", android.widget.Toast.LENGTH_LONG).show()
+                }
+            isUploadingPhoto = false
         }
     }
-    
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -654,20 +661,29 @@ private fun EnhancedHeaderSection(
                             .border(3.dp, Color.White, CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
-                        profileBitmap?.let { bmp ->
-                            Image(
-                                bitmap = bmp,
-                                contentDescription = null,
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = null,
+                            modifier = Modifier.size(40.dp),
+                            tint = Color.White
+                        )
+                        if (!photoUrl.isNullOrBlank()) {
+                            coil.compose.AsyncImage(
+                                model = photoUrl,
+                                contentDescription = "Tu foto de perfil",
                                 modifier = Modifier.fillMaxSize(),
                                 contentScale = ContentScale.Crop
                             )
-                        } ?: run {
-                            Icon(
-                                imageVector = Icons.Default.Person,
-                                contentDescription = null,
-                                modifier = Modifier.size(40.dp),
-                                tint = Color.White
-                            )
+                        }
+                        if (isUploadingPhoto) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(Color.Black.copy(alpha = 0.4f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(color = Color.White, strokeWidth = 3.dp, modifier = Modifier.size(32.dp))
+                            }
                         }
                         
                         // Edit overlay

@@ -181,6 +181,7 @@ fun DriverHomeScreen(
                     userId = ride.clientId,
                     userName = ride.riderName,
                     userPhone = ride.riderPhone,
+                    userPhotoUrl = ride.riderPhotoUrl.ifBlank { null },
                     originLatitude = ride.originLatitude,
                     originLongitude = ride.originLongitude,
                     originAddress = ride.originAddress,
@@ -1249,25 +1250,16 @@ fun EnhancedActiveRideCard(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(if (isMinimized) 32.dp else 50.dp)
-                        .background(
-                            color = Color(0xFF08817E).copy(alpha = 0.1f),
-                            shape = CircleShape
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Navigation,
-                        contentDescription = null,
-                        tint = Color(0xFF08817E),
-                        modifier = Modifier.size(if (isMinimized) 16.dp else 24.dp)
-                    )
-                }
-                
+                // Foto del pasajero para reconocerlo en el punto de recojo; tocarla la agranda
+                com.intu.taxi.ui.components.Avatar(
+                    url = request.userPhotoUrl,
+                    size = if (isMinimized) 40.dp else 56.dp,
+                    zoomable = true,
+                    contentDescription = "Foto del pasajero"
+                )
+
                 Spacer(modifier = Modifier.width(if (isMinimized) 8.dp else 12.dp))
-                
+
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = when (status) {
@@ -1278,6 +1270,11 @@ fun EnhancedActiveRideCard(
                         style = if (isMinimized) MaterialTheme.typography.bodySmall else MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF1E1F47)
+                    )
+                    Text(
+                        text = request.userName.ifBlank { "Pasajero" },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFF5F6570)
                     )
                     if (!isMinimized) {
                         Text(

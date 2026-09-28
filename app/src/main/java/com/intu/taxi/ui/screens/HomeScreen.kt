@@ -2210,9 +2210,29 @@ fun HomeScreen(
                             }
                         }
                     }
-                    if (ride.driverName.isNotBlank()) Text("Conductor: ${ride.driverName}")
-                    if (ride.vehiclePlate.isNotBlank()) {
-                        Text("Mototaxi: ${listOf(ride.vehicleDescription, ride.vehiclePlate).filter { it.isNotBlank() }.joinToString(" · ")}")
+                    if (ride.driverName.isNotBlank() || ride.vehiclePlate.isNotBlank()) {
+                        // Foto del conductor para reconocerlo al llegar; tocarla la agranda
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            com.intu.taxi.ui.components.Avatar(
+                                url = ride.driverPhotoUrl,
+                                size = 56.dp,
+                                zoomable = true,
+                                contentDescription = "Foto del conductor"
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                if (ride.driverName.isNotBlank()) {
+                                    Text(ride.driverName, fontWeight = FontWeight.SemiBold)
+                                }
+                                if (ride.vehiclePlate.isNotBlank()) {
+                                    Text(
+                                        "Mototaxi ${listOf(ride.vehicleDescription, ride.vehiclePlate).filter { it.isNotBlank() }.joinToString(" · ")}",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = Color(0xFF5F6570)
+                                    )
+                                }
+                            }
+                        }
                     }
                     Text("Total: ${com.intu.taxi.ui.formatSoles(ride.fare)}")
                     Text(

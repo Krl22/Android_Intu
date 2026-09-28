@@ -11,5 +11,8 @@
   },
   "database": {
     "rules": "../realtime_database_rules.json"
+  },
+  "storage": {
+    "rules": "storage.rules"
   }
 }

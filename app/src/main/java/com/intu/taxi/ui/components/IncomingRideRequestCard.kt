@@ -66,14 +66,14 @@ fun IncomingRideRequestCard(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Person,
-                        contentDescription = "Pasajero",
-                        tint = Color(0xFF08817E),
-                        modifier = Modifier.size(24.dp)
+                    Avatar(
+                        url = request.userPhotoUrl,
+                        size = 44.dp,
+                        zoomable = true,
+                        contentDescription = "Foto del pasajero"
                     )
-                    
-                    Spacer(modifier = Modifier.width(8.dp))
+
+                    Spacer(modifier = Modifier.width(10.dp))
                     
                     Column(modifier = Modifier.weight(1f)) {
                         Text(

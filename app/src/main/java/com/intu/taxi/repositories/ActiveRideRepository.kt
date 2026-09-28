@@ -117,6 +117,7 @@ class ActiveRideRepository {
         driverName = str("driver_name"), driverPhone = str("driver_phone"),
         riderName = str("rider_name"), riderPhone = str("rider_phone"),
         vehiclePlate = str("vehicle_plate"), vehicleDescription = str("vehicle_description"),
+        driverPhotoUrl = str("driver_photo_url"), riderPhotoUrl = str("rider_photo_url"),
         paymentConfirmed = !isNull("payment_confirmed_at")
         )
     }

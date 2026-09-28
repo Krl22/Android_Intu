@@ -62,7 +62,9 @@ data class ActiveRide(
     val riderPhone: String = "",
     val vehiclePlate: String = "",
     val vehicleDescription: String = "",
-    val paymentConfirmed: Boolean = false
+    val paymentConfirmed: Boolean = false,
+    val driverPhotoUrl: String = "",
+    val riderPhotoUrl: String = ""
 ) {
     companion object {
         private fun readGeoPoint(value: Any?): GeoPoint? {

@@ -131,6 +131,74 @@ class AuthRepository(
         )
     }
 
+    /**
+     * Sube la foto de perfil (reducida a 640 px, JPEG) a Firebase Storage en avatars/{uid}.jpg y la
+     * guarda como foto de la cuenta. Supabase la toma de ahí y la copia a cada viaje, para que
+     * pasajero y conductor se reconozcan. Devuelve la URL pública de la foto.
+     */
+    suspend fun uploadProfilePhoto(context: android.content.Context, uri: android.net.Uri): String {
+        val user = auth.currentUser ?: error("Inicia sesión para continuar.")
+        val jpeg = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            compressProfilePhoto(context, uri)
+        } ?: error("No se pudo leer la foto. Prueba con otra imagen.")
+
+        val ref = com.google.firebase.storage.FirebaseStorage.getInstance().reference
+            .child("avatars/${user.uid}.jpg")
+        val metadata = com.google.firebase.storage.StorageMetadata.Builder()
+            .setContentType("image/jpeg")
+            .build()
+        ref.putBytes(jpeg, metadata).await()
+        // Al cambiar de foto la URL de Storage puede repetirse; el parámetro v evita ver la foto vieja en caché
+        val url = ref.downloadUrl.await().toString() + "&v=${System.currentTimeMillis()}"
+
+        user.updateProfile(
+            com.google.firebase.auth.UserProfileChangeRequest.Builder()
+                .setPhotoUri(android.net.Uri.parse(url))
+                .build()
+        ).await()
+        SupabaseApi.ensureCurrentProfile(photoUrl = url)
+        return url
+    }
+
+    /** Reduce la foto a 640 px como máximo, respeta la rotación de la cámara y la comprime a JPEG. */
+    private fun compressProfilePhoto(context: android.content.Context, uri: android.net.Uri): ByteArray? {
+        val resolver = context.contentResolver
+        val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        resolver.openInputStream(uri)?.use { android.graphics.BitmapFactory.decodeStream(it, null, bounds) }
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+
+        val maxSide = 640
+        var sample = 1
+        while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= maxSide) sample *= 2
+        val decoded = resolver.openInputStream(uri)?.use {
+            android.graphics.BitmapFactory.decodeStream(it, null, android.graphics.BitmapFactory.Options().apply { inSampleSize = sample })
+        } ?: return null
+
+        val rotation = runCatching {
+            resolver.openInputStream(uri)?.use { input ->
+                when (android.media.ExifInterface(input).getAttributeInt(
+                    android.media.ExifInterface.TAG_ORIENTATION, android.media.ExifInterface.ORIENTATION_NORMAL
+                )) {
+                    android.media.ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+                    android.media.ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+                    android.media.ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+                    else -> 0f
+                }
+            } ?: 0f
+        }.getOrDefault(0f)
+
+        val scale = minOf(1f, maxSide.toFloat() / maxOf(decoded.width, decoded.height))
+        val matrix = android.graphics.Matrix().apply {
+            postScale(scale, scale)
+            postRotate(rotation)
+        }
+        val finalBitmap = android.graphics.Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height, matrix, true)
+        return java.io.ByteArrayOutputStream().use { out ->
+            finalBitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 82, out)
+            out.toByteArray()
+        }
+    }
+
     suspend fun getUserProfile(uid: String): UserProfile? {
         return try {
             val snap = db.collection("users").document(uid).get().await()

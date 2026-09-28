@@ -79,6 +79,8 @@ dependencies {
     implementation("com.google.firebase:firebase-auth-ktx")
     implementation("com.google.firebase:firebase-firestore-ktx")
     implementation("com.google.firebase:firebase-database-ktx")
+    // Fotos de perfil de pasajeros y conductores
+    implementation("com.google.firebase:firebase-storage-ktx")
     // Google Sign-In para proveedor Google
     implementation("com.google.android.gms:play-services-auth:21.2.0")
     // DataStore para preferencias
