@@ -1,6 +1,7 @@
 package com.intu.taxi.repositories
 
 import com.intu.taxi.data.SupabaseApi
+import com.intu.taxi.data.str
 import com.intu.taxi.models.RideRequest
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -47,21 +48,20 @@ class RideRequestRepository {
     }
 
     private fun JSONObject.toRideRequest() = RideRequest(
-        requestId = getString("id"), userId = optString("rider_id"), userName = optString("rider_name"),
-        userPhone = optString("rider_phone"), userPhotoUrl = nullable("rider_photo_url"),
+        requestId = getString("id"), userId = str("rider_id"), userName = str("rider_name"),
+        userPhone = str("rider_phone"), userPhotoUrl = nullable("rider_photo_url"),
         originLatitude = optDouble("origin_lat"), originLongitude = optDouble("origin_lng"),
-        originAddress = optString("origin_address"), destinationLatitude = optDouble("destination_lat"),
-        destinationLongitude = optDouble("destination_lng"), destinationAddress = optString("destination_address"),
+        originAddress = str("origin_address"), destinationLatitude = optDouble("destination_lat"),
+        destinationLongitude = optDouble("destination_lng"), destinationAddress = str("destination_address"),
         distanceMeters = optDouble("distance_meters"), durationSeconds = optDouble("duration_seconds"),
-        estimatedPrice = optDouble("estimated_fare"), rideType = optString("vehicle_type"),
-        paymentMethod = optString("payment_method", "efectivo"), status = optString("status", "searching"),
+        estimatedPrice = optDouble("estimated_fare"), rideType = str("vehicle_type"),
+        paymentMethod = str("payment_method", "efectivo"), status = str("status", "searching"),
         createdAt = millis(nullable("requested_at")), updatedAt = millis(nullable("updated_at")),
         driverId = nullable("driver_id"), driverName = nullable("driver_name"),
         driverPhone = nullable("driver_phone"), driverPhotoUrl = nullable("driver_photo_url")
     )
 
-    private fun JSONObject.nullable(key: String): String? =
-        if (isNull(key)) null else optString(key).takeIf { it.isNotBlank() }
+    private fun JSONObject.nullable(key: String): String? = str(key).ifBlank { null }
     private fun millis(value: String?): Long =
         runCatching { Instant.parse(value).toEpochMilli() }.getOrDefault(System.currentTimeMillis())
 }

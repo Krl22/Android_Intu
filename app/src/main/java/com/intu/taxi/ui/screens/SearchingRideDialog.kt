@@ -219,7 +219,7 @@ fun SearchingRideDialog(
                                     color = Color(0xFF7F8C8D)
                                 )
                                 Text(
-                                    text = "S/ ${String.format("%.2f", estimatedPrice)}",
+                                    text = com.intu.taxi.ui.formatSoles(estimatedPrice),
                                     fontSize = 14.sp,
                                     color = Color(0xFF27AE60),
                                     fontWeight = FontWeight.Medium

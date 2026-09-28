@@ -69,8 +69,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -294,7 +297,7 @@ private fun RideOptionSlideCard(
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                val priceStr = String.format(Locale.getDefault(), "$%.2f", option.price)
+                val priceStr = com.intu.taxi.ui.formatSoles(option.price)
                 val etaMin = kotlin.math.max(1.0, option.minutes)
                 val etaStr = String.format(Locale.getDefault(), "~%.0f min", etaMin)
                 
@@ -480,6 +483,18 @@ fun HomeScreen(
     var lastValidZoom by remember { mutableStateOf<Double?>(null) }
     var isCameraLocked by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var showCancelRideDialog by remember { mutableStateOf(false) }
+    var isCancellingRide by remember { mutableStateOf(false) }
+    var greetingName by rememberSaveable { mutableStateOf("") }
+
+    // Nombre para el saludo: perfil guardado o, si no hay, el nombre de la cuenta de Google
+    LaunchedEffect(Unit) {
+        val user = FirebaseAuth.getInstance().currentUser ?: return@LaunchedEffect
+        val profileName = runCatching { com.intu.taxi.auth.AuthRepository().getUserProfile(user.uid)?.firstName }.getOrNull()
+        greetingName = (profileName?.takeIf { it.isNotBlank() } ?: user.displayName.orEmpty())
+            .trim()
+            .substringBefore(' ')
+    }
 
     LaunchedEffect(Unit) {
         val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return@LaunchedEffect
@@ -511,41 +526,33 @@ fun HomeScreen(
         }
     }
 
-    // Escuchar cambios en el estado de la solicitud de viaje
-    LaunchedEffect(currentRideRequestId) {
-        currentRideRequestId?.let { requestId ->
-            rideRequestRepository.listenToRideRequest(requestId).collect { rideRequest ->
-                if (rideRequest != null) {
-                    when (rideRequest.status) {
-                        "accepted" -> {
-                            // El conductor aceptó el viaje, obtener el viaje activo
-                            println("DEBUG: ¡Viaje aceptado por el conductor! Buscando viaje activo...")
-                            isSearchingDriver = false
-                            // El viaje activo se obtendrá con el listener de abajo
-                        }
-                        "cancelled" -> {
-                            // El viaje fue cancelado
-                            println("DEBUG: Viaje cancelado")
-                            isSearchingDriver = false
-                            currentRideRequestId = null
-                        }
-                    }
-                } else {
-                    // El ride request fue eliminado (probablemente porque el conductor lo aceptó)
-                    // No limpiamos currentRideRequestId aquí porque el active ride listener necesita el requestId
-                    println("DEBUG: Ride request eliminado, continuando búsqueda de active ride...")
-                }
-            }
-        }
-    }
-
+    // Un solo sondeo del viaje: decide entre la animación de búsqueda y la tarjeta del viaje
     LaunchedEffect(currentRideRequestId) {
         currentRideRequestId?.let { requestId ->
             activeRideRepository.getActiveRideByRequestId(requestId).collect { ride ->
-                activeRide = ride
-                driverLocation = ride?.driverLocation
-                if (ride != null) {
-                    isSearchingDriver = false
+                if (ride == null) return@collect
+                when (ride.status) {
+                    // Sin conductor todavía, o el conductor canceló y la solicitud volvió a abrirse
+                    "searching" -> {
+                        activeRide = null
+                        driverLocation = null
+                        isSearchingDriver = true
+                    }
+                    // Cancelado fuera de esta pantalla (p. ej. nadie aceptó en 5 minutos)
+                    "cancelled" -> {
+                        if (isSearchingDriver && !isCancellingRide) {
+                            Toast.makeText(context, "No encontramos un conductor disponible. Intenta de nuevo.", Toast.LENGTH_LONG).show()
+                        }
+                        activeRide = null
+                        driverLocation = null
+                        isSearchingDriver = false
+                        currentRideRequestId = null
+                    }
+                    else -> {
+                        activeRide = ride
+                        driverLocation = ride.driverLocation
+                        isSearchingDriver = false
+                    }
                 }
             }
         } ?: run {
@@ -1181,9 +1188,10 @@ fun HomeScreen(
         }
 
         // Control centralizado de visibilidad del BottomNavbar:
-        // oculto si está activo el modo pin, panel de opciones de viaje o búsqueda de conductor.
-        LaunchedEffect(isSelectingDestination, isRideOptionsVisible, isSearchingDriver) {
-            val visible = !(isSelectingDestination || isRideOptionsVisible || isSearchingDriver)
+        // oculto si está activo el modo pin, panel de opciones de viaje, búsqueda de conductor o un viaje.
+        val hasActiveRide = activeRide != null
+        LaunchedEffect(isSelectingDestination, isRideOptionsVisible, isSearchingDriver, hasActiveRide) {
+            val visible = !(isSelectingDestination || isRideOptionsVisible || isSearchingDriver || hasActiveRide)
             onBottomBarVisibilityChanged(visible)
         }
 
@@ -1389,7 +1397,7 @@ fun HomeScreen(
                         )
                         Spacer(modifier = Modifier.height(30.dp))
                         Text(
-                            text = "¡Hola Carlos!",
+                            text = if (greetingName.isNotBlank()) "¡Hola, $greetingName!" else "¡Hola!",
                             color = Color.White,
                             style = MaterialTheme.typography.bodyLarge,
                             fontSize = 24.sp
@@ -2194,12 +2202,48 @@ fun HomeScreen(
             }
         }
 
+        // Deja el mapa listo para pedir otro viaje
+        fun resetRideState() {
+            isSearchingDriver = false
+            currentRideRequestId = null
+            activeRide = null
+            driverLocation = null
+            searchQuery = ""
+            selectedDestination = null
+            pickupLocation = null
+            confirmedDestination = null
+            confirmedDestOffset = null
+            routePoints = emptyList()
+            routeDistanceMeters = null
+            routeDurationSeconds = null
+            suggestions = emptyList()
+        }
+
+        // El pasajero puede cancelar mientras busca, o mientras el conductor viene o ya llegó
+        fun cancelCurrentRide() {
+            val rideId = currentRideRequestId ?: return
+            if (isCancellingRide) return
+            isCancellingRide = true
+            scope.launch {
+                rideRequestRepository.cancelRideRequest(rideId)
+                    .onSuccess {
+                        resetRideState()
+                        Toast.makeText(context, "Viaje cancelado", Toast.LENGTH_SHORT).show()
+                    }
+                    .onFailure {
+                        Toast.makeText(context, "No se pudo cancelar. Revisa tu conexión e intenta de nuevo.", Toast.LENGTH_LONG).show()
+                    }
+                isCancellingRide = false
+            }
+        }
+
         activeRide?.let { ride ->
             Card(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .padding(start = 16.dp, end = 16.dp, bottom = 76.dp),
+                    // Encima de la barra de navegación del sistema, sea de gestos o de 3 botones
+                    .padding(start = 16.dp, end = 16.dp, bottom = padding.calculateBottomPadding() + 16.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.White),
                 elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
             ) {
@@ -2210,30 +2254,33 @@ fun HomeScreen(
                             "arrived" -> "Tu conductor llegó"
                             "in_progress" -> "Viaje en curso"
                             "completed" -> "Viaje finalizado"
-                            "cancelled" -> "Viaje cancelado"
                             else -> "Buscando conductor"
                         },
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
                     if (ride.driverName.isNotBlank()) Text("Conductor: ${ride.driverName}")
-                    if (ride.vehiclePlate.isNotBlank()) Text("Mototaxi: ${ride.vehicleDescription} · ${ride.vehiclePlate}")
-                    Text("Total: S/ ${String.format("%.2f", ride.fare)}")
+                    if (ride.vehiclePlate.isNotBlank()) {
+                        Text("Mototaxi: ${listOf(ride.vehicleDescription, ride.vehiclePlate).filter { it.isNotBlank() }.joinToString(" · ")}")
+                    }
+                    Text("Total: ${com.intu.taxi.ui.formatSoles(ride.fare)}")
                     Text(
                         if (ride.paymentMethod == "yape_plin") {
                             "Pago por Yape al conductor${if (ride.driverPhone.isNotBlank()) ": ${ride.driverPhone}" else ""}"
                         } else "Pago en efectivo al conductor"
                     )
+                    if (ride.status == "accepted" || ride.status == "arrived") {
+                        OutlinedButton(
+                            onClick = { showCancelRideDialog = true },
+                            enabled = !isCancellingRide,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFB42318))
+                        ) { Text(if (isCancellingRide) "Cancelando…" else "Cancelar viaje") }
+                    }
                     if (ride.status == "completed") {
                         Text("El conductor confirmó que recibió el pago.", color = Color(0xFF08817E))
                         Button(
-                            onClick = {
-                                currentRideRequestId = null
-                                activeRide = null
-                                driverLocation = null
-                                routePoints = emptyList()
-                                pickupLocation = null
-                            },
+                            onClick = { resetRideState() },
                             modifier = Modifier.fillMaxWidth()
                         ) { Text("Listo") }
                     }
@@ -2241,43 +2288,28 @@ fun HomeScreen(
             }
         }
 
+        if (showCancelRideDialog) {
+            AlertDialog(
+                onDismissRequest = { showCancelRideDialog = false },
+                title = { Text("¿Cancelar el viaje?") },
+                text = { Text("Tu conductor ya aceptó el viaje y va en camino.") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        showCancelRideDialog = false
+                        cancelCurrentRide()
+                    }) { Text("Sí, cancelar", color = Color(0xFFB42318)) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showCancelRideDialog = false }) { Text("No") }
+                }
+            )
+        }
+
         // Indicador creativo de búsqueda de conductor con animaciones de radar
         CreativeDriverSearchIndicator(
             isVisible = isSearchingDriver,
-            onCancel = {
-                    // Cancelar búsqueda y eliminar completamente de Firebase
-                    scope.launch {
-                        currentRideRequestId?.let { requestId ->
-                            println("DEBUG: Cancelando búsqueda y eliminando request: $requestId")
-                            rideRequestRepository.cancelRideRequest(requestId)
-                                .onSuccess {
-                                    println("DEBUG: Request eliminado exitosamente de Firebase")
-                                }
-                                .onFailure { error ->
-                                    println("DEBUG: Error al eliminar request: ${error.message}")
-                                    // Aunque falle la eliminación, continuamos con la limpieza local
-                                }
-                        }
-                    
-                    // Limpiar estado local independientemente del resultado de Firebase
-                    isSearchingDriver = false
-                    currentRideRequestId = null
-                    
-                    // Limpiar el campo de búsqueda y destino para nueva búsqueda
-                    searchQuery = ""
-                    selectedDestination = null
-                    pickupLocation = null
-                    confirmedDestination = null
-                    confirmedDestOffset = null
-                    routePoints = emptyList()
-                    routeDistanceMeters = null
-                    routeDurationSeconds = null
-                    suggestions = emptyList()
-                    
-                    println("DEBUG: Estado de búsqueda reiniciado y campos limpiados")
-                    println("DEBUG: El ride request permanece en Firebase con estado 'cancelled' para historial")
-                }
-            }
+            isCancelling = isCancellingRide,
+            onCancel = { cancelCurrentRide() }
         )
     }
 }
@@ -2374,7 +2406,7 @@ private fun RideOptionCard(
     selected: Boolean = false,
     onClick: () -> Unit = {}
 ) {
-    val priceStr = String.format(Locale.getDefault(), "$%.2f", price)
+    val priceStr = com.intu.taxi.ui.formatSoles(price)
     val etaMin = kotlin.math.max(1.0, minutes)
     val etaStr = String.format(Locale.getDefault(), "~%.0f min", etaMin)
     

@@ -177,7 +177,7 @@ fun IncomingRideRequestCard(
                         color = Color.Gray
                     )
                     Text(
-                        text = "S/ ${String.format("%.2f", request.estimatedPrice)}",
+                        text = com.intu.taxi.ui.formatSoles(request.estimatedPrice),
                         fontSize = 12.sp,
                         color = Color(0xFF08817E),
                         fontWeight = FontWeight.Bold

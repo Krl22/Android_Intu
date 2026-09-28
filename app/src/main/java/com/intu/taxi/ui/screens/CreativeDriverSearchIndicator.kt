@@ -24,7 +24,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 fun CreativeDriverSearchIndicator(
     isVisible: Boolean,
     onCancel: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isCancelling: Boolean = false
 ) {
     if (!isVisible) return
 
@@ -149,17 +150,22 @@ fun CreativeDriverSearchIndicator(
                 )
         )
         
+        // Al pie de la pantalla, por encima de la barra de navegación del sistema,
+        // para que la ruta siga visible y "Cancelar búsqueda" no quede tapado
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-            modifier = Modifier.fillMaxSize()
+            verticalArrangement = Arrangement.Bottom,
+            modifier = Modifier
+                .fillMaxSize()
+                .navigationBarsPadding()
+                .padding(bottom = 24.dp)
         ) {
             // Contenedor principal con efecto glassmorphism mejorado y animación de flotación
             Card(
                 modifier = Modifier
                     .padding(horizontal = 24.dp)
                     .wrapContentSize()
-                    .offset(y = floatY.dp + 150.dp) // Bajar el card ligeramente
+                    .offset(y = floatY.dp)
                     .alpha(0.98f),
                 shape = RoundedCornerShape(24.dp),
                 colors = CardDefaults.cardColors(
@@ -353,6 +359,7 @@ fun CreativeDriverSearchIndicator(
                     // Botón de cancelar con estilo premium mejorado
                     Surface(
                         onClick = onCancel,
+                        enabled = !isCancelling,
                         modifier = Modifier
                             .height(48.dp) // Más alto para mejor accesibilidad
                             .padding(horizontal = 20.dp),
@@ -385,7 +392,7 @@ fun CreativeDriverSearchIndicator(
                             Spacer(modifier = Modifier.width(6.dp))
                             
                             Text(
-                                text = "Cancelar búsqueda",
+                                text = if (isCancelling) "Cancelando…" else "Cancelar búsqueda",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = Color(0xFFE8F8F7), // Color más brillante
                                 fontWeight = FontWeight.SemiBold, // Más peso

@@ -2,6 +2,7 @@ package com.intu.taxi.repositories
 
 import com.google.firebase.firestore.GeoPoint
 import com.intu.taxi.data.SupabaseApi
+import com.intu.taxi.data.str
 import com.intu.taxi.models.ActiveRide
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -87,24 +88,24 @@ class ActiveRideRepository {
     ): Result<String> = Result.success(requestId)
 
     private fun JSONObject.toActiveRide(): ActiveRide {
-        val rideStatus = optString("status")
+        val rideStatus = str("status")
         val routeTarget = if (rideStatus == "in_progress") {
             GeoPoint(optDouble("destination_lat"), optDouble("destination_lng"))
         } else {
             GeoPoint(optDouble("origin_lat"), optDouble("origin_lng"))
         }
         return ActiveRide(
-        rideId = optString("id"), requestId = optString("id"), driverId = optString("driver_id"),
-        clientId = optString("rider_id"), clientLocation = routeTarget,
+        rideId = str("id"), requestId = str("id"), driverId = str("driver_id"),
+        clientId = str("rider_id"), clientLocation = routeTarget,
         destination = GeoPoint(optDouble("destination_lat"), optDouble("destination_lng")),
-        originAddress = optString("origin_address"), destinationAddress = optString("destination_address"),
-        status = rideStatus, createdAt = millis(optString("requested_at")), updatedAt = millis(optString("updated_at")),
+        originAddress = str("origin_address"), destinationAddress = str("destination_address"),
+        status = rideStatus, createdAt = millis(str("requested_at")), updatedAt = millis(str("updated_at")),
         originLatitude = optDouble("origin_lat"), originLongitude = optDouble("origin_lng"),
         destinationLatitude = optDouble("destination_lat"), destinationLongitude = optDouble("destination_lng"),
-        paymentMethod = optString("payment_method"), fare = optDouble("final_fare", optDouble("estimated_fare")),
-        driverName = optString("driver_name"), driverPhone = optString("driver_phone"),
-        riderName = optString("rider_name"), riderPhone = optString("rider_phone"),
-        vehiclePlate = optString("vehicle_plate"), vehicleDescription = optString("vehicle_description"),
+        paymentMethod = str("payment_method"), fare = optDouble("final_fare", optDouble("estimated_fare")),
+        driverName = str("driver_name"), driverPhone = str("driver_phone"),
+        riderName = str("rider_name"), riderPhone = str("rider_phone"),
+        vehiclePlate = str("vehicle_plate"), vehicleDescription = str("vehicle_description"),
         paymentConfirmed = !isNull("payment_confirmed_at")
         )
     }

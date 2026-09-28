@@ -731,9 +731,9 @@ private fun EnhancedHeaderSection(
 @Composable
 private fun DriverStatsSection() {
     val stats = listOf(
-        Triple("Hoy", "$120.00", Icons.Default.TrendingUp),
-        Triple("Semana", "$540.50", Icons.Default.CalendarToday),
-        Triple("Rating", "4.8", Icons.Default.Star)
+        Triple("Hoy", "S/ 120.00", Icons.Default.TrendingUp),
+        Triple("Semana", "S/ 540.50", Icons.Default.CalendarToday),
+        Triple("Calificación", "4.8", Icons.Default.Star)
     )
     
     Card(

@@ -17,8 +17,11 @@
 
 ## Preparación del backend
 
-1. Aplicar `supabase/migrations/20260927020000_mvp_payment_and_live_location.sql`.
-2. Desplegar únicamente las funciones de autenticación nuevas, sin borrar las funciones existentes:
+1. Aplicar `supabase/migrations/20260928043517_mvp_payment_and_live_location.sql` y
+   `supabase/migrations/20260928043518_allow_upsert_on_own_rows.sql` (ya aplicadas en `vkguzpciwpfvaeyedepl`).
+2. Activar Identity Platform en Firebase (Authentication → Settings → *Upgrade to Firebase Authentication
+   with Identity Platform*). Sin esto, Firebase rechaza las funciones de bloqueo del paso siguiente.
+3. Desplegar únicamente las funciones de autenticación nuevas, sin borrar las funciones existentes:
 
    ```bash
    firebase deploy --config firebase/firebase.json \

@@ -21,6 +21,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
@@ -903,7 +904,9 @@ fun DriverHomeScreen(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .padding(bottom = 50.dp) // Espacio aún más reducido (subido 40dp total desde 90dp original)
+                    // Encima de la barra de navegación del sistema, sea de gestos o de 3 botones
+                    .navigationBarsPadding()
+                    .padding(bottom = 16.dp)
             ) {
                 EnhancedActiveRideCard(
                     request = request,
@@ -1334,7 +1337,7 @@ fun EnhancedActiveRideCard(
                 Spacer(modifier = Modifier.height(20.dp))
 
                 Text(
-                    text = "Cobrar S/ ${String.format("%.2f", request.estimatedPrice)} · ${if (request.paymentMethod == "yape_plin") "Yape" else "Efectivo"}",
+                    text = "Cobrar ${com.intu.taxi.ui.formatSoles(request.estimatedPrice)} · ${if (request.paymentMethod == "yape_plin") "Yape" else "Efectivo"}",
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF08817E)

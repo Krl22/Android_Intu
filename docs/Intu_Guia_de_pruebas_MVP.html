@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Intu – Guía de pruebas del MVP</title>
+<style>
+  @page {
+    size: A4;
+    margin: 16mm 14mm 18mm 14mm;
+    @bottom-left { content: "Intu · Guía de pruebas del MVP"; font: 8pt "Segoe UI", sans-serif; color: #8a8f98; }
+    @bottom-right { content: "Página " counter(page) " de " counter(pages); font: 8pt "Segoe UI", sans-serif; color: #8a8f98; }
+  }
+  :root {
+    --teal: #08817E;
+    --teal-soft: #E6F4F3;
+    --ink: #1C1C1E;
+    --navy: #1E1F47;
+    --muted: #5F6570;
+    --line: #D9DDE3;
+    --warn: #B45309;
+    --warn-soft: #FEF3E2;
+    --bad: #B42318;
+    --bad-soft: #FDECEA;
+    --ok: #067647;
+    --ok-soft: #E8F6EE;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { font-family: "Segoe UI", Calibri, Arial, sans-serif; font-size: 9.3pt; line-height: 1.38; color: var(--ink); margin: 0; }
+  h1, h2, h3 { color: var(--navy); line-height: 1.2; }
+  h2 { font-size: 15pt; margin: 0 0 3mm; padding-bottom: 2mm; border-bottom: 2px solid var(--teal); break-after: avoid; }
+  h2 .num { color: var(--teal); margin-right: 2mm; }
+  h3 { font-size: 11pt; margin: 5mm 0 2mm; break-after: avoid; }
+  p { margin: 0 0 2.5mm; }
+  ul, ol { margin: 0 0 3mm; padding-left: 5.5mm; }
+  li { margin-bottom: 1mm; }
+  code, .mono { font-family: Consolas, "Cascadia Mono", monospace; font-size: 8.6pt; }
+  code { background: #F1F3F6; padding: 0.2mm 1.2mm; border-radius: 1mm; }
+  b, strong { font-weight: 600; }
+  .ui { font-weight: 600; color: var(--navy); }
+  .section { margin-top: 9mm; }
+  .section.newpage { break-before: page; margin-top: 0; }
+  .keep { break-inside: avoid; }
+
+  /* Portada */
+  .cover { height: 250mm; display: flex; flex-direction: column; }
+  .brand { display: flex; align-items: center; gap: 4mm; margin-top: 18mm; }
+  .logo { width: 16mm; height: 16mm; border-radius: 4mm; background: linear-gradient(135deg, var(--teal), var(--navy)); color: #fff; font-weight: 700; font-size: 20pt; display: flex; align-items: center; justify-content: center; }
+  .brand span { font-size: 13pt; color: var(--muted); letter-spacing: 0.3mm; }
+  .cover h1 { font-size: 30pt; margin: 14mm 0 3mm; }
+  .cover .lead { font-size: 12.5pt; color: var(--muted); max-width: 150mm; }
+  .meta { margin-top: 10mm; border-top: 1px solid var(--line); padding-top: 5mm; display: grid; grid-template-columns: 38mm 1fr; row-gap: 2mm; font-size: 10pt; }
+  .meta dt { color: var(--muted); }
+  .meta dd { margin: 0; }
+  .howto { margin-top: auto; background: var(--teal-soft); border-radius: 3mm; padding: 5mm 6mm; }
+  .howto h3 { margin-top: 0; color: var(--teal); }
+  .howto ol { margin-bottom: 0; }
+
+  /* Avisos */
+  .note { border-left: 3px solid var(--teal); background: var(--teal-soft); padding: 2.5mm 4mm; border-radius: 0 2mm 2mm 0; margin: 3mm 0; break-inside: avoid; }
+  .warn { border-left-color: var(--warn); background: var(--warn-soft); }
+  .bad { border-left-color: var(--bad); background: var(--bad-soft); }
+  .note .t { font-weight: 700; display: block; margin-bottom: 0.8mm; }
+  .warn .t { color: var(--warn); }
+  .bad .t { color: var(--bad); }
+  .note p:last-child, .note ul:last-child { margin-bottom: 0; }
+
+  /* Tablas de pruebas */
+  table { width: 100%; border-collapse: collapse; margin: 1.5mm 0 4mm; }
+  thead { display: table-header-group; }
+  tr { break-inside: avoid; }
+  th { text-align: left; font-size: 8.2pt; text-transform: uppercase; letter-spacing: 0.2mm; color: var(--muted); font-weight: 600; border-bottom: 1.5px solid var(--navy); padding: 1.6mm 2mm; }
+  td { border-bottom: 1px solid var(--line); padding: 1.5mm 1.8mm; vertical-align: top; }
+  .tests td:first-child { font-weight: 700; color: var(--teal); white-space: nowrap; width: 11mm; }
+  .tests td.do { width: 38%; }
+  .tests td.chk { width: 17mm; white-space: nowrap; text-align: center; }
+  .tests th.chk { text-align: center; }
+  .tests td.notes { width: 13%; }
+  .box { display: inline-block; width: 3.4mm; height: 3.4mm; border: 1.3px solid #6B7280; border-radius: 0.7mm; vertical-align: -0.6mm; }
+  .box + .box { margin-left: 2.5mm; }
+  .chk-legend { font-size: 8pt; color: var(--muted); }
+  .tag { display: inline-block; font-size: 7.4pt; font-weight: 600; padding: 0.2mm 1.6mm; border-radius: 5mm; margin-left: 1mm; vertical-align: 0.3mm; white-space: nowrap; }
+  .tag.two { background: #EEF0FB; color: var(--navy); }
+  .tag.db { background: #F1F3F6; color: var(--muted); }
+  .tag.req { background: var(--warn-soft); color: var(--warn); }
+  .sub { color: var(--muted); font-size: 8.6pt; display: block; margin-top: 0.8mm; }
+
+  /* Tabla de estado */
+  .status td:nth-child(2) { white-space: nowrap; font-weight: 600; }
+  .s-ok { color: var(--ok); }
+  .s-bad { color: var(--bad); }
+  .s-warn { color: var(--warn); }
+
+  .steps { counter-reset: s; list-style: none; padding-left: 0; }
+  .steps li { counter-increment: s; position: relative; padding-left: 8mm; margin-bottom: 2mm; }
+  .steps li::before { content: counter(s); position: absolute; left: 0; top: 0.2mm; width: 5mm; height: 5mm; border-radius: 50%; background: var(--teal); color: #fff; font-size: 8pt; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+
+  .flow { display: flex; flex-wrap: wrap; gap: 1.5mm; align-items: center; margin: 2mm 0 4mm; font-size: 8.8pt; }
+  .flow span { background: #F1F3F6; border-radius: 1.5mm; padding: 1mm 2.2mm; }
+  .flow i { color: var(--muted); font-style: normal; }
+
+  pre { font-family: Consolas, monospace; font-size: 8.4pt; background: #F6F7F9; border: 1px solid var(--line); border-radius: 2mm; padding: 2.5mm 3.5mm; white-space: pre-wrap; margin: 1mm 0 4mm; break-inside: avoid; }
+  .summary td, .summary th { text-align: center; }
+  .summary td:first-child, .summary th:first-child { text-align: left; }
+  .summary td { height: 8mm; }
+  .known li { margin-bottom: 1.8mm; }
+</style>
+</head>
+<body>
+
+<!-- ===================== PORTADA ===================== -->
+<section class="cover">
+  <div class="brand"><div class="logo">i</div><span>INTU · MOTOTAXI</span></div>
+  <h1>Guía de pruebas del MVP</h1>
+  <p class="lead">Lista paso a paso para comprobar que la app funciona de principio a fin: inicio de sesión, pedido de un viaje como pasajero y atención del viaje como conductor.</p>
+  <dl class="meta">
+    <dt>Versión de la app</dt><dd>1.0 (debug) · paquete <code>com.intu.taxi</code></dd>
+    <dt>Código</dt><dd>commit <code>4c6298f</code> — “Build functional passenger-driver MVP on Supabase”</dd>
+    <dt>Backend</dt><dd>Firebase <code>intu-e8403</code> (login) · Supabase <code>vkguzpciwpfvaeyedepl</code> (datos)</dd>
+    <dt>Fecha</dt><dd>27 de septiembre de 2026</dd>
+    <dt>Probado por</dt><dd>______________________________________</dd>
+  </dl>
+  <div class="howto">
+    <h3>Cómo usar esta guía</h3>
+    <ol>
+      <li>Empieza por la <b>sección 1</b>: indica qué debe estar listo antes de probar y qué falta hoy.</li>
+      <li>Sigue las secciones en orden. Cada una deja lista la siguiente (por ejemplo, necesitas un conductor aprobado antes de la sección 7).</li>
+      <li>En cada prueba marca la primera casilla si pasó (<b>OK</b>) o la segunda si falló (<b>Falla</b>), y anota lo que viste.</li>
+      <li><span class="tag two">2 teléfonos</span> significa que necesitas al pasajero y al conductor al mismo tiempo. <span class="tag db">Supabase</span> significa revisar el dato en el dashboard (consultas en el apéndice A).</li>
+      <li>Si algo falla, sigue el <b>apéndice B</b> para reportarlo con la información que necesito para corregirlo.</li>
+    </ol>
+  </div>
+</section>
+
+<!-- ===================== 1. PREPARACIÓN ===================== -->
+<section class="section newpage">
+  <h2><span class="num">1</span>Antes de empezar</h2>
+
+  <h3>1.1 Qué necesitas</h3>
+  <ul>
+    <li><b>Dos teléfonos Android</b> (Android 7.0 o superior) con <i>Depuración USB</i> activada: uno para el pasajero y otro para el conductor. Puede ser un teléfono y un emulador, pero el emulador debe tener <b>Google Play</b> para que funcione el login con Google.</li>
+    <li><b>Dos cuentas distintas</b>: una de pasajero y otra de conductor. Para el conductor usa una <b>cuenta de Google</b>, porque así el correo ya viene verificado y Google ya queda vinculado (ver sección 6).</li>
+    <li><b>Números de teléfono</b> para el login por SMS, o números de prueba de Firebase (ver el consejo en la sección 3).</li>
+    <li>GPS e internet activos en ambos teléfonos.</li>
+    <li>Acceso a la consola de Firebase y al dashboard de Supabase para revisar datos y aprobar al conductor.</li>
+  </ul>
+
+  <h3>1.2 Estado del proyecto (revisado el 27/09/2026)</h3>
+  <table class="status">
+    <thead><tr><th>Elemento</th><th>Estado</th><th>Qué afecta</th></tr></thead>
+    <tbody>
+      <tr><td>Proyecto en Android Studio (compila e instala)</td><td class="s-ok">Listo</td><td>Todo.</td></tr>
+      <tr><td>Token de Mapbox</td><td class="s-ok">Listo</td><td>Mapa, búsqueda de direcciones y rutas. Sin token la app se cierra al abrir el mapa.</td></tr>
+      <tr><td>Huella SHA-1/SHA-256 de esta PC en Firebase</td><td class="s-ok">Listo</td><td>Login con Google en APKs compilados en esta PC.</td></tr>
+      <tr><td>Conexión Firebase → Supabase (<i>Third-Party Auth</i>)</td><td class="s-warn">Por verificar</td><td>Supabase → Authentication → Third-Party Auth debe tener Firebase con el ID <code>intu-e8403</code>. Sin esto, <b>nada</b> se guarda en Supabase.</td></tr>
+      <tr><td>Funciones de Firebase <code>beforecreated</code> y <code>beforesignedin</code></td><td class="s-bad">No desplegadas</td><td>Agregan <code>role: authenticated</code> al token. Sin ellas, Supabase rechaza las peticiones de la app.</td></tr>
+      <tr><td>Migración <code>20260927020000_mvp_payment_and_live_location</code></td><td class="s-bad">No aplicada</td><td>Registro de la confirmación de pago y ubicación del conductor en vivo. Sin ella, el pasajero no ve moverse al conductor.</td></tr>
+      <tr><td>Usuarios reales en Supabase</td><td class="s-warn">0</td><td>Nadie ha guardado datos todavía desde la app: la conexión app → Supabase no se ha probado nunca.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note bad">
+    <span class="t">Importante: hasta resolver los 3 pendientes, solo podrás probar las secciones 2 y 3</span>
+    <p>La instalación y el login funcionan solo con Firebase. Desde la sección 4 la app guarda datos en Supabase. Si Supabase rechaza la petición, <b>la app se cierra sola al pulsar “Guardar y continuar”</b> (prueba 4.6), porque ese botón no maneja el error. Pídeme que aplique la migración y despliegue las funciones, o hazlo con los comandos de <code>MVP_TESTING.md</code>. Después, cada tester debe <b>cerrar sesión y volver a entrar</b> para recibir el nuevo token.</p>
+  </div>
+
+  <h3>1.3 Instalar la app desde Android Studio</h3>
+  <ol class="steps">
+    <li>Abre la carpeta <code>Android_Intu</code> y pulsa <span class="ui">Sync Project with Gradle Files</span> (ícono del elefante). Espera a que termine sin errores.</li>
+    <li>En el teléfono, activa <i>Opciones de desarrollador → Depuración USB</i>, conéctalo por cable y acepta el mensaje “¿Permitir depuración USB?”.</li>
+    <li>Elige el teléfono en la lista de dispositivos de la barra superior y pulsa <span class="ui">▶ Run 'app'</span>.</li>
+    <li>Para el segundo teléfono, conéctalo, selecciónalo en la misma lista y vuelve a pulsar <span class="ui">▶ Run</span>.</li>
+    <li>Abre la pestaña <span class="ui">Logcat</span> y filtra por <code>package:com.intu.taxi</code> para ver errores mientras pruebas.</li>
+  </ol>
+</section>
+
+<!-- ===================== 2. ARRANQUE ===================== -->
+<section class="section">
+  <h2><span class="num">2</span>Instalación y arranque</h2>
+  <table class="tests">
+    <thead><tr><th>#</th><th>Qué hacer</th><th>Qué debe pasar</th><th class="chk">OK · Falla</th><th>Notas</th></tr></thead>
+    <tbody>
+      <tr><td>2.1</td><td class="do">Instalar con <span class="ui">▶ Run</span>.</td><td>Se instala sin errores y aparece el ícono <b>Intu</b> en el teléfono.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>2.2</td><td class="do">Abrir la app por primera vez.</td><td>Se ve un indicador de carga breve y luego la pantalla <span class="ui">Bienvenido a Intu</span>.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>2.3</td><td class="do">Observar durante todas las pruebas.</td><td>Nunca aparece “Intu se detuvo” ni “Intu no responde”. Si pasa, anota el número de la prueba.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+    </tbody>
+  </table>
+
+  <h2 style="margin-top:8mm"><span class="num">3</span>Inicio de sesión</h2>
+  <div class="note"><span class="t">Consejo: números de prueba sin SMS</span>
+    <p>Consola de Firebase → Authentication → Sign-in method → Teléfono → <i>Números de teléfono para pruebas</i>. Agrega, por ejemplo, <code>+51 999 000 001</code> con el código <code>123456</code>. Así no gastas SMS ni llegas al límite diario.</p>
+  </div>
+  <table class="tests">
+    <thead><tr><th>#</th><th>Qué hacer</th><th>Qué debe pasar</th><th class="chk">OK · Falla</th><th>Notas</th></tr></thead>
+    <tbody>
+      <tr><td>3.1</td><td class="do">En <span class="ui">Bienvenido a Intu</span>, intentar pulsar los botones sin marcar la casilla.</td><td><span class="ui">Continuar con Google</span> y <span class="ui">Continuar con Teléfono</span> están desactivados hasta marcar <span class="ui">Acepto Términos y Privacidad</span>.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>3.2</td><td class="do">Marcar la casilla y pulsar <span class="ui">Continuar con Teléfono</span>.</td><td>Abre <span class="ui">Verifica tu número</span> con selector de prefijo (Perú +51 y otros 19 países) y campo <span class="ui">Número</span>.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>3.3</td><td class="do">Con +51, escribir un número de 8 dígitos y pulsar <span class="ui">Enviar código</span>.</td><td>Aparece <span class="ui">Número inválido para ese prefijo</span> y no se envía nada.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>3.4</td><td class="do">Escribir un número válido de 9 dígitos y pulsar <span class="ui">Enviar código</span>.</td><td>Aparece <span class="ui">Código enviado</span> y llega un SMS de 6 dígitos. En algunos teléfonos se completa solo con <span class="ui">Verificación automática completada</span>.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>3.5</td><td class="do">Escribir un código incorrecto y pulsar <span class="ui">Verificar</span>.</td><td>Muestra un error de verificación y la app sigue abierta.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>3.6</td><td class="do">Esperar 60 segundos y pulsar <span class="ui">Reenviar</span>.</td><td>El botón se activa a los 60 s, aparece <span class="ui">Código reenviado</span> y llega un nuevo SMS.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>3.7</td><td class="do">Escribir el código correcto y pulsar <span class="ui">Verificar</span>.</td><td>Si la cuenta es nueva, abre <span class="ui">Completa tu perfil</span>. Si ya tenía perfil completo, abre el mapa.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>3.8</td><td class="do">En el otro teléfono: marcar la casilla y pulsar <span class="ui">Continuar con Google</span>.</td><td>Abre el selector de cuentas de Google; al elegir una, vuelve a la app con sesión iniciada. Si aparece “Google Sign-In: … (10)”, falla la huella SHA-1: avísame.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>3.9</td><td class="do">Repetir 3.8, pero cerrar el selector sin elegir cuenta.</td><td>La app no se cierra: muestra <span class="ui">Cancelar</span> y <span class="ui">Reintentar</span>, y <span class="ui">Reintentar</span> vuelve a abrir el selector.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>3.10</td><td class="do">Con sesión iniciada y perfil completo, quitar la app de recientes y abrirla otra vez.</td><td>Entra directo al mapa sin pedir login.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ===================== 4. PERFIL ===================== -->
+<section class="section">
+  <h2><span class="num">4</span>Completar perfil</h2>
+  <p>Se muestra la primera vez que entra una cuenta. Haz esta sección con las dos cuentas (pasajero y conductor). <span class="tag req">Requiere sección 1.2</span></p>
+  <table class="tests">
+    <thead><tr><th>#</th><th>Qué hacer</th><th>Qué debe pasar</th><th class="chk">OK · Falla</th><th>Notas</th></tr></thead>
+    <tbody>
+      <tr><td>4.1</td><td class="do">Revisar la pantalla <span class="ui">Completa tu perfil</span>.</td><td>Tiene los campos Nombre, Apellido, Fecha de nacimiento, Teléfono y Correo electrónico.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>4.2</td><td class="do">Si entraste con teléfono, mirar el campo Teléfono.</td><td>Ya viene con tu número en formato +51…</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>4.3</td><td class="do">Pulsar <span class="ui">Elegir fecha</span>, escoger una fecha y pulsar <span class="ui">Confirmar</span>.</td><td>La fecha aparece en el campo.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>4.4</td><td class="do">Dejar el correo vacío.</td><td><span class="ui">Guardar y continuar</span> está desactivado.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>4.5</td><td class="do">Escribir el correo y pulsar <span class="ui">Verificar correo</span>.</td><td>Llega un correo de verificación de Firebase (revisa spam). <span class="sub">Si entraste solo con teléfono, puede que no llegue: la cuenta de Firebase no tiene correo propio. Es un problema conocido (ver sección 10).</span></td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>4.6</td><td class="do">Llenar <b>todos</b> los campos y pulsar <span class="ui">Guardar y continuar</span>.</td><td>Abre el mapa con la barra inferior (Inicio, Viajes, Cuenta). <span class="sub">Si la app se cierra aquí, Supabase rechazó el guardado: revisa la sección 1.2.</span></td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>4.7</td><td class="do">Revisar los datos guardados. <span class="tag db">Supabase</span></td><td>En Firestore existe <code>users/&lt;uid&gt;</code> y en Supabase hay una fila en <code>profiles</code> con tu nombre, teléfono y correo (consulta A.1).</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>4.8</td><td class="do">Con otra cuenta, guardar el perfil dejando la fecha vacía y reabrir la app.</td><td>Vuelve a pedir <span class="ui">Completa tu perfil</span>. Es lo esperado: el perfil se considera completo solo con nombre, apellido, fecha y teléfono.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ===================== 5. PASAJERO ===================== -->
+<section class="section">
+  <h2><span class="num">5</span>Pasajero: pedir un viaje</h2>
+  <p>Usa la cuenta de pasajero. Así funciona el pedido en la app:</p>
+  <div class="flow"><span>¿A dónde quieres ir?</span><i>→</i><span>elegir sugerencia</span><i>→</i><span>Elegir punto de recojo (opcional)</span><i>→</i><span>Confirmar destino</span><i>→</i><span>Elige tu viaje</span><i>→</i><span>Confirmar viaje</span><i>→</i><span>Buscando conductor</span></div>
+  <p>Si no eliges un punto de recojo, se usa tu ubicación actual. <span class="tag req">Requiere sección 1.2</span></p>
+  <table class="tests">
+    <thead><tr><th>#</th><th>Qué hacer</th><th>Qué debe pasar</th><th class="chk">OK · Falla</th><th>Notas</th></tr></thead>
+    <tbody>
+      <tr><td>5.1</td><td class="do">Entrar a Inicio por primera vez.</td><td>Pide permiso de ubicación. Al aceptarlo, el mapa carga y se centra en tu posición.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>5.2</td><td class="do">(Opcional, con app reinstalada) Denegar el permiso de ubicación.</td><td>La app no se cierra.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>5.3</td><td class="do">Escribir una dirección en <span class="ui">¿A dónde quieres ir?</span></td><td>Aparecen hasta 6 sugerencias de direcciones reales.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>5.4</td><td class="do">Tocar una sugerencia.</td><td>El mapa va a ese punto y muestra un marcador rojo, con los botones <span class="ui">Elegir punto de recojo</span> y <span class="ui">Confirmar destino</span>.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>5.5</td><td class="do">Pulsar <span class="ui">Elegir punto de recojo</span>, mover el mapa y pulsar <span class="ui">Confirmar punto de recojo</span>.</td><td>Se ve <span class="ui">Mueve el mapa hasta el punto de recojo</span> con un marcador verde. Al confirmar sale <span class="ui">Punto de recojo guardado</span>, el mapa vuelve al destino y el botón cambia a <span class="ui">Cambiar punto de recojo</span>.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>5.6</td><td class="do">Pulsar <span class="ui">Confirmar destino</span>.</td><td>Se dibuja la ruta y aparece <span class="ui">Elige tu viaje</span> con una sola opción, <b>Mototaxi</b>, con precio y minutos.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>5.7</td><td class="do">Revisar el precio.</td><td>Precio = el mayor entre S/ 4.00 y (S/ 2.50 + S/ 1.00 por km + S/ 0.10 por minuto), redondeado a 10 céntimos. <span class="sub">Ejemplo: 3 km y 10 min = 2.50 + 3.00 + 1.00 = S/ 6.50. Un viaje menor a 1 km cuesta S/ 4.00.</span></td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>5.8</td><td class="do">Tocar el método de pago; luego cerrar y abrir la app.</td><td>Alterna entre <b>Efectivo</b> y <b>Yape</b>. Al reabrir, se mantiene el último elegido.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>5.9</td><td class="do">Pulsar <span class="ui">Confirmar viaje</span>.</td><td>Aparece la animación <span class="ui">Buscando conductor</span> / <span class="ui">Escaneando área</span> con el botón <span class="ui">Cancelar búsqueda</span>.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>5.10</td><td class="do">Revisar el viaje creado. <span class="tag db">Supabase</span></td><td>En <code>rides</code> hay una fila con status <code>searching</code>, <code>estimated_fare</code> igual al precio mostrado y el <code>payment_method</code> elegido (consulta A.2).</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>5.11</td><td class="do">Pulsar <span class="ui">Cancelar búsqueda</span>.</td><td>Vuelve al mapa. En Supabase el viaje queda <code>cancelled</code> con <code>cancelled_by = rider</code>.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>5.12</td><td class="do">Pedir otro viaje, quitar la app de recientes durante la búsqueda y volver a abrirla.</td><td>Sigue mostrando <span class="ui">Buscando conductor</span>: el viaje no se pierde.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>5.13</td><td class="do">Dejar la búsqueda sin conductor.</td><td>Entre 5 y 6 minutos después la búsqueda termina sola. En Supabase queda <code>cancelled_by = system</code>.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ===================== 6. CONDUCTOR REGISTRO ===================== -->
+<section class="section">
+  <h2><span class="num">6</span>Conductor: registro y aprobación</h2>
+  <p>Usa la cuenta de conductor en el segundo teléfono. Para activar el modo conductor, la app exige en este orden:</p>
+  <div class="flow"><span>correo</span><i>→</i><span>correo verificado</span><i>→</i><span>Google vinculado</span><i>→</i><span>datos de conductor</span><i>→</i><span>aprobación manual</span></div>
+  <div class="note"><span class="t">Recomendación</span><p>Entra con <b>Continuar con Google</b>: el correo ya viene verificado y Google ya está vinculado, así saltas dos requisitos.</p></div>
+  <table class="tests">
+    <thead><tr><th>#</th><th>Qué hacer</th><th>Qué debe pasar</th><th class="chk">OK · Falla</th><th>Notas</th></tr></thead>
+    <tbody>
+      <tr><td>6.1</td><td class="do">Ir a la pestaña <span class="ui">Cuenta</span>.</td><td>Muestra <span class="ui">Mi cuenta</span> con nombre, teléfono y correo, el estado del correo (<span class="ui">Verificado</span> / <span class="ui">Verificar</span>) y la <span class="ui">Cuenta de Google</span> (<span class="ui">Vinculado</span> / <span class="ui">Vincular</span>).</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>6.2</td><td class="do">(Cuenta sin correo verificado) Pulsar <span class="ui">Comenzar</span> en <span class="ui">Ganar como conductor</span>.</td><td>Aparece <span class="ui">Por favor verificar correo para convertirse en conductor</span>, o <span class="ui">Debes agregar un correo electrónico primero</span> si no hay correo.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>6.3</td><td class="do">(Cuenta que entró por teléfono) Pulsar <span class="ui">Vincular</span> en Cuenta de Google.</td><td>Aparece <span class="ui">Cuenta de Google vinculada exitosamente</span>. Si esa cuenta de Google ya pertenece a otro usuario: <span class="ui">Esta cuenta de Google ya está vinculada a otro usuario</span>.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>6.4</td><td class="do">Con el correo verificado, pulsar <span class="ui">Comenzar</span>.</td><td>Abre <span class="ui">Datos de conductor</span>.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>6.5</td><td class="do">Probar el formulario: Tipo de vehículo, Marca, Modelo, Año, Placa, Licencia y DNI.</td><td>Marca se activa después de elegir Tipo, y Modelo después de Marca (existe <span class="ui">Modelo personalizado</span>). Año acepta solo 4 dígitos y DNI solo 8. <span class="ui">Guardar</span> se activa únicamente con todo lleno y el DNI de 8 dígitos.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>6.6</td><td class="do">Elegir <b>Mototaxi</b>, completar todo y pulsar <span class="ui">Guardar</span>.</td><td>Vuelve a <span class="ui">Mi cuenta</span> y aparece el interruptor <span class="ui">Pasajero</span> / <span class="ui">Conductor</span>.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>6.7</td><td class="do">Revisar el registro. <span class="tag db">Supabase</span></td><td>En <code>drivers</code> el conductor tiene status <code>pending</code>, y en <code>vehicles</code> está su placa (consulta A.3).</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>6.8</td><td class="do">Sin aprobar todavía, activar el interruptor <span class="ui">Conductor</span>.</td><td>Aparece <span class="ui">Tu perfil de conductor está pendiente de aprobación manual…</span> <span class="sub">Puede que la app ya esté en modo conductor tras 6.6 (problema conocido). En ese caso, pulsar <span class="ui">Buscar</span> en Inicio debe mostrar un error sin cerrarse.</span></td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>6.9</td><td class="do">Aprobar al conductor con la consulta A.4. Luego, en la app: <span class="ui">Cerrar sesión</span> y volver a entrar.</td><td>El login funciona normalmente.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>6.10</td><td class="do">Activar el interruptor <span class="ui">Conductor</span> y volver a Inicio.</td><td>Inicio cambia a la pantalla <span class="ui">Modo conductor</span> con el botón <span class="ui">Buscar</span>.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>6.11</td><td class="do">Desactivar el interruptor y volver a Inicio; luego activarlo otra vez.</td><td>Alterna entre el mapa de pasajero y el modo conductor. Al reabrir la app se mantiene el último modo.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ===================== 7. VIAJE COMPLETO ===================== -->
+<section class="section">
+  <h2><span class="num">7</span>Viaje completo: pasajero y conductor</h2>
+  <p><span class="tag two">2 teléfonos</span> Pasajero en modo pasajero y conductor aprobado en modo conductor, ambos con GPS. Así avanza un viaje:</p>
+  <div class="flow"><span>searching</span><i>→ Aceptar →</i><span>accepted</span><i>→ Llegué →</i><span>arrived</span><i>→ Iniciar viaje →</i><span>in_progress</span><i>→ Confirmar pago y finalizar →</i><span>completed</span></div>
+
+  <h3>7A. Recorrido normal</h3>
+  <table class="tests">
+    <thead><tr><th>#</th><th>Qué hacer</th><th>Qué debe pasar</th><th class="chk">OK · Falla</th><th>Notas</th></tr></thead>
+    <tbody>
+      <tr><td>7.1</td><td class="do"><b>Conductor:</b> pulsar <span class="ui">Buscar</span>.</td><td>Sale <span class="ui">Buscando clientes cerca…</span>, se oculta la barra inferior y el botón cambia a <span class="ui">Parar</span>. <span class="sub">Supabase: en <code>driver_locations</code> aparece su fila con <code>is_available = true</code>.</span></td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>7.2</td><td class="do"><b>Conductor:</b> pulsar <span class="ui">Parar</span> y luego <span class="ui">Buscar</span> otra vez.</td><td>Sale <span class="ui">Búsqueda detenida</span> y luego vuelve a buscar sin errores.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>7.3</td><td class="do"><b>Pasajero:</b> pedir un viaje (pruebas 5.3 a 5.9).</td><td><b>Conductor:</b> en 2–3 segundos aparece una tarjeta con el nombre del pasajero, Origen, Destino, precio S/ y método de pago, con <span class="ui">Aceptar</span> y <span class="ui">Rechazar</span>.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>7.4</td><td class="do">Comparar precios.</td><td>El precio de la tarjeta del conductor es igual al que vio el pasajero en <span class="ui">Elige tu viaje</span>.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>7.5</td><td class="do"><b>Conductor:</b> pulsar <span class="ui">Aceptar</span>.</td><td>Sale <span class="ui">Viaje aceptado exitosamente</span> y se dibuja la ruta al punto de recojo con <span class="ui">Dirígete al punto de recogida</span>.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>7.6</td><td class="do"><b>Pasajero:</b> mirar la pantalla.</td><td>Termina la búsqueda y aparece <span class="ui">Tu mototaxi está en camino</span> con Conductor, Mototaxi (marca, modelo y placa), Total S/ y forma de pago. Con Yape se muestra el teléfono del conductor.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>7.7</td><td class="do"><b>Conductor:</b> caminar o moverse unos metros.</td><td><b>Pasajero:</b> el marcador del conductor se mueve en su mapa. <span class="sub">Solo funciona con la migración MVP aplicada (sección 1.2).</span></td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>7.8</td><td class="do"><b>Conductor:</b> pulsar <span class="ui">Llegué</span>.</td><td>Conductor: <span class="ui">Llegada confirmada</span> y <span class="ui">En el punto de recojo</span>. Pasajero: <span class="ui">Tu conductor llegó</span>.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>7.9</td><td class="do"><b>Conductor:</b> pulsar <span class="ui">Iniciar viaje</span>.</td><td>Conductor: <span class="ui">Viaje iniciado</span> y ruta hacia el destino. Pasajero: <span class="ui">Viaje en curso</span>.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>7.10</td><td class="do"><b>Conductor:</b> revisar el botón final.</td><td>Muestra <span class="ui">Cobrar S/ …</span> con el mismo precio y el botón <span class="ui">Confirmar pago y finalizar</span>.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>7.11</td><td class="do"><b>Conductor:</b> pulsar <span class="ui">Confirmar pago y finalizar</span>.</td><td>Sale <span class="ui">Pago confirmado. Viaje finalizado</span> y vuelve a la pantalla de buscar.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>7.12</td><td class="do"><b>Pasajero:</b> mirar la pantalla y pulsar <span class="ui">Listo</span>.</td><td>Aparecen <span class="ui">Viaje finalizado</span> y <span class="ui">El conductor confirmó que recibió el pago.</span> Al pulsar <span class="ui">Listo</span>, el mapa queda limpio para pedir otro viaje.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>7.13</td><td class="do">Revisar el viaje. <span class="tag db">Supabase</span></td><td>Status <code>completed</code>, <code>final_fare</code> igual a <code>estimated_fare</code> y, con la migración aplicada, <code>payment_confirmed_at</code> con fecha.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>7.14</td><td class="do"><b>Conductor:</b> pulsar <span class="ui">Buscar</span> y pedir otro viaje desde el pasajero.</td><td>El conductor recibe la nueva solicitud: quedó disponible otra vez.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+    </tbody>
+  </table>
+
+  <h3>7B. Casos alternos</h3>
+  <table class="tests">
+    <thead><tr><th>#</th><th>Qué hacer</th><th>Qué debe pasar</th><th class="chk">OK · Falla</th><th>Notas</th></tr></thead>
+    <tbody>
+      <tr><td>7.15</td><td class="do"><b>Conductor:</b> con una solicitud en pantalla, pulsar <span class="ui">Rechazar</span>.</td><td>La tarjeta desaparece. <span class="sub">Puede reaparecer a los pocos segundos (problema conocido).</span></td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>7.16</td><td class="do"><b>Pasajero:</b> cancelar la búsqueda mientras el conductor ve la tarjeta.</td><td>La tarjeta desaparece del conductor en 2–3 segundos.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>7.17</td><td class="do"><b>Conductor:</b> aceptar un viaje y luego pulsar <span class="ui">Cancelar</span> (antes de iniciar el viaje).</td><td>Conductor: aparece <span class="ui">Viaje cancelado</span> y vuelve a la pantalla de buscar. Pasajero: vuelve a <span class="ui">Buscando conductor</span> y otro conductor puede aceptarlo (en Supabase el viaje vuelve a <code>searching</code>).</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>7.18</td><td class="do"><b>Conductor:</b> en medio de un viaje, quitar la app de recientes y abrirla.</td><td>Retoma el viaje en el mismo estado (ruta y botón correctos).</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>7.19</td><td class="do"><b>Pasajero:</b> en medio de un viaje, quitar la app de recientes y abrirla.</td><td>Vuelve a ver la tarjeta del viaje con el estado actual.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>7.20</td><td class="do">(Opcional, 3 teléfonos) Dos conductores aprobados pulsan <span class="ui">Aceptar</span> en la misma solicitud a la vez.</td><td>Solo uno obtiene el viaje. El otro ve un mensaje de error (<code>ride_not_available</code>) y su app no se cierra.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ===================== 8-9. OTRAS PANTALLAS / ROBUSTEZ ===================== -->
+<section class="section">
+  <h2><span class="num">8</span>Otras pantallas y cierre de sesión</h2>
+  <table class="tests">
+    <thead><tr><th>#</th><th>Qué hacer</th><th>Qué debe pasar</th><th class="chk">OK · Falla</th><th>Notas</th></tr></thead>
+    <tbody>
+      <tr><td>8.1</td><td class="do">Abrir la pestaña <span class="ui">Viajes</span> como pasajero y como conductor.</td><td>Abre sin cerrarse. <span class="sub">Por ahora muestra datos de ejemplo, no tus viajes reales (problema conocido).</span></td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>8.2</td><td class="do">En Cuenta, cambiar el método de pago y volver a Inicio.</td><td>El método elegido en Cuenta (Efectivo o Yape) es el mismo que aparece al pedir un viaje.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>8.3</td><td class="do">Tocar las opciones de Cuenta que aún no tienen función: Direcciones guardadas, Notificaciones, Soporte, Políticas de la app.</td><td>Ninguna cierra la app.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>8.4</td><td class="do">Pulsar <span class="ui">Cerrar sesión</span>.</td><td>Vuelve a <span class="ui">Bienvenido a Intu</span>. Al entrar otra vez con la misma cuenta, va directo al mapa sin pedir el perfil.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+    </tbody>
+  </table>
+
+  <h2 style="margin-top:8mm"><span class="num">9</span>Resistencia a fallos</h2>
+  <table class="tests">
+    <thead><tr><th>#</th><th>Qué hacer</th><th>Qué debe pasar</th><th class="chk">OK · Falla</th><th>Notas</th></tr></thead>
+    <tbody>
+      <tr><td>9.1</td><td class="do">Activar el modo avión 30 s durante una búsqueda o un viaje, y desactivarlo.</td><td>La app no se cierra y vuelve a actualizarse sola al recuperar internet.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>9.2</td><td class="do">Salir con el botón Inicio de Android durante un viaje y volver a la app.</td><td>Mantiene el mismo estado del viaje.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>9.3</td><td class="do">Girar el teléfono en el mapa y en los formularios.</td><td>La app no se cierra. Anota si se pierde lo escrito.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>9.4</td><td class="do">Apagar el GPS. <b>Conductor:</b> pulsar <span class="ui">Buscar</span>.</td><td>Muestra <span class="ui">Ubicación no disponible</span> y la app sigue abierta.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+      <tr><td>9.5</td><td class="do">Usar el botón Atrás de Android en cada pantalla.</td><td>Regresa a la pantalla lógica anterior o sale de la app, sin cerrarse con error.</td><td class="chk"><span class="box"></span><span class="box"></span></td><td class="notes"></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ===================== 10. CONOCIDOS ===================== -->
+<section class="section">
+  <h2><span class="num">10</span>Problemas conocidos</h2>
+  <p>Los encontré al revisar el código para esta guía. Si los ves, marca la prueba como <b>Falla</b> y escribe “conocido” en Notas: no hace falta investigarlos.</p>
+  <ol class="known">
+    <li><b>La app se cierra si Supabase rechaza el perfil.</b> En “Guardar y continuar” (4.6) no se maneja el error. Es el más importante mientras falten los pendientes de la sección 1.2.</li>
+    <li><b>El saludo del mapa es fijo:</b> siempre dice “¡Hola Carlos!”.</li>
+    <li><b>La pestaña Viajes muestra datos de ejemplo</b> (Juan Perez, ABC-123…), no los viajes guardados en Supabase.</li>
+    <li><b>“Rechazar” solo oculta la solicitud unos segundos.</b> La app consulta las solicitudes cada 2 s y la vuelve a mostrar.</li>
+    <li><b>Tras guardar los datos de conductor, la app entra en modo conductor aunque siga pendiente de aprobación.</b> “Buscar” dará error hasta aprobar la cuenta.</li>
+    <li><b>El conductor ve todas las solicitudes de mototaxi abiertas</b>, no solo las cercanas a él.</li>
+    <li><b>El pasajero no puede cancelar después de que el conductor aceptó:</b> no hay botón para hacerlo.</li>
+    <li><b>Con login por teléfono, “Verificar correo” puede no enviar nada</b>, porque la cuenta de Firebase no tiene correo propio. Solución: vincular Google en Cuenta. Además, tras verificar un correo hay que cerrar sesión y volver a entrar para que la app lo detecte.</li>
+    <li><b>Sin la migración MVP</b>, el pasajero no ve moverse al conductor y no se guarda la fecha de confirmación del pago.</li>
+  </ol>
+
+  <h2 style="margin-top:8mm"><span class="num">11</span>Resumen de resultados</h2>
+  <table class="summary">
+    <thead><tr><th>Sección</th><th>Pruebas</th><th>OK</th><th>Falla</th><th>Bloqueada</th></tr></thead>
+    <tbody>
+      <tr><td>2. Instalación y arranque</td><td>3</td><td></td><td></td><td></td></tr>
+      <tr><td>3. Inicio de sesión</td><td>10</td><td></td><td></td><td></td></tr>
+      <tr><td>4. Completar perfil</td><td>8</td><td></td><td></td><td></td></tr>
+      <tr><td>5. Pasajero: pedir un viaje</td><td>13</td><td></td><td></td><td></td></tr>
+      <tr><td>6. Conductor: registro y aprobación</td><td>11</td><td></td><td></td><td></td></tr>
+      <tr><td>7. Viaje completo</td><td>20</td><td></td><td></td><td></td></tr>
+      <tr><td>8. Otras pantallas</td><td>4</td><td></td><td></td><td></td></tr>
+      <tr><td>9. Resistencia a fallos</td><td>5</td><td></td><td></td><td></td></tr>
+      <tr><td><b>Total</b></td><td><b>74</b></td><td></td><td></td><td></td></tr>
+    </tbody>
+  </table>
+  <p class="chk-legend">“Bloqueada”: no se pudo probar porque falló un requisito anterior (por ejemplo, sin conductor aprobado no se puede hacer la sección 7).</p>
+</section>
+
+<!-- ===================== APÉNDICES ===================== -->
+<section class="section">
+  <h2><span class="num">A</span>Consultas útiles en Supabase</h2>
+  <p>Dashboard de Supabase → proyecto <code>vkguzpciwpfvaeyedepl</code> → <b>SQL Editor</b>. Pega la consulta y pulsa <i>Run</i>. El <code>uid</code> de cada usuario está en la consola de Firebase → Authentication → Users (columna <i>User UID</i>).</p>
+
+  <h3>A.1 Perfiles reales (sin los conductores de prueba)</h3>
+<pre>select id, first_name, last_name, phone, email, driver_mode, created_at
+from public.profiles
+where id not like 'test\_%'
+order by created_at desc;</pre>
+
+  <h3>A.2 Últimos viajes</h3>
+<pre>select id, status, rider_name, driver_name, estimated_fare, final_fare,
+       payment_method, cancelled_by, requested_at
+from public.rides
+order by requested_at desc
+limit 10;</pre>
+
+  <h3>A.3 Conductores y vehículos</h3>
+<pre>select d.id, p.first_name, p.last_name, d.status, v.brand, v.model, v.plate
+from public.drivers d
+join public.profiles p on p.id = d.id
+left join public.vehicles v on v.driver_id = d.id and v.is_active
+where d.id not like 'test\_%';</pre>
+
+  <h3>A.4 Aprobar a un conductor</h3>
+<pre>update public.drivers
+set status = 'approved', approved_at = now()
+where id = '&lt;uid de Firebase&gt;';</pre>
+  <p>Después, el conductor debe cerrar sesión y volver a entrar en la app.</p>
+
+  <h3>A.5 Disponibilidad del conductor</h3>
+<pre>select driver_id, latitude, longitude, is_available, updated_at
+from public.driver_locations
+where driver_id not like 'test\_%';</pre>
+
+  <h2 style="margin-top:8mm"><span class="num">B</span>Cómo reportar un fallo</h2>
+  <p>Para cada prueba que falle, envíame:</p>
+  <ol class="steps">
+    <li><b>Número de prueba</b> (por ejemplo, 7.9) y en qué teléfono pasó: pasajero o conductor.</li>
+    <li><b>Qué hiciste, qué esperabas y qué pasó</b>, con la hora aproximada.</li>
+    <li><b>Captura de pantalla</b> del error, si se ve.</li>
+    <li><b>Logcat</b>: en Android Studio, pestaña Logcat, filtra por <code>package:com.intu.taxi level:error</code> y copia las líneas rojas. Si la app se cerró, busca el bloque que empieza con <code>FATAL EXCEPTION</code> y cópialo completo.</li>
+    <li>Si el fallo tiene que ver con un viaje, el resultado de la consulta <b>A.2</b>.</li>
+  </ol>
+</section>
+
+</body>
+</html>

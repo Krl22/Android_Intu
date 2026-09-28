@@ -1,6 +1,7 @@
 package com.intu.taxi.repositories
 
 import com.intu.taxi.data.SupabaseApi
+import com.intu.taxi.data.str
 import com.intu.taxi.models.DriverRideRequest
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -28,13 +29,13 @@ class DriverRideRequestRepository {
     suspend fun declineRideRequest(requestId: String): Result<Unit> = Result.success(Unit)
 
     private fun JSONObject.toRequest() = DriverRideRequest(
-        requestId = getString("id"), userId = optString("rider_id"), userName = optString("rider_name", "Pasajero"),
-        userPhone = optString("rider_phone"), userPhotoUrl = if (isNull("rider_photo_url")) null else optString("rider_photo_url"),
-        originLatitude = optDouble("origin_lat"), originLongitude = optDouble("origin_lng"), originAddress = optString("origin_address"),
-        destinationLatitude = optDouble("destination_lat"), destinationLongitude = optDouble("destination_lng"), destinationAddress = optString("destination_address"),
+        requestId = getString("id"), userId = str("rider_id"), userName = str("rider_name", "Pasajero"),
+        userPhone = str("rider_phone"), userPhotoUrl = str("rider_photo_url").ifBlank { null },
+        originLatitude = optDouble("origin_lat"), originLongitude = optDouble("origin_lng"), originAddress = str("origin_address"),
+        destinationLatitude = optDouble("destination_lat"), destinationLongitude = optDouble("destination_lng"), destinationAddress = str("destination_address"),
         distanceMeters = optDouble("distance_meters"), durationSeconds = optDouble("duration_seconds"), estimatedPrice = optDouble("estimated_fare"),
-        rideType = optString("vehicle_type"), paymentMethod = optString("payment_method"), status = optString("status"),
-        createdAt = runCatching { Instant.parse(optString("requested_at")).toEpochMilli() }.getOrDefault(0L),
-        updatedAt = runCatching { Instant.parse(optString("updated_at")).toEpochMilli() }.getOrDefault(0L)
+        rideType = str("vehicle_type"), paymentMethod = str("payment_method", "efectivo"), status = str("status"),
+        createdAt = runCatching { Instant.parse(str("requested_at")).toEpochMilli() }.getOrDefault(0L),
+        updatedAt = runCatching { Instant.parse(str("updated_at")).toEpochMilli() }.getOrDefault(0L)
     )
 }

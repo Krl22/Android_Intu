@@ -474,9 +474,9 @@ private fun DriverDashboardTab(
 @Composable
 private fun DriverSummaryCards(timeRange: String) {
     val summaryData = when (timeRange) {
-        "Día" -> listOf("Viajes" to "8", "Ganancias" to "$62.30", "Horas" to "4h 15m", "Promedio" to "$7.79")
-        "Semana" -> listOf("Viajes" to "42", "Ganancias" to "$310.80", "Horas" to "26h", "Promedio" to "$7.40")
-        else -> listOf("Viajes" to "180", "Ganancias" to "$1,280.00", "Horas" to "110h", "Promedio" to "$7.11")
+        "Día" -> listOf("Viajes" to "8", "Ganancias" to "S/ 62.30", "Horas" to "4h 15m", "Promedio" to "S/ 7.79")
+        "Semana" -> listOf("Viajes" to "42", "Ganancias" to "S/ 310.80", "Horas" to "26h", "Promedio" to "S/ 7.40")
+        else -> listOf("Viajes" to "180", "Ganancias" to "S/ 1,280.00", "Horas" to "110h", "Promedio" to "S/ 7.11")
     }
     
     Row(
@@ -595,7 +595,7 @@ private fun EnhancedEarningsChart(data: List<Pair<String, Float>>, timeRange: St
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    "Total: $${data.sumOf { it.second.toDouble() }.let { "%.2f".format(it) }}",
+                    "Total: ${com.intu.taxi.ui.formatSoles(data.sumOf { it.second.toDouble() })}",
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color(0xFF08817E), // teal
                     fontWeight = FontWeight.Medium
@@ -644,7 +644,7 @@ private fun EnhancedEarningsChart(data: List<Pair<String, Float>>, timeRange: St
                     Spacer(modifier = Modifier.width(8.dp))
                     
                     Text(
-                        "$${"%.2f".format(value)}",
+                        com.intu.taxi.ui.formatSoles(value.toDouble()),
                         style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.Medium,
                         color = Color(0xFF1C1C1E)
