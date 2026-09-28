@@ -53,6 +53,12 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -147,6 +153,11 @@ fun DriverHomeScreen(
     var activeRideRequest by remember { mutableStateOf<DriverRideRequest?>(null) }
     var activeRideId by remember { mutableStateOf<String?>(null) }
     var activeRideStatus by remember { mutableStateOf("accepted") }
+    // PIN de seguridad que el pasajero le dicta al conductor para iniciar el viaje
+    var showPinDialog by remember { mutableStateOf(false) }
+    var pinInput by remember { mutableStateOf("") }
+    var pinError by remember { mutableStateOf<String?>(null) }
+    var isVerifyingPin by remember { mutableStateOf(false) }
     var clientLocationMarker by remember { mutableStateOf<GeoPoint?>(null) }
     var clientMarkerAnnotation by remember { mutableStateOf<com.mapbox.maps.plugin.annotation.generated.PointAnnotation?>(null) }
     var mapViewRef by remember { mutableStateOf<com.mapbox.maps.MapView?>(null) }
@@ -915,11 +926,15 @@ fun DriverHomeScreen(
                     duration = routeDuration,
                     isCalculatingRoute = isCalculatingRoute,
                     onArrived = {
-                        scope.launch {
+                        // Para iniciar el viaje primero se pide el PIN de seguridad del pasajero
+                        if (activeRideStatus == "arrived") {
+                            pinInput = ""
+                            pinError = null
+                            showPinDialog = true
+                        } else scope.launch {
                             val rideId = activeRideId ?: return@launch
                             val nextStatus = when (activeRideStatus) {
                                 "accepted" -> "arrived"
-                                "arrived" -> "in_progress"
                                 "in_progress" -> "completed"
                                 else -> return@launch
                             }
@@ -945,35 +960,94 @@ fun DriverHomeScreen(
                     onCancel = {
                         scope.launch {
                             activeRideId?.let { rideId ->
-                                try {
-                                    // Cancelar el viaje en Supabase
-                                    activeRideRepository.cancelRide(rideId)
-                                    println("DEBUG: Viaje activo $rideId cancelado en Supabase")
-                                    
-                                    // 3. Limpiar estado local
-                                    activeRideRequest = null
-                                    activeRideId = null
-                                    routeDistance = 0.0
-                                    routeDuration = 0.0
-                                    routeGeometry = null
-                                    
-                                    // 4. Limpiar mapa
-                                    clearRouteAndPassengerMarker()
-                                    
-                                    // 5. Mostrar BottomNavigationBar
-                                    onBottomBarVisibilityChanged(true)
-                                    
-                                    Toast.makeText(context, "Viaje cancelado", Toast.LENGTH_SHORT).show()
-                                    
-                                } catch (e: Exception) {
-                                    println("DEBUG: Error al cancelar viaje: ${e.message}")
-                                    Toast.makeText(context, "Error al cancelar viaje: ${e.message}", Toast.LENGTH_LONG).show()
-                                }
+                                // cancelRide devuelve Result: solo se limpia la pantalla si el servidor aceptó
+                                activeRideRepository.cancelRide(rideId)
+                                    .onSuccess {
+                                        activeRideRequest = null
+                                        activeRideId = null
+                                        routeDistance = 0.0
+                                        routeDuration = 0.0
+                                        routeGeometry = null
+                                        clearRouteAndPassengerMarker()
+                                        onBottomBarVisibilityChanged(true)
+                                        Toast.makeText(context, "Viaje cancelado", Toast.LENGTH_SHORT).show()
+                                    }
+                                    .onFailure {
+                                        Toast.makeText(context, it.message ?: "No se pudo cancelar el viaje", Toast.LENGTH_LONG).show()
+                                    }
                             }
                         }
                     }
                 )
             }
+        }
+
+        // PIN de seguridad: el viaje solo inicia si el pasajero le dicta al conductor el PIN correcto
+        if (showPinDialog) {
+            AlertDialog(
+                onDismissRequest = { if (!isVerifyingPin) showPinDialog = false },
+                title = { Text("PIN de seguridad") },
+                text = {
+                    Column {
+                        Text("Pídele al pasajero su PIN de 4 dígitos. Lo ve en su app.")
+                        Spacer(modifier = Modifier.height(16.dp))
+                        OutlinedTextField(
+                            value = pinInput,
+                            onValueChange = { value ->
+                                pinInput = value.filter(Char::isDigit).take(4)
+                                pinError = null
+                            },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                            textStyle = MaterialTheme.typography.headlineMedium.copy(
+                                textAlign = TextAlign.Center,
+                                letterSpacing = 12.sp
+                            ),
+                            isError = pinError != null,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        pinError?.let {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(it, color = Color(0xFFB42318), style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        enabled = pinInput.length == 4 && !isVerifyingPin,
+                        onClick = {
+                            val rideId = activeRideId ?: return@TextButton
+                            isVerifyingPin = true
+                            scope.launch {
+                                activeRideRepository.verifyStartPin(rideId, pinInput)
+                                    .onSuccess { (verified, attemptsLeft) ->
+                                        if (verified) {
+                                            activeRideRepository.advanceRide(rideId, "in_progress")
+                                                .onSuccess {
+                                                    activeRideStatus = "in_progress"
+                                                    showPinDialog = false
+                                                    Toast.makeText(context, "Viaje iniciado", Toast.LENGTH_SHORT).show()
+                                                }
+                                                .onFailure { pinError = it.message ?: "No se pudo iniciar el viaje" }
+                                        } else {
+                                            pinInput = ""
+                                            pinError = if (attemptsLeft > 0) {
+                                                "PIN incorrecto. Te ${if (attemptsLeft == 1) "queda 1 intento" else "quedan $attemptsLeft intentos"}."
+                                            } else {
+                                                "PIN bloqueado por demasiados intentos. Cancela el viaje por seguridad."
+                                            }
+                                        }
+                                    }
+                                    .onFailure { pinError = it.message ?: "No se pudo verificar el PIN" }
+                                isVerifyingPin = false
+                            }
+                        }
+                    ) { Text(if (isVerifyingPin) "Verificando…" else "Iniciar viaje") }
+                },
+                dismissButton = {
+                    TextButton(enabled = !isVerifyingPin, onClick = { showPinDialog = false }) { Text("Cancelar") }
+                }
+            )
         }
     }
 }

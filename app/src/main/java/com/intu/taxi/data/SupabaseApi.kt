@@ -80,6 +80,8 @@ object SupabaseApi {
         message == "ride_not_available" -> "Este viaje ya no está disponible."
         message == "driver_not_approved" -> "Tu cuenta de conductor aún no está aprobada."
         message == "invalid_transition" -> "El viaje ya cambió de estado. Intenta de nuevo."
+        message == "pin_required" -> "Ingresa el PIN del pasajero para iniciar el viaje."
+        message == "pin_locked" -> "Demasiados intentos con PIN incorrecto. Cancela el viaje por seguridad."
         message == "ride_not_found" -> "No se encontró el viaje."
         message == "vehicle_type_not_available" -> "Este tipo de vehículo no está disponible."
         message == "not_authenticated" -> "Inicia sesión para continuar."

@@ -73,6 +73,17 @@ class ActiveRideRepository {
 
     suspend fun completeRide(rideId: String): Result<Unit> = advanceRide(rideId, "completed").map { Unit }
 
+    /** PIN de seguridad del viaje. Solo el pasajero lo recibe; para cualquier otro es null. */
+    suspend fun startPin(rideId: String): String? = runCatching {
+        SupabaseApi.rpc("ride_start_pin", JSONObject().put("p_ride_id", rideId)).str("pin").ifBlank { null }
+    }.getOrNull()
+
+    /** El conductor verifica el PIN que le dicta el pasajero. Devuelve si es correcto y los intentos que quedan. */
+    suspend fun verifyStartPin(rideId: String, pin: String): Result<Pair<Boolean, Int>> = runCatching {
+        val result = SupabaseApi.rpc("verify_ride_pin", JSONObject().put("p_ride_id", rideId).put("p_pin", pin))
+        result.optBoolean("verified", false) to result.optInt("attempts_left", 0)
+    }
+
     suspend fun cancelRide(rideId: String): Result<Unit> = runCatching {
         SupabaseApi.rpc("cancel_ride", JSONObject().put("p_ride_id", rideId).put("p_reason", "cancelled_by_driver")); Unit
     }

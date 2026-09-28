@@ -163,6 +163,10 @@ import kotlin.math.pow
 import com.mapbox.geojson.LineString
  
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.runtime.withFrameMillis
+import androidx.compose.ui.unit.Dp
+import com.mapbox.maps.plugin.animation.MapAnimationOptions
+import com.mapbox.maps.plugin.animation.easeTo
 import com.mapbox.maps.EdgeInsets
 import com.mapbox.maps.CoordinateBounds
 import com.google.firebase.auth.FirebaseAuth
@@ -479,11 +483,14 @@ fun HomeScreen(
     var showDriverIcon by remember { mutableStateOf(false) }
     var driverAnnotationManager by remember { mutableStateOf<PointAnnotationManager?>(null) }
     var driverAnnotation by remember { mutableStateOf<PointAnnotation?>(null) }
-    var lastValidCenter by remember { mutableStateOf<Point?>(null) }
-    var lastValidZoom by remember { mutableStateOf<Double?>(null) }
-    var isCameraLocked by remember { mutableStateOf(false) }
+    // Alto de la tarjeta del viaje, para que la cámara no ponga la ruta detrás de ella
+    var rideCardHeightPx by remember { mutableStateOf(0) }
+    // Último gesto del pasajero sobre el mapa; mientras explora, la cámara no lo interrumpe
+    var lastUserGestureMs by remember { mutableStateOf(0L) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var showCancelRideDialog by remember { mutableStateOf(false) }
+    // PIN de seguridad que el pasajero le dicta al conductor al subir
+    var ridePin by remember { mutableStateOf<String?>(null) }
     var isCancellingRide by remember { mutableStateOf(false) }
     var greetingName by rememberSaveable { mutableStateOf("") }
 
@@ -506,14 +513,6 @@ fun HomeScreen(
             }
     }
 
-    LaunchedEffect(activeRide) {
-        if (activeRide != null) {
-            isCameraLocked = true
-            kotlinx.coroutines.delay(1200)
-            isCameraLocked = false
-        }
-    }
-    
     // Payment preferences
     val paymentPreferences = remember { PaymentPreferences(context) }
     var selectedPaymentMethod by remember { mutableStateOf("efectivo") }
@@ -524,6 +523,14 @@ fun HomeScreen(
         paymentPreferences.paymentMethod.collect { method ->
             selectedPaymentMethod = method
         }
+    }
+
+    // El PIN se pide una vez por cambio de estado (no en cada sondeo) y solo mientras sirve
+    LaunchedEffect(activeRide?.rideId, activeRide?.status) {
+        val ride = activeRide
+        ridePin = if (ride != null && ride.status in setOf("accepted", "arrived")) {
+            activeRideRepository.startPin(ride.rideId)
+        } else null
     }
 
     // Un solo sondeo del viaje: decide entre la animación de búsqueda y la tarjeta del viaje
@@ -842,97 +849,94 @@ fun HomeScreen(
             }
         }
 
-        LaunchedEffect(driverLocation, mapViewRef, activeRide, isCameraLocked) {
-            val mapView = mapViewRef
-            val driverLoc = driverLocation
-            val clientLoc = activeRide?.clientLocation
-            if (mapView != null && isStyleLoaded && !isCameraLocked && isValidGeoPoint(driverLoc)) {
-                driverOffset = null
-                showDriverIcon = false
-                val dl = driverLoc!!
-                val driverPoint = com.mapbox.geojson.Point.fromLngLat(dl.longitude, dl.latitude)
-                val pam = driverAnnotationManager
-                if (pam != null) {
-                    val options = PointAnnotationOptions()
-                        .withPoint(driverPoint)
+        // Marcador del conductor: se crea una vez y luego se desliza hasta cada nueva posición.
+        // Las posiciones llegan cada ~1.5 s; la animación dura casi lo mismo para que el
+        // movimiento se vea continuo en vez de saltar.
+        LaunchedEffect(driverLocation, mapViewRef, isStyleLoaded) {
+            val pam = driverAnnotationManager ?: return@LaunchedEffect
+            if (mapViewRef == null || !isStyleLoaded) return@LaunchedEffect
+            val dl = driverLocation
+            if (!isValidGeoPoint(dl)) {
+                driverAnnotation?.let { runCatching { pam.delete(it) } }
+                driverAnnotation = null
+                return@LaunchedEffect
+            }
+            val target = Point.fromLngLat(dl!!.longitude, dl.latitude)
+            val marker = driverAnnotation
+            if (marker == null) {
+                driverAnnotation = pam.create(
+                    PointAnnotationOptions()
+                        .withPoint(target)
                         .withIconImage(createDriverIcon(context))
                         .withIconSize(1.0)
-                    driverAnnotation?.let { existing ->
-                        try { pam.delete(existing) } catch (_: Exception) {}
-                        driverAnnotation = null
-                    }
-                    driverAnnotation = pam.create(options)
-                }
-                val map = mapView.mapboxMap
-                val clientValid = clientLoc != null &&
-                    clientLoc.latitude in -90.0..90.0 &&
-                    clientLoc.longitude in -180.0..180.0 &&
-                    !(clientLoc.latitude == 0.0 && clientLoc.longitude == 0.0)
-                if (clientValid) {
-                    val clientPoint = com.mapbox.geojson.Point.fromLngLat(clientLoc!!.longitude, clientLoc.latitude)
-                    val dLat = Math.toRadians(clientLoc.latitude - dl.latitude)
-                    val dLon = Math.toRadians(clientLoc.longitude - dl.longitude)
-                    val a = kotlin.math.sin(dLat/2).pow(2.0) + kotlin.math.cos(Math.toRadians(dl.latitude)) * kotlin.math.cos(Math.toRadians(clientLoc.latitude)) * kotlin.math.sin(dLon/2).pow(2.0)
-                    val c = 2 * kotlin.math.atan2(kotlin.math.sqrt(a), kotlin.math.sqrt(1-a))
-                    val distMeters = 6371000.0 * c
-                    val closeEnough = distMeters < 50000.0
-                    if (closeEnough) {
-                        val cam = map.cameraForCoordinates(
-                            listOf(clientPoint, driverPoint),
-                            CameraOptions.Builder().build(),
-                            com.mapbox.maps.EdgeInsets(80.0, 40.0, 620.0, 40.0), // Más espacio abajo para que aparezca más arriba
-                            null,
-                            null
-                        )
-                        val z = (cam.zoom ?: 14.0).coerceAtLeast(8.0) // Zoom más lejano (menor número)
-                        val center = cam.center ?: driverPoint
-                        val prev = lastValidCenter
-                        val distToPrev = if (prev != null) {
-                            val dLat2 = Math.toRadians(center.latitude() - prev.latitude())
-                            val dLon2 = Math.toRadians(center.longitude() - prev.longitude())
-                            val a2 = kotlin.math.sin(dLat2/2).pow(2.0) + kotlin.math.cos(Math.toRadians(prev.latitude())) * kotlin.math.cos(Math.toRadians(center.latitude())) * kotlin.math.sin(dLon2/2).pow(2.0)
-                            val c2 = 2 * kotlin.math.atan2(kotlin.math.sqrt(a2), kotlin.math.sqrt(1-a2))
-                            6371000.0 * c2
-                        } else 0.0
-                        if (prev == null || distToPrev < 150000.0) {
-                            val adjusted = CameraOptions.Builder()
-                                .center(center)
-                                .zoom(z)
-                                .bearing(cam.bearing)
-                                .pitch(cam.pitch)
-                                .build()
-                            map.setCamera(adjusted)
-                            lastValidCenter = center
-                            lastValidZoom = z
-                        }
-                    } else {
-                        map.setCamera(
-                            CameraOptions.Builder()
-                                .center(driverPoint)
-                                .zoom(13.0) // Zoom más lejano cuando no están cerca
-                                .build()
-                        )
-                        lastValidCenter = driverPoint
-                        lastValidZoom = 13.0
-                    }
-                } else {
-                    map.setCamera(
-                        CameraOptions.Builder()
-                            .center(driverPoint)
-                            .zoom(13.0) // Zoom más lejano cuando no hay cliente
-                            .build()
-                    )
-                    lastValidCenter = driverPoint
-                    lastValidZoom = 13.0
-                }
-            } else if (mapView != null && isStyleLoaded && !isCameraLocked && driverLoc == null) {
-                // Limpiar el icono del conductor cuando no hay ubicación válida
-                val pam = driverAnnotationManager
-                if (pam != null && driverAnnotation != null) {
-                    try { pam.delete(driverAnnotation!!) } catch (_: Exception) {}
-                    driverAnnotation = null
-                }
+                )
+                return@LaunchedEffect
             }
+            val start = marker.point
+            val durationMs = 1300f
+            val startTime = withFrameMillis { it }
+            while (true) {
+                val t = ((withFrameMillis { it } - startTime) / durationMs).coerceIn(0f, 1f)
+                // El viaje pudo terminar y el marcador borrarse a mitad de la animación
+                if (driverAnnotation !== marker) break
+                marker.point = Point.fromLngLat(
+                    start.longitude() + (target.longitude() - start.longitude()) * t,
+                    start.latitude() + (target.latitude() - start.latitude()) * t
+                )
+                if (runCatching { pam.update(marker) }.isFailure) break
+                if (t >= 1f) break
+            }
+        }
+
+        // Si el pasajero mueve el mapa con el dedo, la cámara deja de seguir el viaje unos segundos
+        DisposableEffect(mapView) {
+            val gestureListener = object : OnMoveListener {
+                override fun onMoveBegin(detector: MoveGestureDetector) { lastUserGestureMs = System.currentTimeMillis() }
+                override fun onMove(detector: MoveGestureDetector): Boolean = false
+                override fun onMoveEnd(detector: MoveGestureDetector) { lastUserGestureMs = System.currentTimeMillis() }
+            }
+            mapView.gestures.addOnMoveListener(gestureListener)
+            onDispose { mapView.gestures.removeOnMoveListener(gestureListener) }
+        }
+
+        // Cámara del viaje: encuadra conductor, punto objetivo (recojo o destino) y ruta,
+        // dejando libre el espacio de la tarjeta, y se mueve con animación en lugar de saltar.
+        LaunchedEffect(activeRide?.status, driverLocation, routePoints, rideCardHeightPx, isStyleLoaded) {
+            val ride = activeRide ?: return@LaunchedEffect
+            if (!isStyleLoaded || ride.status !in setOf("accepted", "arrived", "in_progress")) return@LaunchedEffect
+            if (System.currentTimeMillis() - lastUserGestureMs < 8_000) return@LaunchedEffect
+            val map = mapView.mapboxMap
+            fun valid(p: Point) = p.latitude() in -90.0..90.0 && p.longitude() in -180.0..180.0 &&
+                !(p.latitude() == 0.0 && p.longitude() == 0.0)
+            val points = buildList {
+                driverLocation?.takeIf { isValidGeoPoint(it) }?.let { add(Point.fromLngLat(it.longitude, it.latitude)) }
+                ride.clientLocation?.let { add(Point.fromLngLat(it.longitude, it.latitude)) }
+                addAll(routePoints)
+            }.filter(::valid)
+            if (points.isEmpty()) return@LaunchedEffect
+
+            fun px(dp: Dp) = with(density) { dp.toPx().toDouble() }
+            val mapHeight = mapView.height.toDouble().takeIf { it > 0 } ?: return@LaunchedEffect
+            val bottom = (rideCardHeightPx + px(padding.calculateBottomPadding() + 40.dp))
+                .coerceAtMost(mapHeight * 0.6)
+            val cam = map.cameraForCoordinates(
+                points,
+                CameraOptions.Builder().build(),
+                EdgeInsets(px(110.dp), px(56.dp), bottom, px(56.dp)),
+                16.0,
+                null
+            )
+            val center = cam.center ?: return@LaunchedEffect
+            map.easeTo(
+                CameraOptions.Builder()
+                    .center(center)
+                    // Un poco más lejos que el encuadre exacto, para ver el entorno de la ruta
+                    .zoom(((cam.zoom ?: 15.0) - 0.4).coerceAtLeast(3.0))
+                    .bearing(0.0)
+                    .pitch(0.0)
+                    .build(),
+                MapAnimationOptions.mapAnimationOptions { duration(900L) }
+            )
         }
 
         // Icono de conductor ahora se maneja con PointAnnotation en el mapa
@@ -1017,106 +1021,55 @@ fun HomeScreen(
             onDispose { map.removeOnCameraChangeListener(cameraListener) }
         }
 
-        // Calcular ruta entre conductor y pasajero durante viaje activo
-        LaunchedEffect(activeRide, driverLocation) {
+        // Ruta del conductor hacia el punto objetivo (recojo o destino). Solo se vuelve a pedir a
+        // Mapbox si cambia el estado del viaje o el conductor avanzó ~30 m; antes se pedía cada 1.5 s,
+        // gastando cuota de la API sin cambios visibles. La cámara la maneja el efecto de arriba.
+        var lastRouteOrigin by remember { mutableStateOf<Point?>(null) }
+        var lastRouteStatus by remember { mutableStateOf<String?>(null) }
+        LaunchedEffect(activeRide?.rideId, activeRide?.status, driverLocation) {
             val ride = activeRide
-            val driverLoc = driverLocation
-            val clientLoc = ride?.clientLocation
-            val mapView = mapViewRef
-            if (ride != null && driverLoc != null && clientLoc != null) {
-                scope.launch(Dispatchers.IO) {
-                    try {
-                        val origin = Point.fromLngLat(driverLoc.longitude, driverLoc.latitude)
-                        val destination = Point.fromLngLat(clientLoc.longitude, clientLoc.latitude)
-                        val directionsUrl = "https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${origin.longitude()},${origin.latitude()};${destination.longitude()},${destination.latitude()}?alternatives=false&geometries=geojson&overview=full&access_token=$mapboxToken"
-                        val req = Request.Builder().url(directionsUrl).get().build()
-                        var body: String? = null
-                        var success = false
-                        httpClient.newCall(req).execute().use { resp ->
-                            success = resp.isSuccessful
-                            body = resp.body?.string()
-                        }
-                        var lineString: LineString? = null
-                        if (success && body != null) {
-                            val json = JSONObject(body)
-                            val routes = json.optJSONArray("routes")
-                            val first = routes?.optJSONObject(0)
-                            val geom = first?.optJSONObject("geometry")
-                            val coords = geom?.optJSONArray("coordinates")
-                            if (coords != null && coords.length() > 1) {
-                                val pts = mutableListOf<Point>()
-                                for (i in 0 until coords.length()) {
-                                    val c = coords.getJSONArray(i)
-                                    val lon = c.optDouble(0)
-                                    val lat = c.optDouble(1)
-                                    pts.add(Point.fromLngLat(lon, lat))
-                                }
-                                lineString = LineString.fromLngLats(pts)
-                            }
-                        }
-                        withContext(Dispatchers.Main) {
-                            val ls = lineString
-                            if (ls != null) {
-                                routePoints = ls.coordinates()
-                                val view = mapView
-                                if (view != null) {
-                                    val offsets = ls.coordinates().map { p ->
-                                        val sc = view.mapboxMap.pixelForCoordinate(p)
-                                        Offset(sc.x.toFloat(), sc.y.toFloat())
-                                    }
-                                    routeOffsets = offsets
-                                    val coords = ls.coordinates().filter { it.latitude() in -90.0..90.0 && it.longitude() in -180.0..180.0 && !(it.latitude() == 0.0 && it.longitude() == 0.0) }
-                                    if (coords.size >= 2) {
-                                        val map = view.mapboxMap
-                                        val cs = map.cameraState
-                                        val cam = map.cameraForCoordinates(
-                                            coords,
-                                            CameraOptions.Builder()
-                                                .bearing(cs.bearing)
-                                                .pitch(cs.pitch)
-                                                .build(),
-                                            EdgeInsets(80.0, 40.0, 100.0, 40.0),
-                                            null,
-                                            null
-                                        )
-                                        val center = cam.center
-                                        val zoom = (cam.zoom ?: 14.0).coerceAtLeast(13.5)
-                                        if (center != null) {
-                                            val prev = lastValidCenter
-                                            val dLat = Math.toRadians(center.latitude() - (prev?.latitude() ?: center.latitude()))
-                                            val dLon = Math.toRadians(center.longitude() - (prev?.longitude() ?: center.longitude()))
-                                            val a = kotlin.math.sin(dLat/2).pow(2.0) + kotlin.math.cos(Math.toRadians(prev?.latitude() ?: center.latitude())) * kotlin.math.cos(Math.toRadians(center.latitude())) * kotlin.math.sin(dLon/2).pow(2.0)
-                                            val c = 2 * kotlin.math.atan2(kotlin.math.sqrt(a), kotlin.math.sqrt(1-a))
-                                            val dist = 6371000.0 * c
-                                            if (prev == null || dist < 150000.0) {
-                                                map.setCamera(
-                                                    CameraOptions.Builder()
-                                                        .center(center)
-                                                        .zoom(zoom)
-                                                        .bearing(cam.bearing)
-                                                        .pitch(cam.pitch)
-                                                        .build()
-                                                )
-                                                lastValidCenter = center
-                                                lastValidZoom = zoom
-                                            }
-                                        }
-                                    }
-                                } else {
-                                    routeOffsets = emptyList()
-                                }
-                            }
-                        }
-                    } catch (_: Exception) {
-                        withContext(Dispatchers.Main) {
-                            routePoints = emptyList()
-                            routeOffsets = emptyList()
+            if (ride == null || ride.status !in setOf("accepted", "arrived", "in_progress")) {
+                if (ride != null || lastRouteStatus != null) {
+                    routePoints = emptyList()
+                    routeOffsets = emptyList()
+                }
+                lastRouteOrigin = null
+                lastRouteStatus = null
+                return@LaunchedEffect
+            }
+            val driverLoc = driverLocation?.takeIf { isValidGeoPoint(it) } ?: return@LaunchedEffect
+            val target = ride.clientLocation ?: return@LaunchedEffect
+            val origin = Point.fromLngLat(driverLoc.longitude, driverLoc.latitude)
+            val previous = lastRouteOrigin
+            if (ride.status == lastRouteStatus && previous != null && routePoints.isNotEmpty() &&
+                metersBetween(previous, origin) < 30.0
+            ) return@LaunchedEffect
+
+            val url = "https://api.mapbox.com/directions/v5/mapbox/driving-traffic/" +
+                "${origin.longitude()},${origin.latitude()};${target.longitude},${target.latitude}" +
+                "?alternatives=false&geometries=geojson&overview=full&access_token=$mapboxToken"
+            val points = withContext(Dispatchers.IO) {
+                runCatching {
+                    httpClient.newCall(Request.Builder().url(url).get().build()).execute().use { resp ->
+                        if (!resp.isSuccessful) return@use null
+                        val coords = JSONObject(resp.body?.string().orEmpty())
+                            .optJSONArray("routes")?.optJSONObject(0)
+                            ?.optJSONObject("geometry")?.optJSONArray("coordinates") ?: return@use null
+                        (0 until coords.length()).map { i ->
+                            val c = coords.getJSONArray(i)
+                            Point.fromLngLat(c.optDouble(0), c.optDouble(1))
                         }
                     }
+                }.getOrNull()
+            }
+            if (points != null && points.size > 1) {
+                routePoints = points
+                routeOffsets = points.map { p ->
+                    val sc = mapView.mapboxMap.pixelForCoordinate(p)
+                    Offset(sc.x.toFloat(), sc.y.toFloat())
                 }
-            } else if (ride == null) {
-                routePoints = emptyList()
-                routeOffsets = emptyList()
+                lastRouteOrigin = origin
+                lastRouteStatus = ride.status
             }
         }
 
@@ -2213,7 +2166,8 @@ fun HomeScreen(
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     // Encima de la barra de navegación del sistema, sea de gestos o de 3 botones
-                    .padding(start = 16.dp, end = 16.dp, bottom = padding.calculateBottomPadding() + 16.dp),
+                    .padding(start = 16.dp, end = 16.dp, bottom = padding.calculateBottomPadding() + 16.dp)
+                    .onGloballyPositioned { rideCardHeightPx = it.size.height },
                 colors = CardDefaults.cardColors(containerColor = Color.White),
                 elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
             ) {
@@ -2229,6 +2183,33 @@ fun HomeScreen(
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
+                    ridePin?.let { pin ->
+                        if (ride.status == "accepted" || ride.status == "arrived") {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(Color(0xFFE6F4F3), RoundedCornerShape(12.dp))
+                                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("PIN de seguridad", fontWeight = FontWeight.SemiBold, color = Color(0xFF08817E))
+                                    Text(
+                                        "Díselo al conductor al subir. No lo compartas antes.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = Color(0xFF5F6570)
+                                    )
+                                }
+                                Text(
+                                    pin,
+                                    style = MaterialTheme.typography.headlineMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 6.sp,
+                                    color = Color(0xFF1E1F47)
+                                )
+                            }
+                        }
+                    }
                     if (ride.driverName.isNotBlank()) Text("Conductor: ${ride.driverName}")
                     if (ride.vehiclePlate.isNotBlank()) {
                         Text("Mototaxi: ${listOf(ride.vehicleDescription, ride.vehiclePlate).filter { it.isNotBlank() }.joinToString(" · ")}")
@@ -2315,6 +2296,16 @@ private suspend fun readableAddress(
         }
     }.getOrNull()?.let(::cleanAddress)
     fromMapbox?.takeIf { it.isNotBlank() } ?: fromAndroid?.takeIf { it.isNotBlank() }
+}
+
+/** Distancia aproximada en metros entre dos puntos (fórmula de haversine). */
+private fun metersBetween(a: Point, b: Point): Double {
+    val dLat = Math.toRadians(b.latitude() - a.latitude())
+    val dLon = Math.toRadians(b.longitude() - a.longitude())
+    val h = kotlin.math.sin(dLat / 2).pow(2.0) +
+        kotlin.math.cos(Math.toRadians(a.latitude())) * kotlin.math.cos(Math.toRadians(b.latitude())) *
+        kotlin.math.sin(dLon / 2).pow(2.0)
+    return 6_371_000.0 * 2 * kotlin.math.atan2(kotlin.math.sqrt(h), kotlin.math.sqrt(1 - h))
 }
 
 /** Falso si la primera parte es un código de ruta ("5S 3859"), un número suelto o una calle sin nombre. */
