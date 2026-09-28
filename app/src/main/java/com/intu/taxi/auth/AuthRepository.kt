@@ -116,6 +116,21 @@ class AuthRepository(
         )
     }
 
+    /**
+     * Copia nombre, teléfono y correo del perfil de Firestore a Supabase.
+     * Los viajes toman de ahí el nombre del pasajero y del chofer; sin esto llegaban vacíos.
+     * Siempre deja creada la fila del perfil, aunque no haya datos en Firestore.
+     */
+    suspend fun syncProfileToSupabase(uid: String) {
+        val profile = runCatching { getUserProfile(uid) }.getOrNull()
+        SupabaseApi.ensureCurrentProfile(
+            firstName = profile?.firstName.orEmpty(),
+            lastName = profile?.lastName.orEmpty(),
+            phone = profile?.number?.takeIf { it.startsWith("+") },
+            email = profile?.email
+        )
+    }
+
     suspend fun getUserProfile(uid: String): UserProfile? {
         return try {
             val snap = db.collection("users").document(uid).get().await()

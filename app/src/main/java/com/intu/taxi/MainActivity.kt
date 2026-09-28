@@ -118,6 +118,8 @@ fun IntuApp() {
                                     it.firstName.isNotBlank() && it.lastName.isNotBlank() && it.birthdate.isNotBlank() && it.number.isNotBlank()
                                 } ?: false
                                 if (isComplete) {
+                                    // Mantiene el nombre al día en Supabase para los viajes; si falla, no bloquea
+                                    scope.launch { runCatching { repo.syncProfileToSupabase(uid) } }
                                     bottomBarVisible = true
                                     navController.navigate(NavItem.Home.route) {
                                         popUpTo("splash") { inclusive = true }

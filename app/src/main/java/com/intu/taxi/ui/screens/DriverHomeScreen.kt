@@ -1078,10 +1078,13 @@ fun AnimatedGradientButton(
                 .clickable { onClick() },
             contentAlignment = Alignment.Center
         ) {
+            // Dos líneas para que "Empezar ahora" quepa dentro del círculo de 90 dp
             Text(
-                text = if (isSearching) "Parar" else "Buscar",
+                text = if (isSearching) "Parar" else "Empezar\nahora",
                 color = Color.White,
-                style = MaterialTheme.typography.titleMedium
+                style = MaterialTheme.typography.titleMedium,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                lineHeight = 18.sp
             )
         }
     }

@@ -1,5 +1,7 @@
 package com.intu.taxi.repositories
 
+import com.google.firebase.auth.FirebaseAuth
+import com.intu.taxi.auth.AuthRepository
 import com.intu.taxi.data.SupabaseApi
 import com.intu.taxi.data.str
 import com.intu.taxi.models.RideRequest
@@ -18,7 +20,9 @@ class RideRequestRepository {
         distanceMeters: Double, durationSeconds: Double, estimatedPrice: Double,
         rideType: String, paymentMethod: String
     ): Result<String> = runCatching {
-        SupabaseApi.ensureCurrentProfile()
+        // El nombre del pasajero se copia del perfil de Supabase al crear el viaje
+        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: error("Inicia sesión para continuar.")
+        AuthRepository().syncProfileToSupabase(uid)
         val body = JSONObject()
             .put("vehicle_type", "mototaxi")
             .put("origin_lat", originLatitude).put("origin_lng", originLongitude)

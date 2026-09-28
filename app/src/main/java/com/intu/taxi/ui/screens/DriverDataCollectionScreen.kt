@@ -657,22 +657,12 @@ fun DriverDataCollectionScreen(
                                         )
                                     )
                                 ) {
-                                    Row(
+                                    // Acción principal a todo el ancho para que el texto completo quepa;
+                                    // "Cancelar" queda debajo como acción secundaria
+                                    Column(
                                         modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
                                     ) {
-                                        Button(
-                                            onClick = onCancel,
-                                            modifier = Modifier.weight(1f),
-                                            shape = RoundedCornerShape(12.dp),
-                                            colors = ButtonDefaults.buttonColors(
-                                                containerColor = Color(0xFF1C1C1E).copy(alpha = 0.8f),
-                                                contentColor = Color.White
-                                            )
-                                        ) {
-                                            Text("Cancelar")
-                                        }
-                                        
                                         Button(
                                             onClick = {
                                                 if (vehicleType.isNotBlank() && vehicleBrand.isNotBlank() && 
@@ -694,20 +684,27 @@ fun DriverDataCollectionScreen(
                                             enabled = vehicleType.isNotBlank() && vehicleBrand.isNotBlank() && 
                                                      vehicleModel.isNotBlank() && vehicleYear.isNotBlank() &&
                                                      licensePlate.isNotBlank() && driverLicense.isNotBlank() && documentNumber.length == 8,
-                                            modifier = Modifier.weight(1f),
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(52.dp),
                                             shape = RoundedCornerShape(12.dp),
                                             colors = ButtonDefaults.buttonColors(
                                                 containerColor = Color(0xFF08817E),
                                                 contentColor = Color.White
                                             )
                                         ) {
-                                           
                                             Text(
                                                 if (isConversion) "Convertirse en conductor" else "Guardar",
-                                                maxLines = 1,
-                                                softWrap = false,
-                                                style = MaterialTheme.typography.labelMedium
+                                                style = MaterialTheme.typography.titleSmall,
+                                                fontWeight = FontWeight.SemiBold
                                             )
+                                        }
+
+                                        TextButton(
+                                            onClick = onCancel,
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Text("Cancelar", color = Color(0xFF5F6570))
                                         }
                                     }
                                 }

@@ -77,13 +77,13 @@ fun IncomingRideRequestCard(
                     
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = request.userName,
+                            text = request.userName.ifBlank { "Pasajero" },
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp,
                             color = Color(0xFF1E1F47)
                         )
                         Text(
-                            text = "${String.format("%.1f", distanceInKm)} km de distancia",
+                            text = "${String.format(java.util.Locale.US, "%.1f", distanceInKm)} km de distancia",
                             fontSize = 12.sp,
                             color = Color.Gray
                         )
@@ -167,12 +167,12 @@ fun IncomingRideRequestCard(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(
-                        text = "${String.format("%.1f", request.distanceMeters / 1000.0)} km",
+                        text = "${String.format(java.util.Locale.US, "%.1f", request.distanceMeters / 1000.0)} km",
                         fontSize = 12.sp,
                         color = Color.Gray
                     )
                     Text(
-                        text = "${request.durationSeconds / 60} min",
+                        text = "${kotlin.math.max(1, kotlin.math.round(request.durationSeconds / 60).toInt())} min",
                         fontSize = 12.sp,
                         color = Color.Gray
                     )

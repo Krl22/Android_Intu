@@ -53,7 +53,7 @@ La app no puede aprobar choferes por sí sola.
 1. Registrar al pasajero y al chofer con cuentas diferentes.
 2. En el teléfono del chofer, completar DNI, licencia, placa y datos del mototaxi.
 3. Aprobar manualmente al chofer y volver a entrar a la cuenta.
-4. Activar el modo conductor y pulsar **Buscar clientes**.
+4. Activar el modo conductor y pulsar **Empezar ahora**.
 5. En el teléfono del pasajero, elegir destino, ajustar el punto de recojo, elegir Yape o efectivo y confirmar.
 6. El chofer acepta la solicitud.
 7. Verificar en ambos teléfonos la ubicación y los datos del viaje.

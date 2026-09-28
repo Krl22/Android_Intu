@@ -1134,16 +1134,10 @@ fun HomeScreen(
                 val tipSC = com.mapbox.maps.ScreenCoordinate(centerPx.x, centerPx.y + tipOffsetPx)
                 selectedDestination = mapView.mapboxMap.coordinateForPixel(tipSC)
                 // Geocodificar dirección inicial
-                scope.launch(Dispatchers.IO) {
+                scope.launch {
                     val p = selectedDestination
-                    val addr = try {
-                        if (p != null) {
-                            val geocoder = Geocoder(context, Locale.getDefault())
-                            val res = withContext(Dispatchers.IO) { geocoder.getFromLocation(p.latitude(), p.longitude(), 1) }
-                            res?.firstOrNull()?.getAddressLine(0)
-                        } else null
-                    } catch (e: Exception) { null }
-                    withContext(Dispatchers.Main) { pinSearchQuery = addr ?: "${p?.latitude()}, ${p?.longitude()}" }
+                    val addr = p?.let { readableAddress(context, httpClient, mapboxToken, it) }
+                    pinSearchQuery = addr ?: "Ubicación seleccionada"
                 }
                 val listener = object : OnMoveListener {
                     override fun onMoveBegin(detector: MoveGestureDetector) {}
@@ -1162,19 +1156,10 @@ fun HomeScreen(
                         val tipSC = com.mapbox.maps.ScreenCoordinate(cPx.x, cPx.y + tipOffsetPx)
                         selectedDestination = mapView.mapboxMap.coordinateForPixel(tipSC)
                         // Geocodificar al terminar el movimiento
-                        scope.launch(Dispatchers.IO) {
-                            val addr = try {
-                                val geocoder = Geocoder(context, Locale.getDefault())
-                                val tip = selectedDestination
-                                val res = withContext(Dispatchers.IO) {
-                                    if (tip != null) geocoder.getFromLocation(tip.latitude(), tip.longitude(), 1) else null
-                                }
-                                res?.firstOrNull()?.getAddressLine(0)
-                            } catch (e: Exception) { null }
-                            withContext(Dispatchers.Main) {
-                                val tip = selectedDestination
-                                pinSearchQuery = addr ?: "${tip?.latitude()}, ${tip?.longitude()}"
-                            }
+                        scope.launch {
+                            val tip = selectedDestination
+                            val addr = tip?.let { readableAddress(context, httpClient, mapboxToken, it) }
+                            pinSearchQuery = addr ?: "Ubicación seleccionada"
                         }
                     }
                 }
@@ -1906,26 +1891,11 @@ fun HomeScreen(
                                     } else {
                                         scope.launch {
                                             try {
-                                                // Obtener direcciones para origen y destino
-                                                val originGeocoder = Geocoder(context, Locale.getDefault())
-                                                originAddress = try {
-                                                    val results = withContext(Dispatchers.IO) {
-                                                        originGeocoder.getFromLocation(origin.latitude(), origin.longitude(), 1)
-                                                    }
-                                                    results?.firstOrNull()?.getAddressLine(0) ?: "Ubicación actual"
-                                                } catch (e: Exception) {
-                                                    "Ubicación actual"
-                                                }
-                                                
-                                                val destGeocoder = Geocoder(context, Locale.getDefault())
-                                                destinationAddress = try {
-                                                    val results = withContext(Dispatchers.IO) {
-                                                        destGeocoder.getFromLocation(destination.latitude(), destination.longitude(), 1)
-                                                    }
-                                                    results?.firstOrNull()?.getAddressLine(0) ?: "Destino seleccionado"
-                                                } catch (e: Exception) {
-                                                    "Destino seleccionado"
-                                                }
+                                                // Direcciones legibles para el chofer (nunca coordenadas)
+                                                originAddress = readableAddress(context, httpClient, mapboxToken, origin)
+                                                    ?: "Punto de recojo en el mapa"
+                                                destinationAddress = readableAddress(context, httpClient, mapboxToken, destination)
+                                                    ?: "Destino en el mapa"
                                                 
                                                 // Calcular precio estimado (tarifa base + por km + por tiempo)
                                                 val baseFare = 2.5
@@ -2313,6 +2283,59 @@ fun HomeScreen(
         )
     }
 }
+
+/**
+ * Dirección legible de un punto, para el pasajero y para el chofer. Nunca coordenadas: devuelve
+ * null y quien llama pone un texto genérico.
+ *
+ * El geocodificador de Android trae el número de casa en la ciudad ("Jirón Augusto Hilser N° 465"),
+ * pero en carreteras devuelve códigos de ruta ("5S 3859"). En esos casos se usa Mapbox, que da
+ * el nombre de la vía y el pueblo ("Carretera Longitudinal de la Selva Sur, Río Negro").
+ */
+private suspend fun readableAddress(
+    context: android.content.Context,
+    http: OkHttpClient,
+    token: String,
+    point: Point
+): String? = withContext(Dispatchers.IO) {
+    val fromAndroid = runCatching {
+        Geocoder(context, Locale("es", "PE"))
+            .getFromLocation(point.latitude(), point.longitude(), 1)
+            ?.firstOrNull()?.getAddressLine(0)
+    }.getOrNull()?.let(::cleanAddress)
+    if (fromAndroid != null && isUsefulAddress(fromAndroid)) return@withContext fromAndroid
+
+    val fromMapbox = runCatching {
+        val url = "https://api.mapbox.com/geocoding/v5/mapbox.places/${point.longitude()},${point.latitude()}.json" +
+            "?access_token=$token&language=es&limit=1&types=address,poi,neighborhood,locality,place"
+        http.newCall(Request.Builder().url(url).get().build()).execute().use { res ->
+            if (!res.isSuccessful) null
+            else JSONObject(res.body?.string().orEmpty())
+                .optJSONArray("features")?.optJSONObject(0)?.optString("place_name")
+        }
+    }.getOrNull()?.let(::cleanAddress)
+    fromMapbox?.takeIf { it.isNotBlank() } ?: fromAndroid?.takeIf { it.isNotBlank() }
+}
+
+/** Falso si la primera parte es un código de ruta ("5S 3859"), un número suelto o una calle sin nombre. */
+private fun isUsefulAddress(address: String): Boolean {
+    val first = address.substringBefore(',').trim()
+    return first.isNotBlank() &&
+        !Regex("^\\d+[A-Za-z]?(\\s+\\d+)?$").matches(first) &&
+        !first.equals("Unnamed Road", ignoreCase = true) &&
+        !first.equals("Calle sin nombre", ignoreCase = true)
+}
+
+/** Quita país, departamento y códigos postales ("Satipo 12261, Peru" → "Satipo"); máximo 3 partes. */
+private fun cleanAddress(raw: String): String = raw.split(",")
+    .map { it.replace(Regex("\\b\\d{5}\\b"), "").trim() }
+    .filter {
+        it.isNotBlank() &&
+            !it.equals("Perú", ignoreCase = true) && !it.equals("Peru", ignoreCase = true) &&
+            !it.startsWith("Departamento de", ignoreCase = true) && !it.startsWith("Provincia de", ignoreCase = true)
+    }
+    .take(3)
+    .joinToString(", ")
 
 private fun buildGeocodingUrl(token: String, query: String, center: Point, bbox: String): String {
     val encoded = URLEncoder.encode(query, "UTF-8")

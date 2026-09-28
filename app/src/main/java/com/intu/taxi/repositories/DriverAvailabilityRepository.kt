@@ -2,6 +2,7 @@ package com.intu.taxi.repositories
 
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.GeoPoint
+import com.intu.taxi.auth.AuthRepository
 import com.intu.taxi.data.SupabaseApi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -10,7 +11,10 @@ import org.json.JSONObject
 
 class DriverAvailabilityRepository {
     suspend fun createAvailableDriver(location: GeoPoint, driverId: String? = FirebaseAuth.getInstance().currentUser?.uid) {
-        require(driverId != null) { "Usuario no autenticado" }; setLocation(location, true)
+        require(driverId != null) { "Inicia sesión para continuar." }
+        // Al aceptar, el viaje copia el nombre del chofer desde su perfil de Supabase
+        runCatching { AuthRepository().syncProfileToSupabase(driverId) }
+        setLocation(location, true)
     }
     suspend fun updateDriverLocation(location: GeoPoint, driverId: String? = FirebaseAuth.getInstance().currentUser?.uid) {
         require(driverId != null) { "Usuario no autenticado" }; setLocation(location, true)
