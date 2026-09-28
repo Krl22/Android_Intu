@@ -48,11 +48,17 @@ App Android ── login ──► Firebase Auth (teléfono, Google, MFA)
 | `advance_ride(ride_id, status)` | conductor | `arrived` → `in_progress` → `completed` |
 | `cancel_ride(ride_id, reason?)` | ambos | Pasajero: cancela. Conductor: la solicitud vuelve a `searching` |
 | `rate_ride(ride_id, rating)` | ambos | Calificar 1–5 al otro, una vez |
-| `register_device_token(token, platform?)` | ambos | Guardar el token de FCM |
+| `register_device_token(token, platform?)` | ambos | Guardar el token de FCM (se borra al cerrar sesión) |
+| `admin_set_admin(user_id, is_admin)` | admin | Dar o quitar admin; siempre queda al menos uno |
+| `admin_delete_user(user_id)` | admin | Borrar la cuenta en Supabase; la llama la Cloud Function `adminDeleteUser`, que además borra el login de Firebase y la foto. Los viajes quedan como "Cuenta eliminada" |
 
 Tiempo real:
 - **Postgres Changes** en `rides`: el pasajero escucha su viaje; los conductores aprobados escuchan solicitudes nuevas.
 - **Broadcast privado** en el canal `ride:<id>`: ubicación en vivo del conductor durante el viaje (solo los 2 participantes).
+
+Avisos push: el trigger `rides_notify_status` llama con pg_net a la Cloud Function `ridePush` cuando un viaje
+cambia de estado (aceptado, llegó, iniciado, terminado, cancelado, o el conductor lo soltó). La función los envía
+por FCM y borra los tokens vencidos con `prune_device_tokens`. Ambos lados comparten el secreto `push_webhook_secret`.
 
 Automático (pg_cron, cada minuto):
 - `expire-stale-ride-requests`: solicitudes sin conductor por más de 5 min se cancelan (`cancelled_by = 'system'`).
@@ -64,7 +70,8 @@ Automático (pg_cron, cada minuto):
 - La app no puede cambiar `status`, precios ni `driver_id` de un viaje directamente: solo con las funciones RPC, que validan cada transición.
 - Un conductor no puede aprobarse a sí mismo. Si cambia sus documentos, vuelve a `pending`.
 - Si el login fue por teléfono, el número del perfil se toma del token verificado de Firebase.
-- Sin sesión (rol `anon`) no se puede leer ni ejecutar nada.
+- Sin sesión (rol `anon`) no se puede leer ni ejecutar nada, salvo `prune_device_tokens`, que exige el secreto de los avisos push.
+- Las cuentas eliminadas quedan en `private.deleted_accounts`: aunque su app siga abierta, no pueden volver a crear el perfil.
 
 ## Configuración pendiente (una sola vez)
 
@@ -81,8 +88,9 @@ Automático (pg_cron, cada minuto):
    npm install -g firebase-tools
    firebase login
    cd firebase/functions && npm install && cd ..
-   firebase deploy --only functions
+   firebase deploy --only functions:beforecreated,functions:beforesignedin
    ```
+   Despliega siempre por nombre: `--only functions` a secas propone borrar las funciones antiguas del proyecto.
    Después, en la consola de Firebase → Authentication → Settings → **Blocking functions**, verifica que
    `beforecreated` y `beforesignedin` estén asignadas.
    Los usuarios que ya existían obtienen el rol en su próximo inicio de sesión.
@@ -94,6 +102,15 @@ Automático (pg_cron, cada minuto):
 5. **Llave de la app**
    Dashboard de Supabase → Project Settings → API Keys → copia (o crea) la **publishable key**.
    Esa llave y la URL van en la app. Son públicas por diseño: la seguridad la ponen las reglas RLS.
+
+6. **Avisos push y eliminar cuentas**
+   Genera un valor largo al azar y guárdalo en los dos lados:
+   - Firebase (desde `firebase/`): `firebase functions:secrets:set PUSH_WEBHOOK_SECRET` y pega el valor.
+   - Supabase → SQL Editor: `select vault.create_secret('<valor>', 'push_webhook_secret');`
+
+   Luego despliega las funciones: `firebase deploy --only functions:ridePush,functions:adminDeleteUser`.
+   Para cambiar el secreto: `select vault.update_secret((select id from vault.secrets where name = 'push_webhook_secret'), '<nuevo>');`,
+   vuelve a correr `secrets:set` y despliega de nuevo `ridePush`.
 
 ## Tareas comunes
 

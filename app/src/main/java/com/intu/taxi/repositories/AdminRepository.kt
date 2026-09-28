@@ -1,7 +1,10 @@
 package com.intu.taxi.repositories
 
+import com.google.firebase.functions.FirebaseFunctions
+import com.google.firebase.functions.FirebaseFunctionsException
 import com.intu.taxi.data.SupabaseApi
 import com.intu.taxi.data.str
+import kotlinx.coroutines.tasks.await
 import org.json.JSONObject
 import java.time.Instant
 import java.time.OffsetDateTime
@@ -23,7 +26,7 @@ data class AdminDriver(
     val plate: String
 )
 
-/** Cuenta de la app (pasajero, conductor o admin), para reiniciarla en pruebas. */
+/** Cuenta de la app (pasajero, conductor o admin), para reiniciarla, eliminarla o hacerla admin. */
 data class AdminUser(
     val id: String,
     val fullName: String,
@@ -78,6 +81,39 @@ class AdminRepository {
      */
     suspend fun resetUser(userId: String, scope: String) {
         SupabaseApi.request("POST", "rpc/admin_reset_user", JSONObject().put("p_user_id", userId).put("p_scope", scope))
+    }
+
+    /** Da o quita permisos de administrador. El servidor no deja quitar al último admin. */
+    suspend fun setAdmin(userId: String, isAdmin: Boolean) {
+        SupabaseApi.request("POST", "rpc/admin_set_admin", JSONObject().put("p_user_id", userId).put("p_is_admin", isAdmin))
+    }
+
+    /**
+     * Elimina la cuenta por completo con la Cloud Function adminDeleteUser: datos en Supabase,
+     * cuenta de inicio de sesión de Firebase y foto. Los viajes quedan anónimos para la otra persona.
+     */
+    suspend fun deleteUser(userId: String) {
+        try {
+            FirebaseFunctions.getInstance()
+                .getHttpsCallable("adminDeleteUser")
+                .call(mapOf("userId" to userId))
+                .await()
+        } catch (e: FirebaseFunctionsException) {
+            // Estos errores ya traen el mensaje en español desde la función
+            val ownMessage = e.code in setOf(
+                FirebaseFunctionsException.Code.PERMISSION_DENIED,
+                FirebaseFunctionsException.Code.FAILED_PRECONDITION,
+                FirebaseFunctionsException.Code.INVALID_ARGUMENT,
+                FirebaseFunctionsException.Code.UNAUTHENTICATED,
+                FirebaseFunctionsException.Code.INTERNAL
+            ) && !e.message.isNullOrBlank() && e.message != "INTERNAL"
+            throw IllegalStateException(
+                if (ownMessage) e.message else "No se pudo eliminar la cuenta. Revisa tu internet e intenta de nuevo.",
+                e
+            )
+        } catch (e: Exception) {
+            throw IllegalStateException("No se pudo eliminar la cuenta. Revisa tu internet e intenta de nuevo.", e)
+        }
     }
 
     private fun JSONObject.toAdminDriver() = AdminDriver(

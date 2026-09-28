@@ -81,6 +81,10 @@ dependencies {
     implementation("com.google.firebase:firebase-firestore-ktx")
     // Fotos de perfil de pasajeros y conductores
     implementation("com.google.firebase:firebase-storage-ktx")
+    // Avisos push del viaje (conductor aceptó, llegó, etc.) con la app minimizada
+    implementation("com.google.firebase:firebase-messaging-ktx")
+    // Cloud Functions: eliminar cuentas desde el panel de administración
+    implementation("com.google.firebase:firebase-functions-ktx")
     // Google Sign-In para proveedor Google
     implementation("com.google.android.gms:play-services-auth:21.2.0")
     // DataStore para preferencias

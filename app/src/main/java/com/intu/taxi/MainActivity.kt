@@ -58,6 +58,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        com.intu.taxi.push.PushNotifications.createChannel(this)
         enableEdgeToEdge()
         setContent {
             IntuTheme(darkTheme = false) {
@@ -75,6 +76,7 @@ fun IntuApp() {
     // Visibilidad específica de Home, controlada por HomeScreen (pin/ruta)
     var homeBarVisible by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(true) }
     var isDriverMode by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+    var notificationPermissionAsked by rememberSaveable { mutableStateOf(false) }
     val auth = FirebaseAuth.getInstance()
     val repo = AuthRepository()
     val scope = rememberCoroutineScope()
@@ -82,9 +84,30 @@ fun IntuApp() {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    // Cargar el estado del conductor desde Firestore cuando el usuario esté autenticado
-    LaunchedEffect(Unit) {
-        val uid = auth.currentUser?.uid
+    // Cuenta con sesión; cambia al cerrar sesión, al entrar con otra cuenta o si un admin la elimina
+    var currentUid by androidx.compose.runtime.remember { mutableStateOf(auth.currentUser?.uid) }
+    val authRoutes = setOf("splash", "login", "google_auth", "phone_auth")
+    DisposableEffect(Unit) {
+        val listener = FirebaseAuth.AuthStateListener { firebaseAuth ->
+            currentUid = firebaseAuth.currentUser?.uid
+            // Sin sesión fuera del inicio de sesión: volver al login
+            val route = navController.currentBackStackEntry?.destination?.route
+            if (firebaseAuth.currentUser == null && route != null && route !in authRoutes) {
+                isDriverMode = false
+                bottomBarVisible = false
+                navController.navigate("login") {
+                    popUpTo(navController.graph.id) { inclusive = true }
+                    launchSingleTop = true
+                }
+            }
+        }
+        auth.addAuthStateListener(listener)
+        onDispose { auth.removeAuthStateListener(listener) }
+    }
+
+    // Cargar el modo conductor de la cuenta con sesión
+    LaunchedEffect(currentUid) {
+        val uid = currentUid
         if (uid != null) {
             try {
                 isDriverMode = repo.getDriverMode(uid)
@@ -347,6 +370,32 @@ fun IntuApp() {
                     bottomBarVisible = true
                     homeBarVisible = true
                 }
+                // Avisos push del viaje: registra este teléfono y, en Android 13+, pide permiso una vez
+                val homeContext = LocalContext.current
+                val notificationPermission = androidx.activity.compose.rememberLauncherForActivityResult(
+                    androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+                ) { granted ->
+                    if (!granted) {
+                        android.widget.Toast.makeText(
+                            homeContext,
+                            "Sin notificaciones no sabrás cuándo llega tu conductor con la app minimizada",
+                            android.widget.Toast.LENGTH_LONG
+                        ).show()
+                    }
+                }
+                LaunchedEffect(currentUid) {
+                    if (currentUid == null) return@LaunchedEffect
+                    runCatching { com.intu.taxi.push.PushNotifications.registerToken() }
+                    if (!notificationPermissionAsked &&
+                        android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
+                        androidx.core.content.ContextCompat.checkSelfPermission(
+                            homeContext, android.Manifest.permission.POST_NOTIFICATIONS
+                        ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+                    ) {
+                        notificationPermissionAsked = true
+                        notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                    }
+                }
                 if (isDriverMode) {
                     DriverHomeScreen(
                         padding = innerPadding,
@@ -396,9 +445,18 @@ fun IntuApp() {
                     },
                     onLogout = {
                         goOffline()
-                        bottomBarVisible = false
-                        navController.navigate("login") {
-                            popUpTo(navController.graph.startDestinationId) { inclusive = true }
+                        scope.launch {
+                            // Este teléfono deja de recibir los avisos de la cuenta (sin trabar la salida si no hay internet)
+                            kotlinx.coroutines.withTimeoutOrNull(4_000) {
+                                runCatching { com.intu.taxi.push.PushNotifications.unregisterToken() }
+                            }
+                            // Antes solo se volvía al login y la sesión seguía abierta. Cerrar también la de
+                            // Google permite elegir otra cuenta al entrar. El listener de sesión navega al login.
+                            auth.signOut()
+                            com.google.android.gms.auth.api.signin.GoogleSignIn.getClient(
+                                accountContext,
+                                com.google.android.gms.auth.api.signin.GoogleSignInOptions.DEFAULT_SIGN_IN
+                            ).signOut()
                         }
                     },
                     onNavigateToDriverDataCollection = {
@@ -411,9 +469,21 @@ fun IntuApp() {
             composable("admin") {
                 LaunchedEffect(Unit) { bottomBarVisible = false }
                 DisposableEffect(Unit) { onDispose { bottomBarVisible = true } }
+                val adminContext = LocalContext.current
                 com.intu.taxi.ui.screens.AdminScreen(
                     padding = innerPadding,
-                    onBack = { navController.popBackStack() }
+                    onBack = { navController.popBackStack() },
+                    onOwnAccountDeleted = {
+                        // La cuenta ya no existe: cerrar sesión (el listener de sesión lleva al login)
+                        adminContext.getSharedPreferences("intu_driver", android.content.Context.MODE_PRIVATE)
+                            .edit().putBoolean("online", false).apply()
+                        com.intu.taxi.driver.DriverOnlineService.stop(adminContext)
+                        auth.signOut()
+                        com.google.android.gms.auth.api.signin.GoogleSignIn.getClient(
+                            adminContext,
+                            com.google.android.gms.auth.api.signin.GoogleSignInOptions.DEFAULT_SIGN_IN
+                        ).signOut()
+                    }
                 )
             }
         }

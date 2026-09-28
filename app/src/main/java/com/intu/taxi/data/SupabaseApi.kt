@@ -1,6 +1,7 @@
 package com.intu.taxi.data
 
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseAuthInvalidUserException
 import com.intu.taxi.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
@@ -26,9 +27,16 @@ object SupabaseApi {
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
 
     private suspend fun token(forceRefresh: Boolean = false): String {
-        return FirebaseAuth.getInstance().currentUser
-            ?.getIdToken(forceRefresh)?.await()?.token
+        val user = FirebaseAuth.getInstance().currentUser
             ?: throw IllegalStateException("Inicia sesión para continuar.")
+        return try {
+            user.getIdToken(forceRefresh).await().token
+                ?: throw IllegalStateException("Inicia sesión para continuar.")
+        } catch (e: FirebaseAuthInvalidUserException) {
+            // Un administrador eliminó la cuenta: se cierra la sesión y la app vuelve al inicio de sesión
+            FirebaseAuth.getInstance().signOut()
+            throw IllegalStateException("Tu cuenta fue eliminada. Inicia sesión de nuevo.", e)
+        }
     }
 
     suspend fun request(
@@ -83,6 +91,8 @@ object SupabaseApi {
         message == "driver_not_approved" -> "Tu cuenta de conductor aún no está aprobada."
         message == "invalid_transition" -> "El viaje ya cambió de estado. Intenta de nuevo."
         message == "not_admin" -> "Solo un administrador puede hacer esto."
+        message == "last_admin" -> "Debe quedar al menos un administrador. Haz admin a otra cuenta primero."
+        message == "account_deleted" -> "Tu cuenta fue eliminada. Inicia sesión de nuevo."
         message == "user_not_found" || message == "driver_not_found" -> "No se encontró esa cuenta."
         message == "cannot_rate" -> "Ya calificaste este viaje."
         message == "invalid_rating" -> "Elige de 1 a 5 estrellas."
