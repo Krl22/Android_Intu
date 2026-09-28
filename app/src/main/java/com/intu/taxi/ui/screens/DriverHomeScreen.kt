@@ -538,6 +538,7 @@ fun DriverHomeScreen(
 
     fun handleDeclineRideRequest(request: DriverRideRequest) {
         declinedRequestIds = declinedRequestIds + request.requestId
+        com.intu.taxi.driver.DriverSession.declinedRequestIds += request.requestId
         incomingRideRequests = incomingRideRequests.filter { it.requestId != request.requestId }
     }
 
@@ -595,12 +596,19 @@ fun DriverHomeScreen(
         contentVisible = true
     }
 
-    // Barra inferior solo fuera de línea y sin viaje
+    // Barra inferior solo fuera de línea y sin viaje. El servicio en segundo plano corre mientras
+    // esté en línea o en un viaje: mantiene el GPS y avisa de solicitudes con la app minimizada.
     val hasActiveRide = activeRideRequest != null
     LaunchedEffect(isSearching, hasActiveRide) {
         headerVisible = true
         onBottomBarVisibilityChanged(!isSearching && !hasActiveRide)
+        if (isSearching || hasActiveRide) {
+            com.intu.taxi.driver.DriverOnlineService.start(context)
+        } else {
+            com.intu.taxi.driver.DriverOnlineService.stop(context)
+        }
     }
+    LaunchedEffect(activeRideId) { com.intu.taxi.driver.DriverSession.activeRideId = activeRideId }
 
     // Recibe solicitudes mientras está en línea y libre, o llevando a un pasajero sin siguiente viaje
     val canReceiveRequests = isSearching &&
@@ -659,6 +667,22 @@ fun DriverHomeScreen(
         hasLocationPermission =
             (permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true) ||
             (permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true)
+    }
+
+    // Android 13+: sin este permiso no se ven los avisos de solicitudes con la app minimizada
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (!granted) {
+            Toast.makeText(context, "Sin notificaciones no verás solicitudes con la app minimizada", Toast.LENGTH_LONG).show()
+        }
+    }
+    fun askNotificationPermissionIfNeeded() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -720,10 +744,12 @@ fun DriverHomeScreen(
 
                             // El GPS avisa varias veces por segundo; a Supabase se envía cada 2 s en viaje
                             // (el pasajero lo sigue en el mapa) y cada 10 s en línea sin viaje.
+                            // Si el servicio en segundo plano está activo, él envía la ubicación
                             val rideId = activeRideId
                             val interval = if (rideId != null) 2_000L else 10_000L
                             val now = System.currentTimeMillis()
-                            if ((rideId != null || isSearching) && now - lastLocationSentMs[0] >= interval) {
+                            if (!com.intu.taxi.driver.DriverOnlineService.isRunning &&
+                                (rideId != null || isSearching) && now - lastLocationSentMs[0] >= interval) {
                                 lastLocationSentMs[0] = now
                                 scope.launch {
                                     runCatching {
@@ -876,6 +902,7 @@ fun DriverHomeScreen(
                                         // El conductor quiere empezar a buscar
                                         currentLocation?.let { location ->
                                             driverAvailabilityRepository.createAvailableDriver(location)
+                                            askNotificationPermissionIfNeeded()
                                             isSearching = true
                                             onBottomBarVisibilityChanged(false) // OCULTAR BottomNavigationBar al buscar
                                             Toast.makeText(context, "Buscando clientes cerca...", Toast.LENGTH_SHORT).show()

@@ -8,6 +8,11 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
+    <!-- Conductor en línea con la app en segundo plano: servicio con GPS y avisos de solicitudes -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -17,6 +22,12 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Intu">
+        <!-- Mantiene al conductor en línea (GPS y solicitudes) aunque la app esté minimizada -->
+        <service
+            android:name=".driver.DriverOnlineService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
+
         <!-- Permite a la app de cámara guardar la foto de perfil en la caché privada de Intu -->
         <provider
             android:name="androidx.core.content.FileProvider"

@@ -45,6 +45,17 @@ import androidx.compose.ui.Alignment
 // Removed HomeScreen2 import; using HomeScreen as the start page
 
 class MainActivity : ComponentActivity() {
+    // Con la app visible, las solicitudes se ven en pantalla y el servicio no las notifica
+    override fun onStart() {
+        super.onStart()
+        com.intu.taxi.driver.DriverSession.appInForeground = true
+    }
+
+    override fun onStop() {
+        com.intu.taxi.driver.DriverSession.appInForeground = false
+        super.onStop()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -355,10 +366,18 @@ fun IntuApp() {
                 androidx.compose.runtime.LaunchedEffect(Unit) {
                     bottomBarVisible = true
                 }
+                val accountContext = LocalContext.current
+                // Fuera del modo conductor (pasajero o sesión cerrada) deja de estar en línea
+                fun goOffline() {
+                    accountContext.getSharedPreferences("intu_driver", android.content.Context.MODE_PRIVATE)
+                        .edit().putBoolean("online", false).apply()
+                    com.intu.taxi.driver.DriverOnlineService.stop(accountContext)
+                }
                 AccountScreenEnhanced(
                     padding = innerPadding,
                     isDriver = isDriverMode,
                     onDriverChange = { newDriverMode ->
+                        if (!newDriverMode) goOffline()
                         isDriverMode = newDriverMode
                         // Guardar el modo en Supabase
                         val uid = auth.currentUser?.uid
@@ -376,6 +395,7 @@ fun IntuApp() {
                         }
                     },
                     onLogout = {
+                        goOffline()
                         bottomBarVisible = false
                         navController.navigate("login") {
                             popUpTo(navController.graph.startDestinationId) { inclusive = true }
