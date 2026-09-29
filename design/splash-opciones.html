@@ -112,20 +112,20 @@
   .d .h2 { animation: hills 1s .1s both cubic-bezier(.2,.8,.2,1); }
   .d .h3 { animation: hills 1s .2s both cubic-bezier(.2,.8,.2,1); }
   .d .mist { animation: mist 6s ease-in-out infinite alternate, fade-in 1.2s .5s both; }
-  .d .perch { animation: fade-in .3s .35s both, vanish .01s .72s forwards; }
+  .d .perch { animation: fade-in .3s .2s both, vanish .01s .92s forwards; }
   .d .flyer {
     opacity: 0;
     offset-path: path('M234,516 C 236,440 226,360 196,300 C 180,270 162,254 150,250');
     offset-rotate: 0deg;
-    animation: show .01s .7s forwards, fly .95s .7s both cubic-bezier(.4,.05,.3,1), vanish .12s 1.65s forwards;
+    animation: show .01s .9s forwards, fly .95s .92s both cubic-bezier(.4,.05,.3,1), vanish .12s 1.87s forwards;
   }
-  .d .flyer-body { transform-box: fill-box; transform-origin: center; animation: shrink-to-dot .95s .7s both ease-in; }
-  .d .wing-up { animation: flap-up .19s steps(1) 5 .7s both; }
-  .d .wing-down { animation: flap-down .19s steps(1) 5 .7s both; }
-  .d .dot { transform-box: fill-box; transform-origin: center; animation: pop .45s 1.65s both cubic-bezier(.3,1.4,.5,1); }
-  .d .bar { transform-box: fill-box; transform-origin: 50% 0%; animation: grow-up .45s 1.78s both cubic-bezier(.3,1.4,.5,1); }
-  .d .word { animation: rise-in .6s 1.98s both cubic-bezier(.2,.8,.2,1); }
-  .d .tag { animation: rise-in .6s 2.12s both cubic-bezier(.2,.8,.2,1); }
+  .d .flyer-body { transform-box: fill-box; transform-origin: center; animation: shrink-to-dot .95s .92s both ease-in; }
+  .d .wing-up { animation: flap-up .19s steps(1) 5 .92s both; }
+  .d .wing-down { animation: flap-down .19s steps(1) 5 .92s both; }
+  .d .dot { transform-box: fill-box; transform-origin: center; animation: pop .45s 1.87s both cubic-bezier(.3,1.4,.5,1); }
+  .d .bar { transform-box: fill-box; transform-origin: 50% 0%; animation: grow-up .45s 2s both cubic-bezier(.3,1.4,.5,1); }
+  .d .word { animation: rise-in .6s 2.2s both cubic-bezier(.2,.8,.2,1); }
+  .d .tag { animation: rise-in .6s 2.34s both cubic-bezier(.2,.8,.2,1); }
 
   @media (prefers-reduced-motion: reduce) { * { animation-duration: .01s !important; animation-delay: 0s !important; } }
 </style>
@@ -146,13 +146,17 @@
             <stop offset="0" stop-color="#0A928E"/><stop offset="1" stop-color="#06605D"/>
           </linearGradient>
           <radialGradient id="d-sun"><stop offset="0" stop-color="#EFB11B" stop-opacity=".55"/><stop offset="1" stop-color="#EFB11B" stop-opacity="0"/></radialGradient>
-          <symbol id="gallito-color" viewBox="0 0 120 100">
-            <path d="M36,70 L16,90 Q20,95 26,93 L44,76 Z" fill="#1E1F47"/>
-            <path d="M32,66 C32,52 44,44 60,46 C74,48 82,58 80,70 C78,80 66,86 52,85 C40,84 32,77 32,66 Z" fill="#E8601C"/>
-            <path d="M58,54 C54,36 62,18 80,14 C96,11 108,22 108,36 C108,42 105,47 100,50 C92,51 86,53 80,56 C72,59 62,59 58,54 Z" fill="#E8601C"/>
-            <path d="M40,62 C50,54 66,56 76,66 C70,76 54,78 38,72 Z" fill="#1E1F47"/>
-            <circle cx="91" cy="41" r="2.6" fill="#1E1F47"/>
-            <path d="M52,84 L50,92 M60,84 L60,92" stroke="#1E1F47" stroke-width="3" stroke-linecap="round"/>
+          <symbol id="gallito-color" viewBox="0 0 100 120">
+            <path d="M36,78 L27,113 Q31,117 37,115 L48,84 Z" fill="#15162B"/>
+            <path d="M30,70 C28,52 36,40 52,40 C66,40 74,52 72,68 C70,84 60,94 48,94 C38,94 31,84 30,70 Z" fill="#EE4B1C"/>
+            <path d="M46,44 C42,26 50,8 64,6 C78,4 87,16 86,28 C85,35 82,40 77,43 C70,45 58,47 46,44 Z" fill="#EE4B1C"/>
+            <path d="M52,30 C52,18 60,10 68,10 C78,10 83,18 82,26" fill="none" stroke="#FF7A45" stroke-width="1.8" stroke-linecap="round"/>
+            <path d="M29,60 C33,49 47,48 57,56 C63,68 60,84 49,92 C40,90 32,80 30,70 Z" fill="#15162B"/>
+            <path d="M32,57 C38,50 49,51 55,58 C53,65 47,70 39,69 C34,66 31,62 32,57 Z" fill="#B9BCCB"/>
+            <path d="M37,60 C42,58 48,59 52,62" fill="none" stroke="#8E92A6" stroke-width="1.2" stroke-linecap="round"/>
+            <circle cx="72" cy="31" r="3.2" fill="#F6E7A8"/><circle cx="72.6" cy="31" r="1.5" fill="#15162B"/>
+            <path d="M77,42 L82,44 L77,45.5 Z" fill="#F3C757"/>
+            <path d="M50,93 L49,101 M57,92 L58,101" stroke="#15162B" stroke-width="3" stroke-linecap="round"/>
           </symbol>
         </defs>
         <rect width="300" height="650" fill="url(#d-bg)"/>
@@ -162,19 +166,26 @@
         <g class="h2">
           <path d="M0,560 C48,538 95,552 140,534 C188,516 236,548 300,530 L300,650 L0,650 Z" fill="#07625F"/>
           <path d="M196,538 Q232,528 272,540" fill="none" stroke="#054A48" stroke-width="3" stroke-linecap="round"/>
-          <g class="perch"><use href="#gallito-color" transform="translate(262,490) scale(-1,1)" width="56" height="47"/></g>
+          <g class="perch"><g transform="translate(257.8,487.5) scale(-.46,.46)"><use href="#gallito-color" width="100" height="120"/></g></g>
         </g>
         <path class="h3" d="M0,600 C65,578 112,600 178,584 C225,573 262,590 300,583 L300,650 L0,650 Z" fill="#054A48"/>
 
         <g class="flyer">
           <g class="flyer-body">
-            <g transform="scale(-1,1) translate(-30,-22)">
-              <path d="M13,21 L1,16 L2,27 L13,25 Z" fill="#1E1F47"/>
-              <ellipse cx="26" cy="22" rx="14" ry="8" fill="#E8601C"/>
-              <path d="M32,20 C30,10 36,4 44,4 C52,4 57,10 56,16 C55,19 53,21 50,22 C45,23 38,24 32,20 Z" fill="#E8601C"/>
-              <circle cx="48" cy="13" r="1.3" fill="#1E1F47"/>
-              <path class="wing-up" d="M18,18 C16,6 26,-2 36,1 C31,7 29,13 29,19 Z" fill="#1E1F47"/>
-              <path class="wing-down" d="M18,24 C16,36 26,43 36,40 C31,34 29,29 29,24 Z" fill="#1E1F47"/>
+            <g transform="scale(-1,1) translate(-32,-24)">
+              <path d="M12,26 L0,22 L1,33 L13,31 Z" fill="#15162B"/>
+              <path d="M10,28 C12,22 22,19 34,20 C42,21 46,25 45,29 C44,33 36,36 26,36 C18,36 11,33 10,28 Z" fill="#EE4B1C"/>
+              <path d="M38,23 C36,14 41,7 49,7 C57,7 61,14 60,20 C59,25 56,28 52,29 C47,28 42,27 38,23 Z" fill="#EE4B1C"/>
+              <path d="M43,17 C44,12 47,10 50,10 C54,10 57,13 57,17" fill="none" stroke="#FF7A45" stroke-width="1.2" stroke-linecap="round"/>
+              <g class="wing-up">
+                <path d="M19,23 C16,11 24,1 43,-3 C37,5 34,14 33,23 Z" fill="#15162B"/>
+                <path d="M22,22 C22,16 25,12 30,11 C29,15 29,19 29,23 Z" fill="#B9BCCB"/>
+              </g>
+              <g class="wing-down">
+                <path d="M19,30 C16,41 24,50 43,53 C37,46 34,38 33,30 Z" fill="#15162B"/>
+                <path d="M22,31 C22,36 25,40 30,41 C29,37 29,33 29,30 Z" fill="#B9BCCB"/>
+              </g>
+              <circle cx="52.5" cy="18" r="1.9" fill="#F6E7A8"/><circle cx="53" cy="18" r=".9" fill="#15162B"/>
             </g>
           </g>
         </g>
@@ -186,7 +197,7 @@
     </div>
     <figcaption>
       <b>D · Amanecer + vuelo (tu mezcla)</b>
-      <span>Sale el sol sobre los cerros, el gallito despega de su rama, vuela al centro y se convierte en el punto de la «i».</span>
+      <span>Sale el sol sobre los cerros, el gallito de las rocas despega de su rama, vuela al centro y se convierte en el punto de la «i».</span>
     </figcaption>
     <button type="button" data-replay>Repetir</button>
   </figure>
