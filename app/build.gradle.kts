@@ -21,8 +21,25 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    // Clave de firma del APK que se descarga desde la web. Sus datos viven en ~/.gradle/gradle.properties
+    // (INTU_KEYSTORE_*), nunca en el repositorio. Sin ellos, el release sale sin firmar.
+    val releaseKeystore = providers.gradleProperty("INTU_KEYSTORE_FILE").orNull
+    signingConfigs {
+        if (releaseKeystore != null) {
+            create("release") {
+                storeFile = file(releaseKeystore)
+                storePassword = providers.gradleProperty("INTU_KEYSTORE_PASSWORD").get()
+                keyAlias = providers.gradleProperty("INTU_KEY_ALIAS").get()
+                keyPassword = providers.gradleProperty("INTU_KEY_PASSWORD").get()
+            }
+        }
+    }
+
     buildTypes {
         release {
+            if (releaseKeystore != null) signingConfig = signingConfigs.getByName("release")
+            // Solo celulares (ARM): las librerías x86 son para emuladores y casi duplican el tamaño del APK
+            ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
