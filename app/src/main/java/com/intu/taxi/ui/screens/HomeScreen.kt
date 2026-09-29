@@ -42,6 +42,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material.icons.outlined.DirectionsCar
 import androidx.compose.foundation.background
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.runtime.Composable
@@ -2239,11 +2242,41 @@ fun HomeScreen(
                         }
                     }
                     Text("Total: ${com.intu.taxi.ui.formatSoles(ride.fare)}")
-                    Text(
-                        if (ride.paymentMethod == "yape_plin") {
-                            "Pago por Yape al conductor${if (ride.driverPhone.isNotBlank()) ": ${ride.driverPhone}" else ""}"
-                        } else "Pago en efectivo al conductor"
-                    )
+                    val yapeNumber = com.intu.taxi.ui.peruLocalPhone(ride.driverPhone)
+                    if (ride.paymentMethod == "yape_plin" && yapeNumber.isNotBlank()) {
+                        // Número del conductor sin +51; al tocarlo se copia para pegarlo en Yape o Plin
+                        val clipboard = LocalClipboardManager.current
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0xFFF3EEFB))
+                                .clickable(onClickLabel = "Copiar número de Yape") {
+                                    clipboard.setText(AnnotatedString(yapeNumber))
+                                    Toast.makeText(context, "Número copiado. Pégalo en Yape o Plin", Toast.LENGTH_SHORT).show()
+                                }
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Paga por Yape o Plin a", style = MaterialTheme.typography.bodySmall, color = Color(0xFF5F6570))
+                                Text(
+                                    com.intu.taxi.ui.formatPeruPhone(ride.driverPhone),
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF1E1F47)
+                                )
+                                Text("Toca para copiar el número", style = MaterialTheme.typography.bodySmall, color = Color(0xFF6F2DBD))
+                            }
+                            Icon(
+                                Icons.Filled.ContentCopy,
+                                contentDescription = null,
+                                tint = Color(0xFF6F2DBD)
+                            )
+                        }
+                    } else {
+                        Text(if (ride.paymentMethod == "yape_plin") "Pago por Yape o Plin al conductor" else "Pago en efectivo al conductor")
+                    }
                     if (ride.status == "accepted" || ride.status == "arrived") {
                         OutlinedButton(
                             onClick = { showCancelRideDialog = true },
