@@ -20,7 +20,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="preload" as="image" href="/img/mototaxi-satipo-1100.webp" imagesrcset="/img/mototaxi-satipo-640.webp 640w, /img/mototaxi-satipo-1100.webp 1100w" imagesizes="(min-width: 900px) 46vw, 100vw">
+  <link rel="preload" as="image" href="/img/portada-satipo-1100.webp" imagesrcset="/img/portada-satipo-640.webp 640w, /img/portada-satipo-1100.webp 1100w" imagesizes="(min-width: 900px) 46vw, 100vw">
   <style>
     :root {
       --teal: #08817E;
@@ -132,7 +132,7 @@
     }
     .hero-photo img { width: 100%; height: 100%; object-fit: cover; }
     .toast {
-      position: absolute; left: -12px; top: 26px;
+      position: absolute; left: -12px; top: 36%;
       display: flex; gap: 12px; align-items: center;
       background: rgba(255, 255, 255, .96); border-radius: 18px; padding: 12px 16px 12px 12px;
       box-shadow: 0 18px 40px -16px rgba(16, 24, 40, .45);
@@ -247,9 +247,19 @@
       .nav-links a:not(.btn) { display: none; }
       .btn-download { width: 100%; }
       .cta { justify-items: stretch; }
-      .toast { left: 12px; right: 12px; top: 12px; max-width: none; }
+      .toast { left: 12px; right: 12px; top: 36%; max-width: none; }
       .pin { right: 12px; bottom: 12px; }
     }
+    /* Zonas: Satipo y Río Negro */
+    .zones { display: grid; gap: 18px; }
+    .zone { position: relative; margin: 0; border-radius: var(--radius); overflow: hidden; background: var(--indigo); aspect-ratio: 3 / 2; }
+    .zone img { width: 100%; height: 100%; object-fit: cover; transition: transform 1.2s cubic-bezier(.2, .8, .2, 1); }
+    .zone:hover img { transform: scale(1.04); }
+    .zone figcaption { position: absolute; left: 0; right: 0; bottom: 0; padding: 48px 24px 20px; color: #fff; background: linear-gradient(to top, rgba(18, 19, 44, .85), rgba(18, 19, 44, 0)); }
+    .zone h3 { color: #fff; font-size: 24px; }
+    .zone p { color: #E4E6F0; font-size: 15px; margin-top: 4px; }
+    @media (min-width: 720px) { .zones { grid-template-columns: 1fr 1fr; } }
+
     /* ---------- Animaciones (sutiles, con el gallito de las rocas) ---------- */
     .brand-mark { width: 36px; height: 36px; flex: none; }
     .brand-dot { transform-box: fill-box; transform-origin: center; }
@@ -317,6 +327,7 @@
       <nav class="nav-links" aria-label="Secciones">
         <a href="#como-funciona">Cómo funciona</a>
         <a href="#conductores">Conductores</a>
+        <a href="#zonas">Zonas</a>
         <a href="#instalar">Instalar</a>
         <a class="btn btn-sm" href="/descargar" data-download>Descargar</a>
       </nav>
@@ -327,7 +338,7 @@
     <section class="hero">
       <div class="wrap hero-grid">
         <div class="hero-copy">
-          <span class="eyebrow">Satipo · Perú</span>
+          <span class="eyebrow">Satipo · Río Negro</span>
           <h1>Tu mototaxi,<br><em>a un toque.</em></h1>
           <p class="lede">Pide un mototaxi desde tu celular, ve cuánto cuesta antes de pedir y míralo llegar en el mapa. Pagas en efectivo o con Yape/Plin. La app es gratis.</p>
           <div class="cta">
@@ -347,7 +358,7 @@
 
         <div class="hero-visual">
           <div class="hero-photo">
-            <img src="/img/mototaxi-satipo-1100.webp" srcset="/img/mototaxi-satipo-640.webp 640w, /img/mototaxi-satipo-1100.webp 1100w" sizes="(min-width: 900px) 46vw, 100vw" width="1100" height="1366" alt="Una pasajera sube a un mototaxi turquesa en una calle de Satipo, con la selva al fondo">
+            <img src="/img/portada-satipo-1100.webp" srcset="/img/portada-satipo-640.webp 640w, /img/portada-satipo-1100.webp 1100w" sizes="(min-width: 900px) 46vw, 100vw" width="1100" height="1366" alt="Una pasajera sube a un mototaxi turquesa en la Plaza de Armas de Satipo, con la torre amarilla y su fuente al fondo">
           </div>
           <div class="toast" aria-hidden="true">
             <img class="app" src="/favicon.svg" alt="">
@@ -413,6 +424,26 @@
       </div>
     </section>
 
+    <section id="zonas" class="section" style="padding-top: 0;">
+      <div class="wrap">
+        <div class="section-head reveal">
+          <span class="eyebrow">Dónde estamos</span>
+          <h2>Empezamos en Satipo y Río Negro</h2>
+          <p>Por ahora Intu funciona en la ciudad de Satipo y en Río Negro, con mototaxistas de la zona.</p>
+        </div>
+        <div class="zones">
+          <figure class="zone reveal">
+            <img src="/img/zona-satipo-1200.webp" srcset="/img/zona-satipo-600.webp 600w, /img/zona-satipo-1200.webp 1200w" sizes="(min-width: 720px) 46vw, 100vw" width="1200" height="800" loading="lazy" alt="Plaza de Armas de Satipo al anochecer, con su torre amarilla iluminada y mototaxis esperando pasajeros">
+            <figcaption><h3>Satipo</h3><p>Desde la Plaza de Armas hasta cualquier punto de la ciudad.</p></figcaption>
+          </figure>
+          <figure class="zone reveal">
+            <img src="/img/zona-rionegro-1200.webp" srcset="/img/zona-rionegro-600.webp 600w, /img/zona-rionegro-1200.webp 1200w" sizes="(min-width: 720px) 46vw, 100vw" width="1200" height="800" loading="lazy" alt="Avenida principal de Río Negro con palmeras, la plaza y mototaxis circulando">
+            <figcaption><h3>Río Negro</h3><p>La avenida principal, la plaza y sus alrededores.</p></figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
     <section id="conductores" class="section" style="padding-top: 0;">
       <div class="wrap">
         <div class="drivers reveal">
@@ -430,7 +461,7 @@
               <div><a class="btn btn-light" href="/descargar" data-download>Descargar la app</a></div>
             </div>
             <div class="drivers-photo">
-              <img src="/img/conductor-900.webp" srcset="/img/conductor-560.webp 560w, /img/conductor-900.webp 900w" sizes="(min-width: 900px) 42vw, 100vw" width="900" height="1117" loading="lazy" alt="Conductor de mototaxi sonriendo en su mototaxi turquesa, con el celular en el manubrio">
+              <img src="/img/conductor-rionegro-900.webp" srcset="/img/conductor-rionegro-560.webp 560w, /img/conductor-rionegro-900.webp 900w" sizes="(min-width: 900px) 42vw, 100vw" width="900" height="1117" loading="lazy" alt="Conductor de mototaxi sonriendo con su celular junto a su torito turquesa y blanco, en la plaza de Río Negro">
             </div>
           </div>
         </div>
@@ -547,7 +578,7 @@
     const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     // Aparición al llegar a cada sección; los elementos de una misma lista entran uno tras otro
-    document.querySelectorAll('.steps, .features, .install-steps, .faq').forEach(group => {
+    document.querySelectorAll('.steps, .features, .zones, .install-steps, .faq').forEach(group => {
       [...group.children].forEach((el, i) => el.style.setProperty('--d', (i * 90) + 'ms'));
     });
     const revealItems = document.querySelectorAll('.reveal');
