@@ -28,8 +28,10 @@ npx.cmd wrangler r2 object put intu-apk/intu.apk --file ..\app\build\outputs\apk
 ## Publicar la página
 
 ```powershell
-npx.cmd wrangler pages deploy
+npx.cmd wrangler pages deploy --branch main
 ```
+Sin `--branch main`, wrangler usa la rama de git actual (`codex/intu-mvp`) y publica solo una vista previa;
+`viajaconintu.pages.dev` mostraría «Nothing is here yet».
 
 ## Probar en la computadora
 
