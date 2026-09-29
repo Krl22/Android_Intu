@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script>document.documentElement.classList.add('js');</script>
   <title>Intu · Tu mototaxi en Satipo, a un toque</title>
   <meta name="description" content="Descarga Intu para Android: pide un mototaxi en Satipo, sigue a tu conductor en el mapa y paga en efectivo o con Yape/Plin.">
   <meta name="theme-color" content="#08817E">
@@ -249,16 +250,69 @@
       .toast { left: 12px; right: 12px; top: 12px; max-width: none; }
       .pin { right: 12px; bottom: 12px; }
     }
+    /* ---------- Animaciones (sutiles, con el gallito de las rocas) ---------- */
+    .brand-mark { width: 36px; height: 36px; flex: none; }
+    .brand-dot { transform-box: fill-box; transform-origin: center; }
+    html.intro .brand-dot { opacity: 0; }
+    .brand-dot.pop { animation: dot-pop .55s cubic-bezier(.3, 1.4, .5, 1) both; }
+    @keyframes dot-pop { 0% { transform: scale(.2); opacity: 0; } 60% { transform: scale(1.3); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+
+    /* Al abrir la página: el gallito cruza volando y se vuelve el punto dorado del logo */
+    .intro-bird { position: fixed; left: 0; top: 0; width: 84px; height: 88px; z-index: 50; pointer-events: none; opacity: 0; will-change: transform; }
+    .intro-bird img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+    .intro-bird .wing-b { opacity: 0; }
+    .intro-bird.flying { opacity: 1; }
+    .intro-bird.flying .wing-a { animation: flap-a .2s steps(1) infinite; }
+    .intro-bird.flying .wing-b { animation: flap-b .2s steps(1) infinite; }
+    @keyframes flap-a { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
+    @keyframes flap-b { 0%, 49% { opacity: 0; } 50%, 100% { opacity: 1; } }
+
+    /* Títulos y tarjetas aparecen suavemente al llegar a ellos */
+    .js .reveal { opacity: 0; transform: translateY(18px); transition: opacity .7s ease var(--d, 0ms), transform .7s cubic-bezier(.2, .8, .2, 1) var(--d, 0ms); }
+    .js .reveal.in { opacity: 1; transform: none; }
+
+    /* Foto de portada: acercamiento muy lento */
+    .hero-photo img { animation: drift 18s ease-in-out infinite alternate; transform-origin: 62% 45%; }
+    @keyframes drift { from { transform: scale(1.02); } to { transform: scale(1.08) translate(-1%, -1%); } }
+
+    /* Cierre: cerros de Satipo al amanecer con el gallito posado, como en el splash de la app */
+    .final { position: relative; overflow: hidden; padding-bottom: 170px; }
+    .final > :not(.final-scene) { position: relative; z-index: 1; }
+    .final-scene { position: absolute; left: 0; right: 0; bottom: 0; height: 150px; pointer-events: none; }
+    .final-scene svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+    .final-scene .sun { animation: glow 6s ease-in-out infinite; }
+    @keyframes glow { 0%, 100% { opacity: .7; } 50% { opacity: 1; } }
+    .final-bird { position: absolute; right: 14%; bottom: 74px; height: 100px; width: auto; transform: scaleX(-1); transform-origin: 50% 100%; }
+    .final.in .final-bird { animation: breathe 4.5s 1.4s ease-in-out infinite; }
+    @keyframes breathe { 0%, 100% { transform: scaleX(-1) scaleY(1); } 50% { transform: scaleX(-1) scaleY(1.035); } }
+    .js .final .hill { transform: translateY(46px); transition: transform 1.1s cubic-bezier(.2, .8, .2, 1) var(--hd, 0ms); }
+    .js .final.in .hill { transform: none; }
+    .js .final .sun-wrap { opacity: 0; transition: opacity 1.4s ease .2s; }
+    .js .final.in .sun-wrap { opacity: 1; }
+    .js .final .final-bird { opacity: 0; transition: opacity .6s ease .9s; }
+    .js .final.in .final-bird { opacity: 1; }
+    @media (max-width: 719px) {
+      .final { padding-bottom: 150px; }
+      .final-scene { height: 116px; }
+      .final-bird { height: 74px; bottom: 58px; right: 8%; }
+    }
+
     @media (prefers-reduced-motion: reduce) {
+      .js .reveal, .js .final .hill, .js .final .sun-wrap, .js .final .final-bird { opacity: 1; transform: none; }
+      .final-bird { transform: scaleX(-1); }
       *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
     }
   </style>
 </head>
 <body>
+  <div class="intro-bird" aria-hidden="true">
+    <img class="wing-a" src="/img/gallito-vuelo-1.webp" alt="">
+    <img class="wing-b" src="/img/gallito-vuelo-2.webp" alt="">
+  </div>
   <header id="top">
     <div class="wrap nav">
       <a class="brand" href="#" aria-label="Intu, inicio">
-        <img src="/favicon.svg" alt="" width="36" height="36">intu
+        <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="16" fill="#08817E"/><rect x="26" y="27" width="12" height="25" rx="6" fill="#fff"/><circle class="brand-dot" cx="32" cy="16" r="7" fill="#EFB11B"/></svg>intu
       </a>
       <nav class="nav-links" aria-label="Secciones">
         <a href="#como-funciona">Cómo funciona</a>
@@ -306,21 +360,21 @@
 
     <section class="section" id="como-funciona" style="padding-top: 24px;">
       <div class="wrap">
-        <div class="section-head">
+        <div class="section-head reveal">
           <span class="eyebrow">Cómo funciona</span>
           <h2>Pedir un mototaxi nunca fue tan fácil</h2>
           <p>Sin llamar, sin esperar en la esquina y sin sorpresas en el precio.</p>
         </div>
         <div class="steps">
-          <article class="card step">
+          <article class="card step reveal">
             <h3>Elige a dónde vas</h3>
             <p>Marca tu destino en el mapa y mira el precio del viaje antes de pedirlo.</p>
           </article>
-          <article class="card step">
+          <article class="card step reveal">
             <h3>Un conductor acepta</h3>
             <p>Ves su foto, su mototaxi y la placa, y lo sigues en el mapa mientras llega. Te avisamos aunque tengas el celular guardado.</p>
           </article>
-          <article class="card step">
+          <article class="card step reveal">
             <h3>Viaja y paga</h3>
             <p>Dale tu PIN al conductor para empezar, llega a tu destino y paga en efectivo o con Yape/Plin.</p>
           </article>
@@ -330,27 +384,27 @@
 
     <section class="section" style="padding-top: 0;">
       <div class="wrap">
-        <div class="section-head">
+        <div class="section-head reveal">
           <span class="eyebrow">Viaja tranquilo</span>
           <h2>Pensado para tu seguridad</h2>
         </div>
         <div class="features">
-          <article class="card feature">
+          <article class="card feature reveal">
             <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg></div>
             <h3>Conductores aprobados</h3>
             <p>Cada conductor se registra con su DNI, licencia y mototaxi, y Intu lo revisa antes de que pueda recibir viajes.</p>
           </article>
-          <article class="card feature">
+          <article class="card feature reveal">
             <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></div>
             <h3>PIN para empezar</h3>
             <p>El viaje solo empieza cuando le dices al conductor tu PIN de 4 dígitos. Así sabes que subiste al mototaxi correcto.</p>
           </article>
-          <article class="card feature">
+          <article class="card feature reveal">
             <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-6.2-7-12a7 7 0 0 1 14 0c0 5.8-7 12-7 12z"/><circle cx="12" cy="9" r="2.5"/></svg></div>
             <h3>En vivo en el mapa</h3>
             <p>Sigues a tu conductor en tiempo real desde que acepta hasta que llegas a tu destino.</p>
           </article>
-          <article class="card feature">
+          <article class="card feature reveal">
             <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.7 5.5 6 .9-4.3 4.2 1 6-5.4-2.8-5.4 2.8 1-6L3.3 9.4l6-.9z"/></svg></div>
             <h3>Calificaciones</h3>
             <p>Pasajeros y conductores se califican después de cada viaje para mantener un buen servicio.</p>
@@ -361,7 +415,7 @@
 
     <section id="conductores" class="section" style="padding-top: 0;">
       <div class="wrap">
-        <div class="drivers">
+        <div class="drivers reveal">
           <div class="drivers-grid">
             <div class="drivers-copy">
               <span class="eyebrow">Para conductores</span>
@@ -385,7 +439,7 @@
 
     <section id="instalar" class="section" style="padding-top: 0;">
       <div class="wrap">
-        <div class="section-head">
+        <div class="section-head reveal">
           <span class="eyebrow">Instalar</span>
           <h2>Instálala en 1 minuto</h2>
           <p>Intu se descarga desde aquí, no desde Play Store. Por eso tu celular te pedirá un permiso la primera vez.</p>
@@ -393,14 +447,14 @@
         <div class="install-grid">
           <div style="display: grid; gap: 14px;">
             <ol class="install-steps">
-              <li><div><b>Toca «Descargar»</b><p>Si Chrome te pregunta, elige «Descargar de todos modos».</p></div></li>
-              <li><div><b>Abre el archivo Intu.apk</b><p>Tócalo en la notificación de descarga o en tu carpeta de Descargas.</p></div></li>
-              <li><div><b>Permite la instalación</b><p>Si aparece «Instalar apps desconocidas», toca «Configuración», activa «Permitir de esta fuente» y vuelve atrás.</p></div></li>
-              <li><div><b>Toca «Instalar» y abre Intu</b><p>Si Play Protect muestra un aviso, toca «Más detalles» y luego «Instalar de todos modos». Entra con tu número de celular o con Google.</p></div></li>
+              <li class="reveal"><div><b>Toca «Descargar»</b><p>Si Chrome te pregunta, elige «Descargar de todos modos».</p></div></li>
+              <li class="reveal"><div><b>Abre el archivo Intu.apk</b><p>Tócalo en la notificación de descarga o en tu carpeta de Descargas.</p></div></li>
+              <li class="reveal"><div><b>Permite la instalación</b><p>Si aparece «Instalar apps desconocidas», toca «Configuración», activa «Permitir de esta fuente» y vuelve atrás.</p></div></li>
+              <li class="reveal"><div><b>Toca «Instalar» y abre Intu</b><p>Si Play Protect muestra un aviso, toca «Más detalles» y luego «Instalar de todos modos». Entra con tu número de celular o con Google.</p></div></li>
             </ol>
-            <p class="tip"><b>Para actualizar:</b> descarga Intu de nuevo desde esta página e instálala encima. No pierdes tu cuenta ni tus viajes.</p>
+            <p class="tip reveal"><b>Para actualizar:</b> descarga Intu de nuevo desde esta página e instálala encima. No pierdes tu cuenta ni tus viajes.</p>
           </div>
-          <aside class="qr-card" aria-label="Código QR para descargar">
+          <aside class="qr-card reveal" aria-label="Código QR para descargar">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 29 29" shape-rendering="crispEdges" role="img" aria-label="Código QR de viajaconintu.pages.dev/descargar"><path stroke="#1E1F47" d="M0 0.5h7m4 0h1m2 0h1m1 0h1m1 0h3m1 0h7M0 1.5h1m5 0h1m2 0h2m2 0h1m1 0h2m1 0h1m3 0h1m5 0h1M0 2.5h1m1 0h3m1 0h1m1 0h1m1 0h3m2 0h1m6 0h1m1 0h3m1 0h1M0 3.5h1m1 0h3m1 0h1m1 0h4m1 0h3m1 0h1m2 0h1m1 0h1m1 0h3m1 0h1M0 4.5h1m1 0h3m1 0h1m1 0h3m5 0h1m1 0h3m1 0h1m1 0h3m1 0h1M0 5.5h1m5 0h1m1 0h1m1 0h2m1 0h5m4 0h1m5 0h1M0 6.5h7m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h7M8 7.5h1m1 0h1m1 0h1m1 0h1m4 0h2M0 8.5h1m1 0h5m3 0h1m1 0h4m1 0h1m1 0h1m2 0h5M2 9.5h2m1 0h1m1 0h1m4 0h1m3 0h1m1 0h2m1 0h4m3 0h1M0 10.5h4m2 0h1m1 0h3m4 0h2m3 0h2M0 11.5h2m2 0h2m1 0h1m2 0h1m1 0h1m1 0h1m5 0h1m4 0h1m1 0h1M4 12.5h1m1 0h3m2 0h7m2 0h1m4 0h2M0 13.5h3m1 0h1m3 0h2m2 0h1m1 0h1m1 0h1m2 0h6m3 0h1M1 14.5h2m3 0h1m1 0h1m1 0h4m1 0h4m2 0h1m1 0h4M1 15.5h2m2 0h1m1 0h1m1 0h3m3 0h2m3 0h1m1 0h1m1 0h1m2 0h1M2 16.5h3m1 0h1m1 0h1m1 0h3m2 0h1m1 0h2m1 0h1m4 0h2M0 17.5h1m3 0h2m1 0h3m2 0h2m2 0h9m1 0h1m1 0h1M0 18.5h1m1 0h1m1 0h4m1 0h7m1 0h1m4 0h3m1 0h1M0 19.5h1m8 0h1m1 0h1m1 0h1m1 0h2m1 0h3m1 0h1m4 0h1M0 20.5h1m1 0h6m2 0h3m1 0h2m1 0h1m1 0h6m1 0h3M8 21.5h2m1 0h1m4 0h1m1 0h1m1 0h1m3 0h5M0 22.5h7m3 0h3m2 0h2m2 0h2m1 0h1m1 0h3M0 23.5h1m5 0h1m1 0h1m1 0h3m1 0h1m1 0h1m1 0h3m3 0h1m2 0h1M0 24.5h1m1 0h3m1 0h1m1 0h1m1 0h3m4 0h1m2 0h5m1 0h3M0 25.5h1m1 0h3m1 0h1m1 0h3m1 0h3m3 0h2m5 0h4M0 26.5h1m1 0h3m1 0h1m1 0h4m1 0h1m1 0h1m4 0h8M0 27.5h1m5 0h1m3 0h5m1 0h1m3 0h1m1 0h1m2 0h1m1 0h1M0 28.5h7m1 0h1m1 0h1m1 0h1m1 0h4m1 0h1m1 0h6"/></svg>
             <h3>¿Estás en la computadora?</h3>
             <p>Escanea este código con la cámara de tu celular Android para descargar Intu.</p>
@@ -411,32 +465,32 @@
 
     <section class="section" style="padding-top: 0;">
       <div class="wrap">
-        <div class="section-head">
+        <div class="section-head reveal">
           <span class="eyebrow">Preguntas frecuentes</span>
           <h2>¿Tienes dudas?</h2>
         </div>
         <div class="faq">
-          <details>
+          <details class="reveal">
             <summary>¿Cuánto cuesta la app?</summary>
             <p>Descargar e instalar Intu es gratis. Solo pagas tus viajes, y ves el precio antes de pedir cada uno.</p>
           </details>
-          <details>
+          <details class="reveal">
             <summary>¿Por qué no está en Play Store?</summary>
             <p>Estamos empezando en Satipo y por ahora la compartimos directamente desde esta página. Es la misma app, firmada por Intu, y se actualiza descargándola de nuevo desde aquí.</p>
           </details>
-          <details>
+          <details class="reveal">
             <summary>¿Funciona en iPhone?</summary>
             <p>Por ahora no. Intu está disponible para celulares Android 7 o superior.</p>
           </details>
-          <details>
+          <details class="reveal">
             <summary>¿Cómo pago el viaje?</summary>
             <p>Al pedir eliges si pagarás en efectivo o con Yape/Plin, y le pagas directamente al conductor al llegar.</p>
           </details>
-          <details>
+          <details class="reveal">
             <summary>¿Qué necesito para ser conductor?</summary>
             <p>Tu DNI, tu licencia de conducir y los datos de tu mototaxi (marca, modelo y placa). Te registras desde la app y empiezas a recibir viajes cuando Intu aprueba tu cuenta.</p>
           </details>
-          <details>
+          <details class="reveal">
             <summary>¿Por qué me pide permiso de ubicación y notificaciones?</summary>
             <p>La ubicación sirve para marcar dónde te recogen y, si eres conductor, para que los pasajeros te vean llegar. Las notificaciones te avisan cuando tu conductor acepta, llega o termina el viaje.</p>
           </details>
@@ -446,11 +500,23 @@
 
     <section class="section" style="padding-top: 0;">
       <div class="wrap">
-        <div class="final">
+        <div class="final reveal">
           <h2>Tu próximo viaje en Satipo empieza aquí</h2>
           <p>Descarga Intu y pide tu primer mototaxi en minutos.</p>
           <a class="btn btn-light" href="/descargar" data-download>Descargar gratis para Android</a>
           <div class="meta" data-apk-meta><span>Android 7 o superior</span><span>Archivo APK</span></div>
+          <div class="final-scene" aria-hidden="true">
+            <svg viewBox="0 0 300 120" preserveAspectRatio="none">
+              <defs>
+                <radialGradient id="final-sun"><stop offset="0" stop-color="#EFB11B" stop-opacity=".55"/><stop offset="1" stop-color="#EFB11B" stop-opacity="0"/></radialGradient>
+              </defs>
+              <g class="sun-wrap"><ellipse class="sun" cx="120" cy="40" rx="90" ry="60" fill="url(#final-sun)"/></g>
+              <path class="hill" style="--hd: 0ms" d="M0,50 C55,22 105,34 150,18 C200,2 245,24 300,10 L300,120 L0,120 Z" fill="#fff" fill-opacity=".08"/>
+              <path class="hill" style="--hd: 120ms" d="M0,78 C48,58 95,70 140,54 C188,38 236,66 300,50 L300,120 L0,120 Z" fill="#076966"/>
+              <path class="hill" style="--hd: 240ms" d="M0,104 C65,86 112,104 178,90 C225,80 262,94 300,88 L300,120 L0,120 Z" fill="#055755"/>
+            </svg>
+            <img class="final-bird" src="/img/gallito-posado.webp" alt="" width="420" height="484" loading="lazy">
+          </div>
         </div>
       </div>
     </section>
@@ -476,6 +542,62 @@
     const isAndroid = /Android/i.test(ua);
     if (isIOS) document.querySelectorAll('[data-ios-note]').forEach(el => el.classList.add('show'));
     if (!isIOS && !isAndroid) document.body.classList.add('desktop');
+
+    // ---------- Animaciones ----------
+    const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    // Aparición al llegar a cada sección; los elementos de una misma lista entran uno tras otro
+    document.querySelectorAll('.steps, .features, .install-steps, .faq').forEach(group => {
+      [...group.children].forEach((el, i) => el.style.setProperty('--d', (i * 90) + 'ms'));
+    });
+    const revealItems = document.querySelectorAll('.reveal');
+    if (reduceMotion || !('IntersectionObserver' in window)) {
+      revealItems.forEach(el => el.classList.add('in'));
+    } else {
+      const io = new IntersectionObserver(entries => entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('in');
+          io.unobserve(entry.target);
+        }
+      }), { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+      revealItems.forEach(el => io.observe(el));
+    }
+
+    // Al abrir la página (una vez por visita): el gallito cruza volando y se vuelve el punto del logo
+    function introFlight() {
+      const dot = document.querySelector('.brand-dot');
+      const bird = document.querySelector('.intro-bird');
+      if (!dot || !bird || reduceMotion || !bird.animate) return;
+      try {
+        if (sessionStorage.getItem('intu-gallito')) return;
+        sessionStorage.setItem('intu-gallito', '1');
+      } catch (e) { /* sin almacenamiento: igual se muestra */ }
+      const root = document.documentElement;
+      root.classList.add('intro');
+      const safety = setTimeout(() => root.classList.remove('intro'), 5000);
+      const r = dot.getBoundingClientRect();
+      const end = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+      const start = { x: innerWidth + 70, y: Math.min(innerHeight * 0.42, 380) };
+      const ctrl = { x: innerWidth * 0.45, y: Math.max(end.y - 24, 8) };
+      const frames = [];
+      for (let i = 0; i <= 20; i++) {
+        const t = i / 20, u = 1 - t;
+        const x = u * u * start.x + 2 * u * t * ctrl.x + t * t * end.x;
+        const y = u * u * start.y + 2 * u * t * ctrl.y + t * t * end.y;
+        const s = 1 - 0.85 * t * t;
+        // Mira hacia donde vuela (las imágenes miran a la derecha)
+        frames.push({ offset: t, opacity: t > 0.93 ? 0 : 1, transform: `translate(${x}px, ${y}px) translate(-50%, -50%) scale(${-s}, ${s})` });
+      }
+      bird.classList.add('flying');
+      bird.animate(frames, { duration: 1800, easing: 'cubic-bezier(.45, .05, .35, 1)', fill: 'forwards' }).finished.then(() => {
+        bird.remove();
+        clearTimeout(safety);
+        root.classList.remove('intro');
+        dot.classList.add('pop');
+      });
+    }
+    if (document.readyState === 'complete') setTimeout(introFlight, 350);
+    else addEventListener('load', () => setTimeout(introFlight, 350));
 
     // Tamaño y fecha del APK publicado
     fetch('/api/apk').then(r => r.ok ? r.json() : null).then(info => {
