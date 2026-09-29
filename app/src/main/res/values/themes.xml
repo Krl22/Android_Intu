@@ -2,4 +2,10 @@
 <resources>
 
     <style name="Theme.Intu" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <!-- Solo mientras abre la app: el mismo turquesa del splash animado, sin parpadeo blanco.
+         MainActivity cambia a Theme.Intu al crearse. -->
+    <style name="Theme.Intu.Starting">
+        <item name="android:windowBackground">@color/intu_splash</item>
+    </style>
 </resources>

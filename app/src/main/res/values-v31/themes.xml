@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 12+: el splash del sistema queda turquesa y sin ícono; enseguida empieza el animado -->
+    <style name="Theme.Intu.Starting">
+        <item name="android:windowBackground">@color/intu_splash</item>
+        <item name="android:windowSplashScreenBackground">@color/intu_splash</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_blank</item>
+    </style>
+</resources>

@@ -12,6 +12,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -57,6 +58,8 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // El tema de arranque (turquesa, sin ícono) solo cubre el instante antes del splash animado
+        setTheme(R.style.Theme_Intu)
         super.onCreate(savedInstanceState)
         com.intu.taxi.push.PushNotifications.createChannel(this)
         enableEdgeToEdge()
@@ -137,49 +140,46 @@ fun IntuApp() {
             composable("splash") {
                 bottomBarVisible = false
                 val ctx = LocalContext.current
-                val current = auth.currentUser
-                androidx.compose.runtime.LaunchedEffect(current) {
-                    if (current == null) {
-                        navController.navigate("login") {
-                            popUpTo("splash") { inclusive = true }
-                        }
+                // Mientras corre la animación se revisa la sesión; se navega cuando ambas cosas terminaron
+                var destination by remember { mutableStateOf<String?>(null) }
+                var splashDone by remember { mutableStateOf(false) }
+                LaunchedEffect(Unit) {
+                    val current = auth.currentUser
+                    destination = if (current == null) {
+                        "login"
                     } else {
-                        scope.launch {
-                            try {
-                                val uid = current.uid
-                                val existing = try { repo.getUserProfile(uid) } catch (_: Exception) { null }
-                                val isComplete = existing?.let {
-                                    it.firstName.isNotBlank() && it.lastName.isNotBlank() && it.birthdate.isNotBlank() && it.number.isNotBlank()
-                                } ?: false
-                                if (isComplete) {
-                                    // Mantiene el nombre al día en Supabase para los viajes; si falla, no bloquea
-                                    scope.launch { runCatching { repo.syncProfileToSupabase(uid) } }
-                                    bottomBarVisible = true
-                                    navController.navigate(NavItem.Home.route) {
-                                        popUpTo("splash") { inclusive = true }
-                                    }
-                                } else {
-                                    navController.navigate("profile_completion_phone") {
-                                        popUpTo("splash") { inclusive = true }
-                                    }
-                                }
-                            } catch (t: Throwable) {
-                                android.widget.Toast.makeText(
-                                    ctx,
-                                    t.message ?: "Error al verificar perfil",
-                                    android.widget.Toast.LENGTH_LONG
-                                ).show()
-                                bottomBarVisible = true
-                                navController.navigate(NavItem.Home.route) {
-                                    popUpTo("splash") { inclusive = true }
-                                }
+                        try {
+                            val uid = current.uid
+                            val existing = try { repo.getUserProfile(uid) } catch (_: Exception) { null }
+                            val isComplete = existing?.let {
+                                it.firstName.isNotBlank() && it.lastName.isNotBlank() && it.birthdate.isNotBlank() && it.number.isNotBlank()
+                            } ?: false
+                            if (isComplete) {
+                                // Mantiene el nombre al día en Supabase para los viajes; si falla, no bloquea
+                                scope.launch { runCatching { repo.syncProfileToSupabase(uid) } }
+                                NavItem.Home.route
+                            } else {
+                                "profile_completion_phone"
                             }
+                        } catch (t: Throwable) {
+                            android.widget.Toast.makeText(
+                                ctx,
+                                t.message ?: "Error al verificar perfil",
+                                android.widget.Toast.LENGTH_LONG
+                            ).show()
+                            NavItem.Home.route
                         }
                     }
                 }
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
+                LaunchedEffect(destination, splashDone) {
+                    val next = destination ?: return@LaunchedEffect
+                    if (!splashDone) return@LaunchedEffect
+                    if (next == NavItem.Home.route) bottomBarVisible = true
+                    navController.navigate(next) {
+                        popUpTo("splash") { inclusive = true }
+                    }
                 }
+                com.intu.taxi.ui.screens.IntuSplash(onFinished = { splashDone = true })
             }
             // Pantalla de login
             composable("login") {

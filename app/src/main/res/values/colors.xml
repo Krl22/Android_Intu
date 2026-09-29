@@ -9,4 +9,6 @@
     <color name="white">#FFFFFFFF</color>
     <!-- Color de los avisos push de Intu -->
     <color name="intu_teal">#FF08817E</color>
+    <!-- Fondo del arranque: tono medio del degradado del splash animado -->
+    <color name="intu_splash">#FF08807C</color>
 </resources>
