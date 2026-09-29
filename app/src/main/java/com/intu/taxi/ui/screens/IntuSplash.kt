@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathMeasure
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.translate
@@ -148,7 +149,7 @@ fun IntuSplash(onFinished: () -> Unit) {
             withTransform({
                 translate(pos.x, pos.y)
                 scale(-scale, scale, pivot = Offset.Zero)
-                translate(-32f, -24f)
+                translate(-30f, -27f)
             }) { drawFlyingBird(shapes, flapUp, alpha) }
         }
 
@@ -181,7 +182,9 @@ private const val TOTAL_MS = 2940f
 private val Gold = Color(0xFFEFB11B)
 // Gallito de las rocas: rojo anaranjado, negro, gris plateado en la espalda y ojo claro
 private val Scarlet = Color(0xFFEE4B1C)
-private val CrestLight = Color(0xFFFF7A45)
+private val CrestFan = Color(0xFFF4592A)
+private val CrestEdge = Color(0xFFB8320F)
+private val CrestFeather = Color(0xFFC63B12)
 private val BirdBlack = Color(0xFF15162B)
 private val SilverGrey = Color(0xFFB9BCCB)
 private val SilverLine = Color(0xFF8E92A6)
@@ -205,27 +208,30 @@ private class SplashShapes {
     val hill3 = path("M0,600 C65,578 112,600 178,584 C225,573 262,590 300,583 L300,720 L0,720 Z")
     val branch = path("M196,538 Q232,528 272,540")
 
-    // Gallito posado y erguido (lienzo de 100 x 120): cresta en cúpula que tapa el pico, ojo claro,
-    // ala negra con la mancha gris plateada de la espalda y cola negra colgando
+    // Gallito posado y erguido (lienzo de 100 x 120): cresta en abanico que baja por delante de la cara y
+    // casi tapa el pico, ojo claro, ala negra con la mancha gris plateada de la espalda y cola negra colgando
     val tail = path("M36,78 L27,113 Q31,117 37,115 L48,84 Z")
-    val body = path("M30,70 C28,52 36,40 52,40 C66,40 74,52 72,68 C70,84 60,94 48,94 C38,94 31,84 30,70 Z")
-    val head = path("M46,44 C42,26 50,8 64,6 C78,4 87,16 86,28 C85,35 82,40 77,43 C70,45 58,47 46,44 Z")
-    val crestLine = path("M52,30 C52,18 60,10 68,10 C78,10 83,18 82,26")
-    val wing = path("M29,60 C33,49 47,48 57,56 C63,68 60,84 49,92 C40,90 32,80 30,70 Z")
-    val silver = path("M32,57 C38,50 49,51 55,58 C53,65 47,70 39,69 C34,66 31,62 32,57 Z")
-    val silverLine = path("M37,60 C42,58 48,59 52,62")
-    val beak = path("M77,42 L82,44 L77,45.5 Z")
+    val body = path("M30,72 C28,56 36,46 52,46 C66,46 74,56 72,70 C70,85 60,94 48,94 C38,94 31,85 30,72 Z")
+    val face = path("M52,50 C52,42 60,38 70,38 C80,38 88,44 88,52 C88,58 78,60 68,60 C58,60 52,57 52,50 Z")
+    val crest = path("M48,44 C46,24 58,6 72,6 C86,6 97,20 96,36 C95,44 93,50 90,55 C86,49 70,42 48,44 Z")
+    val crestFeathers = path("M72,44 L60,16 M72,44 L70,10 M72,44 L82,12 M72,44 L91,26")
+    val beak = path("M87,54 L93,56 L87,58 Z")
+    val wing = path("M29,62 C33,52 47,52 57,60 C63,71 60,85 49,92 C40,90 32,81 30,72 Z")
+    val silver = path("M32,60 C38,53 49,54 55,61 C53,68 47,72 39,71 C34,68 31,64 32,60 Z")
+    val silverLine = path("M37,63 C42,61 48,62 52,65")
     val legs = path("M50,93 L49,101 M57,92 L58,101")
 
     // Gallito en vuelo (lienzo de 64 x 46)
-    val flyTail = path("M12,26 L0,22 L1,33 L13,31 Z")
-    val flyBody = path("M10,28 C12,22 22,19 34,20 C42,21 46,25 45,29 C44,33 36,36 26,36 C18,36 11,33 10,28 Z")
-    val flyHead = path("M38,23 C36,14 41,7 49,7 C57,7 61,14 60,20 C59,25 56,28 52,29 C47,28 42,27 38,23 Z")
-    val flyCrestLine = path("M43,17 C44,12 47,10 50,10 C54,10 57,13 57,17")
-    val wingUp = path("M19,23 C16,11 24,1 43,-3 C37,5 34,14 33,23 Z")
-    val silverUp = path("M22,22 C22,16 25,12 30,11 C29,15 29,19 29,23 Z")
-    val wingDown = path("M19,30 C16,41 24,50 43,53 C37,46 34,38 33,30 Z")
-    val silverDown = path("M22,31 C22,36 25,40 30,41 C29,37 29,33 29,30 Z")
+    val flyTail = path("M12,28 L0,24 L1,35 L13,33 Z")
+    val flyBody = path("M10,30 C12,24 22,21 34,22 C42,23 46,27 45,31 C44,35 36,38 26,38 C18,38 11,35 10,30 Z")
+    val flyFace = path("M40,27 C40,22 45,20 50,20 C56,20 61,24 61,28 C61,32 55,33 49,33 C44,33 40,31 40,27 Z")
+    val flyCrest = path("M38,24 C37,12 44,3 52,3 C60,3 66,11 65,20 C64,26 63,29 61,31 C57,26 46,22 38,24 Z")
+    val flyCrestFeathers = path("M52,24 L45,9 M52,24 L52,6 M52,24 L60,9 M52,24 L63,19")
+    val flyBeak = path("M60,30 L64.5,31.5 L60,33 Z")
+    val wingUp = path("M19,25 C16,13 24,3 43,-1 C37,7 34,16 33,25 Z")
+    val silverUp = path("M22,24 C22,18 25,14 30,13 C29,17 29,21 29,25 Z")
+    val wingDown = path("M19,32 C16,43 24,52 43,55 C37,48 34,40 33,32 Z")
+    val silverDown = path("M22,33 C22,38 25,42 30,43 C29,39 29,35 29,32 Z")
 }
 
 private class Flight(val measure: PathMeasure, val length: Float)
@@ -244,26 +250,31 @@ private fun flightPath(sx: Float, bottomY: (Float) -> Float, centerY: (Float) ->
 private fun DrawScope.drawPerchedBird(shapes: SplashShapes, alpha: Float) {
     drawPath(shapes.tail, BirdBlack, alpha)
     drawPath(shapes.body, Scarlet, alpha)
-    drawPath(shapes.head, Scarlet, alpha)
-    drawPath(shapes.crestLine, CrestLight, alpha, style = Stroke(width = 1.8f, cap = StrokeCap.Round))
+    drawPath(shapes.face, Scarlet, alpha)
+    drawPath(shapes.crest, CrestFan, alpha)
+    drawPath(shapes.crest, CrestEdge, alpha, style = Stroke(width = 1.4f, join = StrokeJoin.Round))
+    drawPath(shapes.crestFeathers, CrestFeather, alpha * .45f, style = Stroke(width = 1.1f, cap = StrokeCap.Round))
+    drawCircle(PaleEye, radius = 3.1f, center = Offset(78f, 51f), alpha = alpha)
+    drawCircle(BirdBlack, radius = 1.5f, center = Offset(78.7f, 51f), alpha = alpha)
+    drawPath(shapes.beak, Beak, alpha)
     drawPath(shapes.wing, BirdBlack, alpha)
     drawPath(shapes.silver, SilverGrey, alpha)
     drawPath(shapes.silverLine, SilverLine, alpha, style = Stroke(width = 1.2f, cap = StrokeCap.Round))
-    drawCircle(PaleEye, radius = 3.2f, center = Offset(72f, 31f), alpha = alpha)
-    drawCircle(BirdBlack, radius = 1.5f, center = Offset(72.6f, 31f), alpha = alpha)
-    drawPath(shapes.beak, Beak, alpha)
     drawPath(shapes.legs, BirdBlack, alpha, style = Stroke(width = 3f, cap = StrokeCap.Round))
 }
 
 private fun DrawScope.drawFlyingBird(shapes: SplashShapes, wingUp: Boolean, alpha: Float) {
     drawPath(shapes.flyTail, BirdBlack, alpha)
     drawPath(shapes.flyBody, Scarlet, alpha)
-    drawPath(shapes.flyHead, Scarlet, alpha)
-    drawPath(shapes.flyCrestLine, CrestLight, alpha, style = Stroke(width = 1.2f, cap = StrokeCap.Round))
+    drawPath(shapes.flyFace, Scarlet, alpha)
+    drawPath(shapes.flyCrest, CrestFan, alpha)
+    drawPath(shapes.flyCrest, CrestEdge, alpha, style = Stroke(width = 1f, join = StrokeJoin.Round))
+    drawPath(shapes.flyCrestFeathers, CrestFeather, alpha * .45f, style = Stroke(width = .8f, cap = StrokeCap.Round))
+    drawCircle(PaleEye, radius = 1.9f, center = Offset(54.5f, 28f), alpha = alpha)
+    drawCircle(BirdBlack, radius = .9f, center = Offset(55f, 28f), alpha = alpha)
+    drawPath(shapes.flyBeak, Beak, alpha)
     drawPath(if (wingUp) shapes.wingUp else shapes.wingDown, BirdBlack, alpha)
     drawPath(if (wingUp) shapes.silverUp else shapes.silverDown, SilverGrey, alpha)
-    drawCircle(PaleEye, radius = 1.9f, center = Offset(52.5f, 18f), alpha = alpha)
-    drawCircle(BirdBlack, radius = .9f, center = Offset(53f, 18f), alpha = alpha)
 }
 
 /** Texto centrado en [cx] con su línea base en [baseline]; sube 14 unidades y aparece desde [start] ms. */
