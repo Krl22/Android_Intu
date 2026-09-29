@@ -49,6 +49,10 @@ class ActiveRideRepository {
         return (0 until rows.length()).map { rows.getJSONObject(it).toActiveRide() }
     }
 
+    /** Fila del viaje, sin la ubicación del conductor. */
+    suspend fun getRide(rideId: String): ActiveRide? =
+        SupabaseApi.rows("rides?id=eq.${SupabaseApi.encode(rideId)}&select=*&limit=1").optJSONObject(0)?.toActiveRide()
+
     /** Estado de un viaje cada 3 s, sin la ubicación del conductor (para el siguiente viaje en espera). */
     fun watchRide(rideId: String): Flow<ActiveRide?> = flow {
         while (currentCoroutineContext().isActive) {

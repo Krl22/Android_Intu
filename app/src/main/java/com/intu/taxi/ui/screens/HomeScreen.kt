@@ -168,6 +168,13 @@ import androidx.compose.ui.unit.Dp
 import com.mapbox.maps.plugin.animation.MapAnimationOptions
 import com.mapbox.maps.plugin.animation.easeTo
 import com.mapbox.maps.EdgeInsets
+import androidx.compose.runtime.snapshotFlow
+import androidx.lifecycle.Lifecycle
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import com.intu.taxi.ui.map.TripMap
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.distinctUntilChanged
 import com.mapbox.maps.CoordinateBounds
 import com.google.firebase.auth.FirebaseAuth
 import com.intu.taxi.repositories.RideRequestRepository
@@ -536,8 +543,12 @@ fun HomeScreen(
     // Un solo sondeo del viaje: decide entre la animación de búsqueda y la tarjeta del viaje
     LaunchedEffect(currentRideRequestId) {
         currentRideRequestId?.let { requestId ->
+            // Mientras haya viaje abierto, un servicio mantiene la app al día aunque esté minimizada
+            com.intu.taxi.rider.RiderTrip.searching(requestId)
+            com.intu.taxi.rider.RideTrackingService.start(context)
             activeRideRepository.getActiveRideByRequestId(requestId).collect { ride ->
                 if (ride == null) return@collect
+                com.intu.taxi.rider.RiderTrip.update(ride)
                 when (ride.status) {
                     // Sin conductor todavía, o el conductor canceló y la solicitud volvió a abrirse
                     "searching" -> {
@@ -563,7 +574,8 @@ fun HomeScreen(
                 }
             }
         } ?: run {
-            // Si no hay requestId, limpiar el activeRide
+            // Si no hay requestId, limpiar el activeRide (el aviso fijo del viaje se quita al terminar
+            // o cancelarse; aquí no, porque al volver de otra pestaña el id se recarga un instante después)
             activeRide = null
             driverLocation = null
         }
@@ -613,6 +625,8 @@ fun HomeScreen(
     Box(modifier = Modifier.fillMaxSize()) {
         val mapView = rememberMapViewWithLifecycle(accessToken = mapboxToken)
         mapViewRef = mapView
+        // Para saber si la app está visible (con la app minimizada la cámara se mueve sin animación)
+        val lifecycleOwner = LocalLifecycleOwner.current
         AndroidView(factory = { mapView }, modifier = Modifier.fillMaxSize())
 
         var isStyleLoaded by remember { mutableStateOf(false) }
@@ -849,29 +863,8 @@ fun HomeScreen(
             }
         }
 
-        // Marcador del conductor: se crea una vez y luego se desliza hasta cada nueva posición.
-        // El conductor envía su ubicación cada 2 s; la animación dura casi lo mismo para que el
-        // movimiento se vea continuo en vez de saltar.
-        LaunchedEffect(driverLocation, mapViewRef, isStyleLoaded) {
-            val pam = driverAnnotationManager ?: return@LaunchedEffect
-            if (mapViewRef == null || !isStyleLoaded) return@LaunchedEffect
-            val dl = driverLocation
-            if (!isValidGeoPoint(dl)) {
-                driverAnnotation?.let { runCatching { pam.delete(it) } }
-                driverAnnotation = null
-                return@LaunchedEffect
-            }
-            val target = Point.fromLngLat(dl!!.longitude, dl.latitude)
-            val marker = driverAnnotation
-            if (marker == null) {
-                driverAnnotation = pam.create(
-                    PointAnnotationOptions()
-                        .withPoint(target)
-                        .withIconImage(createDriverIcon(context))
-                        .withIconSize(1.0)
-                )
-                return@LaunchedEffect
-            }
+        // Desliza el marcador del conductor hasta [target] en 1.8 s
+        suspend fun animateDriverMarker(marker: PointAnnotation, pam: PointAnnotationManager, target: Point) {
             val start = marker.point
             val durationMs = 1800f
             val startTime = withFrameMillis { it }
@@ -888,6 +881,40 @@ fun HomeScreen(
             }
         }
 
+        // Marcador del conductor: se crea una vez y luego se desliza hasta cada nueva posición.
+        // El conductor envía su ubicación cada 2 s; la animación dura casi lo mismo para que el
+        // movimiento se vea continuo en vez de saltar. Se escucha el estado directamente (no con
+        // claves del efecto) porque Compose deja de recomponer con la app minimizada: así el marcador
+        // sigue al conductor en segundo plano (ahí salta sin animación) y al volver ya está en su lugar.
+        LaunchedEffect(mapView) {
+            snapshotFlow { Triple(driverLocation, isStyleLoaded, driverAnnotationManager) }
+                .collectLatest { (dl, loaded, pam) ->
+                    if (pam == null || !loaded) return@collectLatest
+                    if (!isValidGeoPoint(dl)) {
+                        driverAnnotation?.let { runCatching { pam.delete(it) } }
+                        driverAnnotation = null
+                        return@collectLatest
+                    }
+                    val target = Point.fromLngLat(dl!!.longitude, dl.latitude)
+                    val marker = driverAnnotation
+                    if (marker == null) {
+                        driverAnnotation = pam.create(
+                            PointAnnotationOptions()
+                                .withPoint(target)
+                                .withIconImage(createDriverIcon(context))
+                                .withIconSize(1.0)
+                        )
+                        return@collectLatest
+                    }
+                    if (!lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+                        marker.point = target
+                        runCatching { pam.update(marker) }
+                        return@collectLatest
+                    }
+                    animateDriverMarker(marker, pam, target)
+                }
+        }
+
         // Si el pasajero mueve el mapa con el dedo, la cámara deja de seguir el viaje unos segundos
         DisposableEffect(mapView) {
             val gestureListener = object : OnMoveListener {
@@ -899,44 +926,65 @@ fun HomeScreen(
             onDispose { mapView.gestures.removeOnMoveListener(gestureListener) }
         }
 
-        // Cámara del viaje: encuadra conductor, punto objetivo (recojo o destino) y ruta,
-        // dejando libre el espacio de la tarjeta, y se mueve con animación en lugar de saltar.
-        LaunchedEffect(activeRide?.status, driverLocation, routePoints, rideCardHeightPx, isStyleLoaded) {
-            val ride = activeRide ?: return@LaunchedEffect
-            if (!isStyleLoaded || ride.status !in setOf("accepted", "arrived", "in_progress")) return@LaunchedEffect
-            if (System.currentTimeMillis() - lastUserGestureMs < 8_000) return@LaunchedEffect
-            val map = mapView.mapboxMap
-            fun valid(p: Point) = p.latitude() in -90.0..90.0 && p.longitude() in -180.0..180.0 &&
-                !(p.latitude() == 0.0 && p.longitude() == 0.0)
-            val points = buildList {
-                driverLocation?.takeIf { isValidGeoPoint(it) }?.let { add(Point.fromLngLat(it.longitude, it.latitude)) }
-                ride.clientLocation?.let { add(Point.fromLngLat(it.longitude, it.latitude)) }
-                addAll(routePoints)
-            }.filter(::valid)
-            if (points.isEmpty()) return@LaunchedEffect
-
-            fun px(dp: Dp) = with(density) { dp.toPx().toDouble() }
-            val mapHeight = mapView.height.toDouble().takeIf { it > 0 } ?: return@LaunchedEffect
-            val bottom = (rideCardHeightPx + px(padding.calculateBottomPadding() + 40.dp))
-                .coerceAtMost(mapHeight * 0.6)
-            val cam = map.cameraForCoordinates(
-                points,
-                CameraOptions.Builder().build(),
-                EdgeInsets(px(110.dp), px(56.dp), bottom, px(56.dp)),
-                16.0,
-                null
-            )
-            val center = cam.center ?: return@LaunchedEffect
-            map.easeTo(
-                CameraOptions.Builder()
-                    .center(center)
-                    // Un poco más lejos que el encuadre exacto, para ver el entorno de la ruta
-                    .zoom(((cam.zoom ?: 15.0) - 0.4).coerceAtLeast(3.0))
-                    .bearing(0.0)
-                    .pitch(0.0)
-                    .build(),
-                MapAnimationOptions.mapAnimationOptions { duration(900L) }
-            )
+        // Ruta y cámara del viaje: la ruta va del conductor al punto objetivo (recojo o destino) y la
+        // cámara encuadra conductor, objetivo y ruta dejando libre la tarjeta del viaje.
+        // Corre fuera de la recomposición, que Compose pausa con la app minimizada: así todo sigue al
+        // día en segundo plano (el servicio del viaje mantiene viva la app) y al volver ya está listo.
+        // La ruta se pide a Mapbox al cambiar de estado o si el conductor se sale de ella; mientras la
+        // sigue, solo se recorta el tramo ya recorrido. Como mucho se procesa un cambio por segundo.
+        LaunchedEffect(mapView) {
+            var routeLeg: String? = null
+            snapshotFlow {
+                RiderTripMapInput(
+                    rideId = activeRide?.rideId,
+                    status = activeRide?.status,
+                    target = activeRide?.clientLocation,
+                    driver = driverLocation,
+                    styleLoaded = isStyleLoaded,
+                    cardHeightPx = rideCardHeightPx
+                )
+            }
+                .distinctUntilChanged()
+                .conflate()
+                .collect { input ->
+                    if (input.status !in setOf("accepted", "arrived", "in_progress")) {
+                        if (routeLeg != null) {
+                            routePoints = emptyList()
+                            routeOffsets = emptyList()
+                            routeLeg = null
+                        }
+                        return@collect
+                    }
+                    val driver = input.driver?.takeIf { isValidGeoPoint(it) }?.let { Point.fromLngLat(it.longitude, it.latitude) }
+                    val target = input.target?.let { Point.fromLngLat(it.longitude, it.latitude) }
+                    val leg = "${input.rideId}:${input.status}"
+                    if (driver != null && target != null) {
+                        val trimmed = if (leg == routeLeg) TripMap.trimRoute(routePoints, driver) else null
+                        val route = trimmed ?: TripMap.fetchRoute(mapboxToken, driver, target)?.points
+                        if (route != null) {
+                            routePoints = route
+                            routeLeg = leg
+                        }
+                    }
+                    if (input.styleLoaded && System.currentTimeMillis() - lastUserGestureMs >= 8_000) {
+                        fun px(dp: Dp) = with(density) { dp.toPx().toDouble() }
+                        val mapHeight = mapView.height.toDouble()
+                        val bottom = (input.cardHeightPx + px(padding.calculateBottomPadding() + 40.dp))
+                            .coerceAtMost(mapHeight * 0.6)
+                        TripMap.fitCamera(
+                            mapView,
+                            listOfNotNull(driver, target) + routePoints,
+                            EdgeInsets(px(110.dp), px(56.dp), bottom, px(56.dp)),
+                            animate = lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
+                        )
+                    }
+                    // La ruta se dibuja sobre el mapa en píxeles; con la cámara quieta se recalculan aquí
+                    routeOffsets = routePoints.map { p ->
+                        val sc = mapView.mapboxMap.pixelForCoordinate(p)
+                        Offset(sc.x.toFloat(), sc.y.toFloat())
+                    }
+                    delay(1_000)
+                }
         }
 
         // Icono de conductor ahora se maneja con PointAnnotation en el mapa
@@ -1019,58 +1067,6 @@ fun HomeScreen(
             }
             map.addOnCameraChangeListener(cameraListener)
             onDispose { map.removeOnCameraChangeListener(cameraListener) }
-        }
-
-        // Ruta del conductor hacia el punto objetivo (recojo o destino). Solo se vuelve a pedir a
-        // Mapbox si cambia el estado del viaje o el conductor avanzó ~30 m; antes se pedía cada 1.5 s,
-        // gastando cuota de la API sin cambios visibles. La cámara la maneja el efecto de arriba.
-        var lastRouteOrigin by remember { mutableStateOf<Point?>(null) }
-        var lastRouteStatus by remember { mutableStateOf<String?>(null) }
-        LaunchedEffect(activeRide?.rideId, activeRide?.status, driverLocation) {
-            val ride = activeRide
-            if (ride == null || ride.status !in setOf("accepted", "arrived", "in_progress")) {
-                if (ride != null || lastRouteStatus != null) {
-                    routePoints = emptyList()
-                    routeOffsets = emptyList()
-                }
-                lastRouteOrigin = null
-                lastRouteStatus = null
-                return@LaunchedEffect
-            }
-            val driverLoc = driverLocation?.takeIf { isValidGeoPoint(it) } ?: return@LaunchedEffect
-            val target = ride.clientLocation ?: return@LaunchedEffect
-            val origin = Point.fromLngLat(driverLoc.longitude, driverLoc.latitude)
-            val previous = lastRouteOrigin
-            if (ride.status == lastRouteStatus && previous != null && routePoints.isNotEmpty() &&
-                metersBetween(previous, origin) < 30.0
-            ) return@LaunchedEffect
-
-            val url = "https://api.mapbox.com/directions/v5/mapbox/driving-traffic/" +
-                "${origin.longitude()},${origin.latitude()};${target.longitude},${target.latitude}" +
-                "?alternatives=false&geometries=geojson&overview=full&access_token=$mapboxToken"
-            val points = withContext(Dispatchers.IO) {
-                runCatching {
-                    httpClient.newCall(Request.Builder().url(url).get().build()).execute().use { resp ->
-                        if (!resp.isSuccessful) return@use null
-                        val coords = JSONObject(resp.body?.string().orEmpty())
-                            .optJSONArray("routes")?.optJSONObject(0)
-                            ?.optJSONObject("geometry")?.optJSONArray("coordinates") ?: return@use null
-                        (0 until coords.length()).map { i ->
-                            val c = coords.getJSONArray(i)
-                            Point.fromLngLat(c.optDouble(0), c.optDouble(1))
-                        }
-                    }
-                }.getOrNull()
-            }
-            if (points != null && points.size > 1) {
-                routePoints = points
-                routeOffsets = points.map { p ->
-                    val sc = mapView.mapboxMap.pixelForCoordinate(p)
-                    Offset(sc.x.toFloat(), sc.y.toFloat())
-                }
-                lastRouteOrigin = origin
-                lastRouteStatus = ride.status
-            }
         }
 
         // Actualizar destino según se mueva el mapa cuando el modo está activo
@@ -2150,6 +2146,7 @@ fun HomeScreen(
             scope.launch {
                 rideRequestRepository.cancelRideRequest(rideId)
                     .onSuccess {
+                        com.intu.taxi.rider.RiderTrip.clear()
                         resetRideState()
                         Toast.makeText(context, "Viaje cancelado", Toast.LENGTH_SHORT).show()
                     }
@@ -2345,6 +2342,16 @@ private suspend fun readableAddress(
 }
 
 /** Distancia aproximada en metros entre dos puntos (fórmula de haversine). */
+/** Lo que decide la ruta y la cámara del viaje en el mapa del pasajero. */
+private data class RiderTripMapInput(
+    val rideId: String?,
+    val status: String?,
+    val target: com.google.firebase.firestore.GeoPoint?,
+    val driver: com.google.firebase.firestore.GeoPoint?,
+    val styleLoaded: Boolean,
+    val cardHeightPx: Int
+)
+
 private fun metersBetween(a: Point, b: Point): Double {
     val dLat = Math.toRadians(b.latitude() - a.latitude())
     val dLon = Math.toRadians(b.longitude() - a.longitude())

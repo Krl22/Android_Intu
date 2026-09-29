@@ -12,6 +12,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Pasajero con un viaje abierto: la app sigue al día minimizada (servicio de uso especial) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <application
         android:allowBackup="true"
@@ -27,6 +29,16 @@
             android:name=".driver.DriverOnlineService"
             android:exported="false"
             android:foregroundServiceType="location" />
+
+        <!-- Pasajero con un viaje abierto: mantiene al día el viaje, la ruta y el mapa con la app minimizada -->
+        <service
+            android:name=".rider.RideTrackingService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Seguimiento en vivo del viaje que pidió el pasajero: estado, ubicación del conductor y ruta" />
+        </service>
 
         <!-- Avisos push del viaje (FCM). Con la app minimizada Android los muestra con este canal e ícono -->
         <service

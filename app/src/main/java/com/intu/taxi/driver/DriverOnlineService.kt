@@ -51,6 +51,12 @@ object DriverSession {
 
     /** Solicitudes que el conductor rechazó: no se notifican. */
     val declinedRequestIds: MutableSet<String> = ConcurrentHashMap.newKeySet()
+
+    /**
+     * Última ubicación del GPS según el servicio. La pantalla la usa para la ruta y la cámara del viaje
+     * aunque el mapa esté pausado (app minimizada), así al volver ya está al día.
+     */
+    val location = kotlinx.coroutines.flow.MutableStateFlow<GeoPoint?>(null)
 }
 
 /**
@@ -179,6 +185,7 @@ class DriverOnlineService : Service() {
 
     /** Cada 2 s en viaje (el pasajero lo sigue en el mapa) y cada 10 s en línea sin viaje. */
     private fun onLocation(location: Location) {
+        DriverSession.location.value = GeoPoint(location.latitude, location.longitude)
         val rideId = DriverSession.activeRideId ?: openRides.firstOrNull()?.rideId
         val interval = if (rideId != null) 2_000L else 10_000L
         val now = System.currentTimeMillis()

@@ -93,6 +93,8 @@ fun IntuApp() {
     DisposableEffect(Unit) {
         val listener = FirebaseAuth.AuthStateListener { firebaseAuth ->
             currentUid = firebaseAuth.currentUser?.uid
+            // Sin sesión ya no hay viaje que seguir: se quita el aviso fijo del pasajero
+            if (firebaseAuth.currentUser == null) com.intu.taxi.rider.RiderTrip.clear()
             // Sin sesión fuera del inicio de sesión: volver al login
             val route = navController.currentBackStackEntry?.destination?.route
             if (firebaseAuth.currentUser == null && route != null && route !in authRoutes) {

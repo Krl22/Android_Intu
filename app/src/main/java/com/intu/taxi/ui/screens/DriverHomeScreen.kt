@@ -15,6 +15,18 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.distinctUntilChanged
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import com.intu.taxi.ui.map.TripMap
+import com.mapbox.android.gestures.MoveGestureDetector
+import com.mapbox.maps.EdgeInsets
+import com.mapbox.maps.plugin.gestures.OnMoveListener
+import com.mapbox.maps.plugin.gestures.gestures
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -170,14 +182,21 @@ fun DriverHomeScreen(
     var pinInput by remember { mutableStateOf("") }
     var pinError by remember { mutableStateOf<String?>(null) }
     var isVerifyingPin by remember { mutableStateOf(false) }
+    // Punto objetivo del viaje: recojo del pasajero o, ya en viaje, el destino
     var clientLocationMarker by remember { mutableStateOf<GeoPoint?>(null) }
     var clientMarkerAnnotation by remember { mutableStateOf<com.mapbox.maps.plugin.annotation.generated.PointAnnotation?>(null) }
+    var routeAnnotation by remember { mutableStateOf<com.mapbox.maps.plugin.annotation.generated.PolylineAnnotation?>(null) }
     var mapViewRef by remember { mutableStateOf<com.mapbox.maps.MapView?>(null) }
     var polylineAnnotationManager by remember { mutableStateOf<com.mapbox.maps.plugin.annotation.generated.PolylineAnnotationManager?>(null) }
     var pointAnnotationManager by remember { mutableStateOf<com.mapbox.maps.plugin.annotation.generated.PointAnnotationManager?>(null) }
-    
-    // Variables para la ruta calculada
-    var routeGeometry by remember { mutableStateOf<String?>(null) }
+    var isStyleLoaded by remember { mutableStateOf(false) }
+    // Alto de la tarjeta del viaje, para que la cámara no deje la ruta debajo de ella
+    var tripCardHeightPx by remember { mutableStateOf(0) }
+    // Si el conductor mueve el mapa con el dedo, la cámara deja de seguir el viaje unos segundos
+    val lastUserGestureMs = remember { longArrayOf(0L) }
+
+    // Ruta calculada: puntos, distancia (km) y tiempo (min) restantes
+    var routePoints by remember { mutableStateOf<List<Point>>(emptyList()) }
     var routeDistance by remember { mutableStateOf(0.0) }
     var routeDuration by remember { mutableStateOf(0.0) }
     var isCalculatingRoute by remember { mutableStateOf(false) }
@@ -198,38 +217,15 @@ fun DriverHomeScreen(
         }
     }
 
-    // Función para limpiar la ruta y el marcador del pasajero del mapa
+    // Quita del mapa la ruta y el marcador del pasajero (viaje terminado o cancelado)
     val clearRouteAndPassengerMarker = remember {
         {
-            try {
-                println("DEBUG: Limpiando ruta y marcador del pasajero")
-                
-                // Limpiar la polilínea (ruta) - eliminar todas las anotaciones del manager
-                polylineAnnotationManager?.let { manager ->
-                    // Obtener todas las anotaciones y eliminarlas
-                    val annotations = manager.annotations
-                    if (annotations.isNotEmpty()) {
-                        manager.deleteAll()
-                        println("DEBUG: Ruta eliminada del mapa")
-                    }
-                }
-                
-                // Limpiar el marcador del pasajero
-                pointAnnotationManager?.let { manager ->
-                    clientMarkerAnnotation?.let { annotation ->
-                        manager.delete(annotation)
-                        println("DEBUG: Marcador del pasajero eliminado")
-                    }
-                }
-                
-                // Limpiar referencias
-                clientMarkerAnnotation = null
-                clientLocationMarker = null
-                
-            } catch (e: Exception) {
-                println("DEBUG: Error al limpiar ruta y marcador: ${e.message}")
-                e.printStackTrace()
-            }
+            runCatching { polylineAnnotationManager?.deleteAll() }
+            runCatching { clientMarkerAnnotation?.let { pointAnnotationManager?.delete(it) } }
+            routeAnnotation = null
+            clientMarkerAnnotation = null
+            clientLocationMarker = null
+            routePoints = emptyList()
         }
     }
 
@@ -247,263 +243,10 @@ fun DriverHomeScreen(
         return earthRadius * c
     }
 
-    // Función para calcular ruta real usando Mapbox Directions API
-    suspend fun calculateRouteWithDirectionsAPI(driverLocation: GeoPoint, clientLocation: GeoPoint): String? {
-        return withContext(Dispatchers.IO) {
-            try {
-                val origin = Point.fromLngLat(driverLocation.longitude, driverLocation.latitude)
-                val destination = Point.fromLngLat(clientLocation.longitude, clientLocation.latitude)
-                
-                val directionsUrl = "https://api.mapbox.com/directions/v5/mapbox/driving-traffic/" +
-                        "${origin.longitude()},${origin.latitude()};" +
-                        "${destination.longitude()},${destination.latitude()}" +
-                        "?alternatives=false&geometries=geojson&overview=full&access_token=$mapboxToken"
-                
-                val request = Request.Builder()
-                    .url(directionsUrl)
-                    .get()
-                    .build()
-                
-                val response = OkHttpClient().newCall(request).execute()
-                val responseBody = response.body?.string()
-                
-                if (response.isSuccessful && responseBody != null) {
-                    val json = JSONObject(responseBody)
-                    val routes = json.optJSONArray("routes")
-                    val firstRoute = routes?.optJSONObject(0)
-                    
-                    if (firstRoute != null) {
-                        // Obtener distancia y duración
-                        routeDistance = firstRoute.optDouble("distance", 0.0) / 1000.0 // Convertir a km
-                        routeDuration = firstRoute.optDouble("duration", 0.0) / 60.0 // Convertir a minutos
-                        
-                        val geometry = firstRoute.optJSONObject("geometry")
-                        val coordinates = geometry?.optJSONArray("coordinates")
-                        
-                        if (coordinates != null && coordinates.length() > 0) {
-                            val points = mutableListOf<Point>()
-                            for (i in 0 until coordinates.length()) {
-                                val coord = coordinates.getJSONArray(i)
-                                val lon = coord.getDouble(0)
-                                val lat = coord.getDouble(1)
-                                points.add(Point.fromLngLat(lon, lat))
-                            }
-                            
-                            // Guardar la geometría para dibujar
-                            routeGeometry = geometry.toString()
-                            
-                            // Actualizar el viaje activo con la ruta
-                            activeRideId?.let { rideId ->
-                                activeRideRepository.updateRouteGeometry(rideId, geometry.toString())
-                            }
-                            
-                            println("DEBUG: Ruta calculada exitosamente - Distancia: ${String.format("%.1f", routeDistance)}km, Duración: ${String.format("%.0f", routeDuration)}min")
-                            return@withContext geometry.toString()
-                        }
-                    }
-                }
-                
-                println("DEBUG: Error al calcular ruta - Código: ${response.code}, Body: $responseBody")
-                return@withContext null
-                
-            } catch (e: Exception) {
-                println("DEBUG: Excepción al calcular ruta: ${e.message}")
-                e.printStackTrace()
-                return@withContext null
-            }
-        }
-    }
-
-    // Función fallback para dibujar línea recta
-    fun drawSimpleRoute(mapView: com.mapbox.maps.MapView, driverLocation: GeoPoint, clientLocation: GeoPoint) {
-        try {
-            val originPoint = Point.fromLngLat(driverLocation.longitude, driverLocation.latitude)
-            val destinationPoint = Point.fromLngLat(clientLocation.longitude, clientLocation.latitude)
-            
-            val annotationPlugin = mapView.annotations
-            polylineAnnotationManager = annotationPlugin.createPolylineAnnotationManager()
-            pointAnnotationManager = annotationPlugin.createPointAnnotationManager()
-            
-            val polylineAnnotationOptions = PolylineAnnotationOptions()
-                .withPoints(listOf(originPoint, destinationPoint))
-                .withLineColor("#FF0000") // Color rojo brillante para prueba
-                .withLineWidth(6.0)
-            
-            polylineAnnotationManager?.create(polylineAnnotationOptions)
-            
-            val pointAnnotationOptions = PointAnnotationOptions()
-                .withPoint(destinationPoint)
-                .withIconImage(createPassengerIcon(context))
-                .withIconSize(1.0)
-            
-            val annotation = pointAnnotationManager?.create(pointAnnotationOptions)
-            clientMarkerAnnotation = annotation
-            
-            // Centrar cámara para mostrar la línea completa más arriba y con más zoom out
-            val centerLat = (driverLocation.latitude + clientLocation.latitude) / 2
-            val centerLng = (driverLocation.longitude + clientLocation.longitude) / 2
-            
-            // Aplicar offset vertical para mover la línea hacia arriba en la pantalla
-            val latOffset = 0.018  // 2 km fijos hacia el norte
-            val adjustedCenterLat = centerLat + latOffset
-            val centerPoint = Point.fromLngLat(centerLng, adjustedCenterLat)
-            
-            // Calcular distancia para ajustar zoom con más zoom out
-            val distance = calculateDistance(driverLocation, clientLocation)
-            val zoomLevel = when {
-                distance < 500 -> 15.0   // Distancia corta (más zoom out)
-                distance < 1000 -> 14.0  // Distancia media (más zoom out)
-                distance < 2000 -> 13.0  // Distancia larga (más zoom out)
-                else -> 12.0             // Distancia muy larga (más zoom out)
-            }
-            
-            println("DEBUG: Línea recta - Distancia: ${distance}m, Zoom: $zoomLevel, Offset: ${String.format("%.1f", latOffset * 111000)}m")
-            
-            val cameraOptions = CameraOptions.Builder()
-                .center(centerPoint)
-                .zoom(zoomLevel)
-                .build()
-            mapView.mapboxMap.setCamera(cameraOptions)
-            
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
-
-    // Función para calcular y mostrar ruta hacia el cliente
-    fun drawRouteToClient(mapView: com.mapbox.maps.MapView, driverLocation: GeoPoint, clientLocation: GeoPoint) {
-        scope.launch {
-            try {
-                // Actualizar la ubicación del cliente para el marcador
-                clientLocationMarker = clientLocation
-                isCalculatingRoute = true
-                
-                // Calcular ruta real usando Directions API
-                val routeGeoJson = calculateRouteWithDirectionsAPI(driverLocation, clientLocation)
-                
-                if (routeGeoJson != null) {
-                    // Parsear la geometría de la ruta
-                    val json = JSONObject(routeGeoJson)
-                    val coordinates = json.optJSONArray("coordinates")
-                    
-                    if (coordinates != null && coordinates.length() > 0) {
-                        val routePoints = mutableListOf<Point>()
-                        for (i in 0 until coordinates.length()) {
-                            val coord = coordinates.getJSONArray(i)
-                            val lon = coord.getDouble(0)
-                            val lat = coord.getDouble(1)
-                            routePoints.add(Point.fromLngLat(lon, lat))
-                        }
-                        
-                        // Centrar cámara para mostrar la ruta completa más arriba y con más zoom out
-                        if (routePoints.isNotEmpty()) {
-                            // Calcular límites de la ruta
-                            val minLat = routePoints.minOf { it.latitude() }
-                            val maxLat = routePoints.maxOf { it.latitude() }
-                            val minLng = routePoints.minOf { it.longitude() }
-                            val maxLng = routePoints.maxOf { it.longitude() }
-                            
-                            // Calcular centro de la ruta con offset vertical para mostrar más arriba
-                            val centerLat = (minLat + maxLat) / 2
-                            val centerLng = (minLng + maxLng) / 2
-                            
-                            // Aplicar offset vertical para mover la ruta hacia arriba en la pantalla
-                            // Offset de ~200-300 metros hacia el norte para que aparezca más arriba
-                            val latOffset = (maxLat - minLat) * 0.2 // 20% del alto de la ruta
-                            val adjustedCenterLat = centerLat + latOffset
-                            val centerPoint = Point.fromLngLat(centerLng, adjustedCenterLat)
-                            
-                            // Calcular dimensiones de la ruta
-                            val routeWidth = calculateDistance(
-                                GeoPoint(minLat, minLng), 
-                                GeoPoint(minLat, maxLng)
-                            )
-                            val routeHeight = calculateDistance(
-                                GeoPoint(minLat, minLng), 
-                                GeoPoint(maxLat, minLng)
-                            )
-                            val maxDimension = maxOf(routeWidth, routeHeight)
-                            
-                            // Ajustar zoom con más zoom out para mejor visibilidad
-                            val zoomLevel = when {
-                                maxDimension < 500 -> 15.0   // Ruta muy corta (más zoom out)
-                                maxDimension < 1000 -> 14.0  // Ruta corta (más zoom out)
-                                maxDimension < 2000 -> 13.0  // Ruta media (más zoom out)
-                                maxDimension < 5000 -> 12.0  // Ruta larga (más zoom out)
-                                else -> 11.0                    // Ruta muy larga (más zoom out)
-                            }
-                            
-                            println("DEBUG: Route dimensions - Width: ${String.format("%.1f", routeWidth)}km, Height: ${String.format("%.1f", routeHeight)}km, Zoom: $zoomLevel, Offset: ${String.format("%.1f", latOffset * 111000)}m")
-                            
-                            val cameraOptions = CameraOptions.Builder()
-                                .center(centerPoint)
-                                .zoom(zoomLevel)
-                                .build()
-                            mapView.mapboxMap.setCamera(cameraOptions)
-                        }
-                        
-                        // Usar el plugin de anotaciones para dibujar la ruta y el marcador
-                        try {
-                            val annotationPlugin = mapView.annotations
-                            
-                            // Limpiar managers anteriores si existen
-                            polylineAnnotationManager?.let {
-                                // No hay método delete directo para polyline, pero podemos crear uno nuevo
-                            }
-                            pointAnnotationManager?.let {
-                                clientMarkerAnnotation?.let { annotation ->
-                                    it.delete(annotation)
-                                }
-                            }
-                            
-                            // Crear nuevos managers
-                            polylineAnnotationManager = annotationPlugin.createPolylineAnnotationManager()
-                            pointAnnotationManager = annotationPlugin.createPointAnnotationManager()
-                            
-                            // Crear opciones para la polilínea con estilo mejorado (similar a HomeScreen)
-                            println("DEBUG: Creando polilínea con color turquesa #0FB9B1")
-                            val polylineAnnotationOptions = PolylineAnnotationOptions()
-                                .withPoints(routePoints)
-                                .withLineColor("#FF0000") // Color rojo brillante para prueba
-                                .withLineWidth(6.0)
-                            
-                            // Crear la polilínea con la ruta real
-                            val createdPolyline = polylineAnnotationManager?.create(polylineAnnotationOptions)
-                            println("DEBUG: Polilínea creada con ID: ${createdPolyline?.id} y color: #FF0000 (rojo de prueba)")
-                            
-                            // Crear nuevo marcador del cliente en el destino
-                            val destinationPoint = routePoints.last()
-                            
-                            // Crear icono de pasajero como bitmap drawable
-                            val passengerIcon = createPassengerIcon(context)
-                            
-                            val pointAnnotationOptions = PointAnnotationOptions()
-                                .withPoint(destinationPoint)
-                                .withIconImage(passengerIcon)
-                                .withIconSize(1.0)
-                            
-                            val annotation = pointAnnotationManager?.create(pointAnnotationOptions)
-                            clientMarkerAnnotation = annotation
-                            
-                            println("DEBUG: Ruta calculada y marcador del cliente dibujados exitosamente - Distancia: ${String.format("%.1f", routeDistance)}km, Duración: ${String.format("%.0f", routeDuration)}min")
-                        } catch (e: Exception) {
-                            println("Error al agregar ruta al mapa: ${e.message}")
-                            e.printStackTrace()
-                        }
-                    }
-                } else {
-                    // Fallback: dibujar línea recta si falla la API
-                    println("DEBUG: Falló cálculo de ruta, usando línea recta")
-                    drawSimpleRoute(mapView, driverLocation, clientLocation)
-                }
-                
-                isCalculatingRoute = false
-                
-            } catch (e: Exception) {
-                isCalculatingRoute = false
-                e.printStackTrace()
-            }
-        }
+    // Fija el punto objetivo del viaje (recojo o destino). La ruta, el marcador del pasajero y la
+    // cámara los dibuja el seguimiento del mapa (más abajo), también con la app minimizada.
+    fun setTripTarget(target: GeoPoint) {
+        clientLocationMarker = target
     }
 
     // Funciones para manejar solicitudes
@@ -518,11 +261,7 @@ fun DriverHomeScreen(
                         activeRideRequest = request
                         activeRideId = rideId
                         activeRideStatus = "accepted"
-                        currentLocation?.let { driverLoc ->
-                            mapViewRef?.let { view ->
-                                drawRouteToClient(view, driverLoc, GeoPoint(request.originLatitude, request.originLongitude))
-                            }
-                        }
+                        setTripTarget(GeoPoint(request.originLatitude, request.originLongitude))
                         Toast.makeText(context, "Viaje aceptado", Toast.LENGTH_SHORT).show()
                     } else {
                         queuedRideRequest = request
@@ -547,7 +286,6 @@ fun DriverHomeScreen(
         clearRouteAndPassengerMarker()
         routeDistance = 0.0
         routeDuration = 0.0
-        routeGeometry = null
         val next = queuedRideRequest
         if (next != null) {
             activeRideRequest = next
@@ -555,11 +293,7 @@ fun DriverHomeScreen(
             activeRideStatus = "accepted"
             queuedRideRequest = null
             queuedRideId = null
-            currentLocation?.let { driverLoc ->
-                mapViewRef?.let { view ->
-                    drawRouteToClient(view, driverLoc, GeoPoint(next.originLatitude, next.originLongitude))
-                }
-            }
+            setTripTarget(GeoPoint(next.originLatitude, next.originLongitude))
         } else {
             activeRideRequest = null
             activeRideId = null
@@ -648,15 +382,10 @@ fun DriverHomeScreen(
                 return@collect
             }
             activeRideStatus = activeRide.status
-            // Redibuja la ruta si el punto objetivo (recojo o destino) cambió más de 10 m
-            val clientLoc = activeRide.clientLocation ?: return@collect
-            val driverLoc = currentLocation ?: return@collect
-            val previousClientLoc = clientLocationMarker
-            clientLocationMarker = clientLoc
-            mapViewRef?.let { mapView ->
-                if (previousClientLoc == null || calculateDistance(previousClientLoc, clientLoc) > 10) {
-                    drawRouteToClient(mapView, driverLoc, clientLoc)
-                }
+            // Punto objetivo: recojo mientras va por el pasajero, destino durante el viaje
+            activeRide.clientLocation?.let { target ->
+                val previous = clientLocationMarker
+                if (previous == null || calculateDistance(previous, target) > 10) setTripTarget(target)
             }
         }
     }
@@ -688,6 +417,8 @@ fun DriverHomeScreen(
     Box(modifier = Modifier.fillMaxSize()) {
         val mapView = rememberMapViewWithLifecycle(accessToken = mapboxToken)
         mapViewRef = mapView
+        // Para saber si la app está visible (con la app minimizada la cámara se mueve sin animación)
+        val lifecycleOwner = LocalLifecycleOwner.current
         AndroidView(factory = { mapView }, modifier = Modifier.fillMaxSize()) { view ->
             view.mapboxMap.loadStyleUri(Style.MAPBOX_STREETS) {
                 if (!hasLocationPermission) {
@@ -707,6 +438,10 @@ fun DriverHomeScreen(
                 }
                 // Ocultar regla de escala para un look limpio
                 view.scalebar.enabled = false
+                // Ruta y marcador del pasajero (la ruta primero, para que el marcador quede encima)
+                if (polylineAnnotationManager == null) polylineAnnotationManager = view.annotations.createPolylineAnnotationManager()
+                if (pointAnnotationManager == null) pointAnnotationManager = view.annotations.createPointAnnotationManager()
+                isStyleLoaded = true
 
                 if (hasLocationPermission) {
                     // Listener para centrar la cámara inicialmente (solo una vez)
@@ -721,13 +456,9 @@ fun DriverHomeScreen(
                             // Guardar ubicación inicial
                             currentLocation = GeoPoint(point.latitude(), point.longitude())
                             
-                            // Si hay un viaje activo, dibujar ruta hacia el cliente
-                            if (activeRideRequest != null && currentLocation != null) {
-                                val clientLoc = com.google.firebase.firestore.GeoPoint(
-                                    activeRideRequest!!.originLatitude,
-                                    activeRideRequest!!.originLongitude
-                                )
-                                drawRouteToClient(view, currentLocation!!, clientLoc)
+                            // Viaje retomado sin objetivo todavía: el recojo del pasajero
+                            if (activeRideRequest != null && clientLocationMarker == null) {
+                                setTripTarget(GeoPoint(activeRideRequest!!.originLatitude, activeRideRequest!!.originLongitude))
                             }
                             
                             // Solo una vez para centrar cámara
@@ -776,6 +507,128 @@ fun DriverHomeScreen(
                     )
                 }
             }
+        }
+
+        // Con la app minimizada el mapa se pausa y deja de dar la ubicación: se usa la del servicio en
+        // segundo plano, que sigue leyendo el GPS
+        LaunchedEffect(Unit) {
+            com.intu.taxi.driver.DriverSession.location.collect { location ->
+                if (location != null && !lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+                    currentLocation = location
+                }
+            }
+        }
+
+        DisposableEffect(mapView) {
+            val gestureListener = object : OnMoveListener {
+                override fun onMoveBegin(detector: MoveGestureDetector) { lastUserGestureMs[0] = System.currentTimeMillis() }
+                override fun onMove(detector: MoveGestureDetector): Boolean = false
+                override fun onMoveEnd(detector: MoveGestureDetector) { lastUserGestureMs[0] = System.currentTimeMillis() }
+            }
+            mapView.gestures.addOnMoveListener(gestureListener)
+            onDispose { mapView.gestures.removeOnMoveListener(gestureListener) }
+        }
+
+        // Ruta, marcador del pasajero y cámara del viaje, como en la app del pasajero: la ruta va del
+        // conductor al objetivo (recojo o destino) y la cámara encuadra ambos dejando libres el
+        // encabezado y la tarjeta. Corre fuera de la recomposición, que Compose pausa con la app
+        // minimizada, así todo sigue al día en segundo plano y al volver no hay que esperar.
+        // La ruta se pide a Mapbox al cambiar de objetivo o si el conductor se sale de ella; mientras
+        // la sigue, solo se recorta lo recorrido. Como mucho se procesa un cambio por segundo.
+        LaunchedEffect(mapView) {
+            var routeLeg: String? = null
+            var secondsPerMeter = 0.0
+            snapshotFlow {
+                DriverTripMapInput(
+                    rideId = activeRideId,
+                    status = activeRideStatus,
+                    target = clientLocationMarker,
+                    driver = currentLocation,
+                    styleLoaded = isStyleLoaded,
+                    cardHeightPx = tripCardHeightPx
+                )
+            }
+                .distinctUntilChanged()
+                .conflate()
+                .collect { input ->
+                    val lines = polylineAnnotationManager
+                    val markers = pointAnnotationManager
+                    val target = input.target?.let { Point.fromLngLat(it.longitude, it.latitude) }
+                    if (input.rideId == null || target == null || !input.styleLoaded || lines == null || markers == null) {
+                        routeLeg = null
+                        return@collect
+                    }
+                    val driver = input.driver?.let { Point.fromLngLat(it.longitude, it.latitude) }
+                    val leg = "${input.rideId}:${target.latitude()},${target.longitude()}"
+
+                    if (driver != null) {
+                        val trimmed = if (leg == routeLeg) TripMap.trimRoute(routePoints, driver) else null
+                        if (trimmed != null) {
+                            routePoints = trimmed
+                        } else {
+                            isCalculatingRoute = true
+                            val route = TripMap.fetchRoute(mapboxToken, driver, target)
+                            isCalculatingRoute = false
+                            if (route != null) {
+                                routePoints = route.points
+                                secondsPerMeter = if (route.distanceMeters > 0) route.durationSeconds / route.distanceMeters else 0.0
+                            } else {
+                                // Sin conexión con Mapbox: línea recta hasta el objetivo
+                                routePoints = listOf(driver, target)
+                                secondsPerMeter = 0.0
+                            }
+                            routeLeg = leg
+                        }
+                        val remaining = TripMap.lengthMeters(routePoints)
+                        routeDistance = remaining / 1000.0
+                        routeDuration = remaining * secondsPerMeter / 60.0
+                    }
+
+                    // Dibuja o mueve la ruta y el marcador del pasajero
+                    if (routePoints.size > 1) {
+                        val line = routeAnnotation
+                        if (line == null || lines.annotations.none { it.id == line.id }) {
+                            routeAnnotation = lines.create(
+                                PolylineAnnotationOptions()
+                                    .withPoints(routePoints)
+                                    .withLineColor("#08817E")
+                                    .withLineWidth(6.0)
+                            )
+                        } else {
+                            line.points = routePoints
+                            runCatching { lines.update(line) }
+                        }
+                    }
+                    val marker = clientMarkerAnnotation
+                    if (marker == null || markers.annotations.none { it.id == marker.id }) {
+                        clientMarkerAnnotation = markers.create(
+                            PointAnnotationOptions()
+                                .withPoint(target)
+                                .withIconImage(createPassengerIcon(context))
+                                .withIconSize(1.0)
+                        )
+                    } else if (marker.point != target) {
+                        marker.point = target
+                        runCatching { markers.update(marker) }
+                    }
+
+                    if (System.currentTimeMillis() - lastUserGestureMs[0] >= 8_000) {
+                        val density = context.resources.displayMetrics.density.toDouble()
+                        val mapHeight = mapView.height.toDouble()
+                        TripMap.fitCamera(
+                            mapView,
+                            listOfNotNull(driver, target) + routePoints,
+                            EdgeInsets(
+                                mapHeight * 0.2 + 24 * density,
+                                48 * density,
+                                (input.cardHeightPx + 24 * density).coerceAtMost(mapHeight * 0.6),
+                                48 * density
+                            ),
+                            animate = lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
+                        )
+                    }
+                    delay(1_000)
+                }
         }
 
         // Header superior con el mismo fondo de gradiente + transparencia de HomeScreen
@@ -943,6 +796,7 @@ fun DriverHomeScreen(
                     // Encima de la barra de navegación del sistema, sea de gestos o de 3 botones
                     .navigationBarsPadding()
                     .padding(bottom = 16.dp)
+                    .onGloballyPositioned { tripCardHeightPx = it.size.height }
             ) {
                 EnhancedActiveRideCard(
                     request = request,
@@ -1299,6 +1153,16 @@ private fun com.intu.taxi.models.ActiveRide.toDriverRequest() = DriverRideReques
 )
 
 // Función para crear icono de pasajero con diseño moderno similar a HomeScreen
+/** Lo que decide la ruta y la cámara del viaje en el mapa del conductor. */
+private data class DriverTripMapInput(
+    val rideId: String?,
+    val status: String,
+    val target: GeoPoint?,
+    val driver: GeoPoint?,
+    val styleLoaded: Boolean,
+    val cardHeightPx: Int
+)
+
 fun createPassengerIcon(context: android.content.Context): android.graphics.Bitmap {
     val size = 100 // Tamaño más compacto del bitmap en píxeles
     val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
