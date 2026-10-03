@@ -92,3 +92,24 @@ portadas oscura/clara con regreso desde mapa/búsqueda. Se revisaron capturas
 nativas de Cuenta y Viajes en ambos temas y ganancias en modo oscuro. Los
 datos del historial usados en estas capturas son fixtures locales; las pruebas
 no califican ni crean viajes reales.
+
+## Revisión: recuperar el turquesa e índigo originales
+
+Se recuperan `#08817E` y `#1E1F47` como los dos colores del degradado compartido.
+Los fondos y las tarjetas de Inicio, Viajes y Cuenta usan variaciones de esa
+misma combinación: profundas en modo oscuro y claras en modo claro. Viajar,
+Enviar, el perfil y las ganancias tienen un degradado más marcado. Las tarjetas
+de lugares guardados conservan el degradado detrás de cada fila.
+
+La paleta del tema reemplaza las superficies grises oscuras por índigo y
+azul/turquesa, y los acentos verdes y las superficies lavanda predeterminadas
+del modo claro por la identidad original. Se conserva la distribución nueva,
+las funciones y el interruptor integrado de Cuenta.
+
+Compilación debug y APK de pruebas correctas. Cuatro pruebas de interfaz
+aprobadas: historial y ganancias en ambos temas, interruptor integrado de Cuenta,
+Inicio oscuro con regreso desde el mapa e Inicio claro con búsqueda y regreso.
+La última prueba cierra primero el teclado nativo antes de enviar Atrás a la
+pantalla, y espera que terminen sus cambios de visibilidad. Se revisaron capturas
+nativas de la nueva combinación y se reinstaló el APK en el Samsung con `-r`,
+conservando los datos.

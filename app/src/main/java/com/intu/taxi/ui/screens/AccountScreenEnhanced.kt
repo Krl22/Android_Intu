@@ -273,8 +273,8 @@ fun AccountScreenEnhanced(
                             onClick = onOpenAdmin,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 20.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+                                .padding(horizontal = 20.dp).intuCardBackground(),
+                            colors = CardDefaults.cardColors(containerColor = Color.Transparent),
                             shape = RoundedCornerShape(24.dp)
                         ) {
                             Row(
@@ -435,8 +435,8 @@ private fun EnhancedHeaderSection(
     Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp)) {
         IntuPageHeading("Tu cuenta", "Tus preferencias y todo lo que necesitas de Intu.")
-        Card(shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = colors.surfaceContainer)) {
+        Card(shape = RoundedCornerShape(24.dp), modifier = Modifier.intuCardBackground(emphasized = true),
+            colors = CardDefaults.cardColors(containerColor = Color.Transparent)) {
             Column(Modifier.fillMaxWidth().padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically,
@@ -518,9 +518,9 @@ private fun DriverStatsSection() {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp),
+            .padding(horizontal = 20.dp).intuCardBackground(emphasized = true),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer
+            containerColor = Color.Transparent
         ),
         shape = RoundedCornerShape(24.dp)
     ) {
@@ -592,9 +592,9 @@ private fun SettingsSection(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp),
+            .padding(horizontal = 20.dp).intuCardBackground(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer
+            containerColor = Color.Transparent
         ),
         shape = RoundedCornerShape(24.dp)
     ) {

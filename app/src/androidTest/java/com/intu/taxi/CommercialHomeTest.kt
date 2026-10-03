@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.espresso.Espresso.pressBack
+import androidx.test.espresso.Espresso.closeSoftKeyboard
 import com.intu.taxi.ui.map.TripRoute
 import com.intu.taxi.ui.screens.HomeScreen
 import com.intu.taxi.ui.screens.CommercialHome
@@ -78,10 +79,15 @@ class CommercialHomeTest {
         compose.onNode(hasSetTextAction()).performClick().performTextInput("zzzz")
         compose.onNodeWithTag("home-map").assertDoesNotExist()
         compose.onNodeWithText("Tu día se mueve\ncon Intu.").assertDoesNotExist()
-        // Cancel the draft/search directly even while the software keyboard is visible.
+        // Android handles IME dismissal before the screen's BackHandler.
         compose.onNodeWithContentDescription("Limpiar").performClick()
+        closeSoftKeyboard()
         pressBack()
         compose.onNodeWithTag("commercial-home").assertIsDisplayed()
+        // The native keyboard inset animation can finish after Compose becomes idle.
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithText("Tu día se mueve\ncon Intu.").fetchSemanticsNodes().isNotEmpty()
+        }
         compose.onNodeWithText("Tu día se mueve\ncon Intu.").performScrollTo().assertIsDisplayed()
         captureNativeScreenshot(compose, "commercial-home-light.png")
     }

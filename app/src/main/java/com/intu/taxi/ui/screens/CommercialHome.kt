@@ -15,6 +15,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -81,8 +82,8 @@ internal fun CommercialHome(
                     HomeServiceCard(MotoOption.DELIVERY, "Enviar", "Paquetes pequeños", onDelivery, Modifier.weight(1f))
                 }
                 destinations()
-                Card(colors = CardDefaults.cardColors(containerColor = colors.surfaceContainer),
-                    shape = RoundedCornerShape(24.dp), modifier = Modifier.testTag("home-local-businesses")) {
+                Card(colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+                    shape = RoundedCornerShape(24.dp), modifier = Modifier.testTag("home-local-businesses").intuCardBackground()) {
                     Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Icon(Icons.Outlined.Storefront, contentDescription = null, tint = colors.primary)
                         Text("Más de tu ciudad", color = colors.onSurface,
@@ -110,8 +111,8 @@ internal fun HomeDestinations(
                 color = colors.onBackground, fontWeight = FontWeight.SemiBold)
             TextButton(onClick = onConfigurePlace, modifier = Modifier.testTag("home-manage-places")) { Text("Gestionar") }
         }
-        Card(shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = colors.surfaceContainer)) {
+        Card(shape = RoundedCornerShape(24.dp), modifier = Modifier.intuCardBackground(),
+            colors = CardDefaults.cardColors(containerColor = Color.Transparent)) {
             val destinations = listOf("casa" to "Casa", "trabajo" to "Trabajo") +
                 places.filterNot { it.id == "casa" || it.id == "trabajo" }.map { it.id to it.name }
             destinations.forEachIndexed { index, (id, name) ->
@@ -126,7 +127,7 @@ internal fun HomeDestinations(
                     }, contentDescription = null, tint = colors.primary) },
                     trailingContent = { Icon(Icons.AutoMirrored.Filled.ArrowForward, null,
                         tint = colors.onSurfaceVariant, modifier = Modifier.size(18.dp)) },
-                    colors = ListItemDefaults.colors(containerColor = colors.surfaceContainer,
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent,
                         headlineColor = colors.onSurface, supportingColor = colors.onSurfaceVariant),
                     modifier = Modifier.testTag("home-place-$id").clickable {
                         if (place != null) onSavedPlaceClick(place) else onConfigurePlace()
@@ -141,8 +142,9 @@ internal fun HomeDestinations(
 @Composable
 private fun HomeServiceCard(option: MotoOption, title: String, subtitle: String, onClick: () -> Unit, modifier: Modifier) {
     val colors = MaterialTheme.colorScheme
-    Card(onClick = onClick, modifier = modifier.testTag(if (option.delivery) "home-start-delivery" else "home-start-trip"),
-        shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = colors.surfaceContainerHigh)) {
+    Card(onClick = onClick, modifier = modifier.testTag(if (option.delivery) "home-start-delivery" else "home-start-trip")
+            .intuCardBackground(emphasized = true),
+        shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = Color.Transparent)) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             MotoOptionArt(option, animate = false, modifier = Modifier.fillMaxWidth().height(70.dp))
             Text(title, color = colors.onSurface, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)

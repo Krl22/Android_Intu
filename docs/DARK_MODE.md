@@ -11,7 +11,7 @@ El interruptor aparece en Cuenta sin depender de permisos de administrador ni de
 ## Implementación
 
 - `IntuAppearanceHost` observa la cuenta, carga su preferencia y proporciona `LocalIntuDarkMode` a la composición. Se mantienen las preferencias originales del modo claro.
-- Paleta grafito con acentos turquesa, texto claro, superficies y campos adaptados. Incluye Inicio, Cuenta, Viajes, selección de motos, herramientas de cuenta, formularios de lugares, panel admin y tarjetas de conductor.
+- Paleta oscura basada en el turquesa e índigo originales de Intu, con texto claro, superficies y campos adaptados. Inicio, Cuenta y Viajes comparten fondos y tarjetas en degradado. Incluye selección de motos, herramientas de cuenta, formularios de lugares, panel admin y tarjetas de conductor.
 - `intuMapStyle()` selecciona Mapbox Streets o Dark para Inicio, conductor, catálogo, ubicación simulada/direcciones guardadas (usan el mismo picker) y detalle de viajes.
 - Inicio y conductor recargan el estilo sobre el mismo MapView, sin reiniciar los estados de recojo/destino ni la suscripción GPS. Los managers de anotaciones conservan sus capas persistentes; el SDK 11.16.4 conserva las fuentes e imágenes asociadas al cambiar de estilo.
 - Se conserva la configuración común de los mapas: escala oculta, logo/atribución visibles y zoom centrado en el pin cuando se elige un punto.

@@ -197,8 +197,8 @@ private fun EarningsCard(rides: List<RideHistoryItem>, rating: Pair<Double, Int>
     val (today, week, month) = RideHistoryRepository.earnings(rides)
     Card(
         shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-        modifier = Modifier.fillMaxWidth()
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        modifier = Modifier.fillMaxWidth().intuCardBackground(emphasized = true)
     ) {
         Column(
             modifier = Modifier
@@ -264,8 +264,8 @@ private fun RideHistoryCard(ride: RideHistoryItem, isDriver: Boolean, onRate: (I
     Card(
         onClick = onDetails,
         shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-        modifier = Modifier.fillMaxWidth().testTag("trip-${ride.id}")
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        modifier = Modifier.fillMaxWidth().testTag("trip-${ride.id}").intuCardBackground()
     ) {
         Column(Modifier.padding(20.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -387,8 +387,8 @@ private fun RoutePoint(color: Color, text: String) {
 private fun MessageCard(title: String, body: String, actionLabel: String? = null, onAction: () -> Unit = {}) {
     Card(
         shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-        modifier = Modifier.fillMaxWidth()
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        modifier = Modifier.fillMaxWidth().intuCardBackground()
     ) {
         Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Text(title, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)

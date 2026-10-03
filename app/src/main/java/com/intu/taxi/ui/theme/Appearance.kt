@@ -1,6 +1,7 @@
 package com.intu.taxi.ui.theme
 
 import android.content.Context
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
@@ -57,11 +58,11 @@ fun IntuAppearanceHost(content: @Composable () -> Unit) {
 fun intuMapStyle(): String = if (LocalIntuDarkMode.current) Style.DARK else Style.MAPBOX_STREETS
 
 object AppearanceColors {
-    val surface: Color @Composable get() = if (LocalIntuDarkMode.current) Color(0xFF19282C) else Color.White
-    val ink: Color @Composable get() = if (LocalIntuDarkMode.current) Color(0xFFE7F1EF) else Color(0xFF1E1F47)
-    val muted: Color @Composable get() = if (LocalIntuDarkMode.current) Color(0xFFAFC2C3) else Color(0xFF5F6570)
-    val accent: Color @Composable get() = if (LocalIntuDarkMode.current) Color(0xFF78D9D0) else Color(0xFF08817E)
-    val outline: Color @Composable get() = if (LocalIntuDarkMode.current) Color(0xFF3A5054) else Color(0xFFDCE8E7)
+    val surface: Color @Composable get() = if (LocalIntuDarkMode.current) MaterialTheme.colorScheme.surface else Color.White
+    val ink: Color @Composable get() = if (LocalIntuDarkMode.current) MaterialTheme.colorScheme.onSurface else IntuIndigo
+    val muted: Color @Composable get() = if (LocalIntuDarkMode.current) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF5F6570)
+    val accent: Color @Composable get() = MaterialTheme.colorScheme.primary
+    val outline: Color @Composable get() = if (LocalIntuDarkMode.current) MaterialTheme.colorScheme.outlineVariant else Color(0xFFDCE8E7)
     @Composable fun foreground(light: Color): Color = if (LocalIntuDarkMode.current) ink else light
     @Composable fun secondary(light: Color): Color = if (LocalIntuDarkMode.current) muted else light
     @Composable fun highlight(light: Color): Color = if (!LocalIntuDarkMode.current) light else when (light.toArgb()) {
@@ -70,5 +71,5 @@ object AppearanceColors {
         0xFF067647.toInt(), 0xFF16A34A.toInt() -> Color(0xFF85DCA4)
         else -> accent
     }
-    @Composable fun tint(light: Color): Color = if (LocalIntuDarkMode.current) Color(0xFF263D40) else light
+    @Composable fun tint(light: Color): Color = if (LocalIntuDarkMode.current) MaterialTheme.colorScheme.surfaceVariant else light
 }

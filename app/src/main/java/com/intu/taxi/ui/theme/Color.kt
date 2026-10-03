@@ -2,6 +2,10 @@ package com.intu.taxi.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
+// Original Intu gradient used by the main screens.
+val IntuTeal = Color(0xFF08817E)
+val IntuIndigo = Color(0xFF1E1F47)
+
 // Paleta de marca
 val IntuGreen = Color(0xFF004834)   // #004834
 val IntuGold = Color(0xFFefb11b)    // #efb11b
