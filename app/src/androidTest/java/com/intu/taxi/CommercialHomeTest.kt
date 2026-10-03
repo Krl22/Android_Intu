@@ -73,11 +73,15 @@ class CommercialHomeTest {
         compose.onNodeWithTag("moto-option-any").performScrollTo().assertIsSelected()
     }
 
-    @Test fun lightLandingSearchKeepsMapHiddenAndBackRestoresPresentation() {
+    @Test fun lightLandingSearchShowsMapImmediatelyAndBackRestoresPresentation() {
         launch(dark = false)
         compose.onNodeWithTag("commercial-home").assertIsDisplayed()
-        compose.onNode(hasSetTextAction()).performClick().performTextInput("zzzz")
-        compose.onNodeWithTag("home-map").assertDoesNotExist()
+        compose.onNode(hasSetTextAction()).performClick()
+        compose.onNodeWithTag("home-map").assertIsDisplayed()
+        compose.onNodeWithTag("home-search-overlay").assertIsDisplayed()
+        compose.onNodeWithTag("commercial-home").assertDoesNotExist()
+        compose.onNode(hasSetTextAction()).assertIsFocused().performTextInput("zzzz")
+        compose.onNodeWithTag("home-map").assertIsDisplayed()
         compose.onNodeWithText("Tu día se mueve\ncon Intu.").assertDoesNotExist()
         // Android handles IME dismissal before the screen's BackHandler.
         compose.onNodeWithContentDescription("Limpiar").performClick()
@@ -89,7 +93,26 @@ class CommercialHomeTest {
             compose.onAllNodesWithText("Tu día se mueve\ncon Intu.").fetchSemanticsNodes().isNotEmpty()
         }
         compose.onNodeWithText("Tu día se mueve\ncon Intu.").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("home-map").assertDoesNotExist()
         captureNativeScreenshot(compose, "commercial-home-light.png")
+    }
+
+    @Test fun darkSearchPreservesInputOverMapAndCanContinueToDestinationPicker() {
+        launch(dark = true)
+        compose.onNode(hasSetTextAction()).performClick()
+        compose.onNodeWithTag("home-map").assertIsDisplayed()
+        compose.onNodeWithTag("home-search-overlay").assertIsDisplayed()
+        compose.onNode(hasSetTextAction()).assertIsFocused().performTextInput("zzzz")
+        closeSoftKeyboard()
+        compose.onNode(hasSetTextAction()).assertTextContains("zzzz")
+        compose.onNodeWithTag("home-map").assertIsDisplayed()
+        captureNativeScreenshot(compose, "home-search-map-dark.png")
+        compose.onNodeWithTag("home-pick-destination").performClick()
+        compose.onNodeWithText("Confirmar destino").assertIsDisplayed()
+        compose.onNodeWithTag("home-search-overlay").assertDoesNotExist()
+        pressBack()
+        compose.onNodeWithTag("commercial-home").assertIsDisplayed()
+        compose.onNodeWithTag("home-map").assertDoesNotExist()
     }
 
     @Test fun relocatedPlacesKeepSavedDestinationsAndManageAction() {

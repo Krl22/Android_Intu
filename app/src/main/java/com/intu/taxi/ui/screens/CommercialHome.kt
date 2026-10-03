@@ -37,8 +37,11 @@ internal fun CommercialHome(
     onDelivery: () -> Unit
 ) {
     val colors = MaterialTheme.colorScheme
+    // Search stays mounted over the map so moving the header preserves focus and typing.
+    val container = if (searchActive) Modifier.fillMaxWidth()
+        else Modifier.fillMaxSize().intuPageBackground()
     Column(
-        Modifier.fillMaxSize().intuPageBackground().testTag("commercial-home")
+        container.testTag(if (searchActive) "home-search-overlay" else "commercial-home")
             .padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())
             .imePadding().verticalScroll(rememberScrollState())
     ) {

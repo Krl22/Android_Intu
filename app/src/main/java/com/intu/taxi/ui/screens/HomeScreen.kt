@@ -645,8 +645,10 @@ fun HomeScreen(
             (permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true)
     }
 
-    val showTripMap = isSelectingPoint || isRideOptionsVisible || isSearchingDriver || activeRide != null ||
+    val isPreparingTrip = isSelectingPoint || isRideOptionsVisible || isSearchingDriver || activeRide != null ||
         isCalculatingDestinationRoute || isCreatingRideRequest || currentRideRequestId != null
+    val searchActive = isSearchFocused || isKeyboardVisible || searchQuery.isNotBlank()
+    val showTripMap = isPreparingTrip || searchActive
 
     Box(modifier = Modifier.fillMaxSize()) {
         val mapView = rememberMapViewWithLifecycle(accessToken = mapboxToken)
@@ -1039,11 +1041,11 @@ fun HomeScreen(
             addressSearchRepository.search(it, userLocation?.latitude(), userLocation?.longitude())
         }
 
-        if (!showTripMap) {
+        if (!isPreparingTrip) {
             CommercialHome(
                 padding = padding,
                 greetingName = greetingName,
-                searchActive = isSearchFocused || isKeyboardVisible || searchQuery.isNotBlank(),
+                searchActive = searchActive,
                 onPickMap = { focusManager.clearFocus(); keyboard?.hide(); isSelectingDestination = true },
                 onTravel = {
                     selectedMotoOptionCode = com.intu.taxi.models.MotoOption.ANY.code
