@@ -18,3 +18,8 @@ local.properties
 hs_err_pid*.log
 replay_pid*.log
 .kotlin/
+
+# Cachés locales de herramientas y adjuntos del chat
+/.wrangler/
+/supabase/.temp/
+/.codex-remote-attachments/

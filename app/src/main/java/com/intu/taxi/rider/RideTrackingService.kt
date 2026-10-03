@@ -38,22 +38,25 @@ object RiderTrip {
     val notice: StateFlow<TripNotice?> = _notice
 
     /** Viaje recién pedido (o retomado): si ya se sigue ese viaje, conserva su estado actual. */
-    fun searching(rideId: String) {
+    fun searching(rideId: String, delivery: Boolean = false) {
         if (_notice.value?.rideId == rideId) return
-        _notice.value = TripNotice(rideId, "Buscando conductor", "Te avisamos apenas un conductor acepte tu viaje.")
+        _notice.value = TripNotice(rideId, if (delivery) "Buscando repartidor" else "Buscando conductor",
+            if (delivery) "Te avisamos apenas un repartidor acepte tu envío." else "Te avisamos apenas un conductor acepte tu viaje.")
     }
 
     /** Actualiza el aviso con el estado del viaje; al terminar o cancelarse lo quita. */
     fun update(ride: ActiveRide) {
-        val driver = ride.driverName.ifBlank { "Tu conductor" }
+        val driver = ride.driverName.ifBlank { if (ride.isDelivery) "Tu repartidor" else "Tu conductor" }
         val plate = ride.vehiclePlate.takeIf { it.isNotBlank() }?.let { " · Placa $it" }.orEmpty()
         _notice.value = when (ride.status) {
-            "searching" -> TripNotice(ride.rideId, "Buscando conductor", "Te avisamos apenas un conductor acepte tu viaje.")
-            "accepted" -> TripNotice(ride.rideId, "Tu conductor va en camino", "$driver$plate")
-            "arrived" -> TripNotice(ride.rideId, "Tu conductor llegó", "$driver te espera en el punto de recojo$plate")
+            "searching" -> TripNotice(ride.rideId, if (ride.isDelivery) "Buscando repartidor" else "Buscando conductor",
+                if (ride.isDelivery) "Te avisamos apenas un repartidor acepte tu envío." else "Te avisamos apenas un conductor acepte tu viaje.")
+            "accepted" -> TripNotice(ride.rideId, if (ride.isDelivery) "Tu repartidor va en camino" else "Tu conductor va en camino", "$driver$plate")
+            "arrived" -> TripNotice(ride.rideId, if (ride.isDelivery) "Tu repartidor llegó al recojo" else "Tu conductor llegó", "$driver te espera en el punto de recojo$plate")
             "in_progress" -> TripNotice(
-                ride.rideId, "Viaje en curso",
-                ride.destinationAddress.takeIf { it.isNotBlank() }?.let { "Vas a $it" } ?: "Vas camino a tu destino"
+                ride.rideId, if (ride.isDelivery) "Tu paquete está en camino" else "Viaje en curso",
+                ride.destinationAddress.takeIf { it.isNotBlank() }?.let { if (ride.isDelivery) "Entrega en $it" else "Vas a $it" }
+                    ?: if (ride.isDelivery) "Tu repartidor va hacia el punto de entrega" else "Vas camino a tu destino"
             )
             else -> null
         }

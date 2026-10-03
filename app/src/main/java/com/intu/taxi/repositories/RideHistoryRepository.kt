@@ -24,7 +24,16 @@ data class RideHistoryItem(
     val riderName: String,
     val riderPhotoUrl: String,
     val ratingForDriver: Int?,
-    val ratingForRider: Int?
+    val ratingForRider: Int?,
+    val originLatitude: Double? = null,
+    val originLongitude: Double? = null,
+    val destinationLatitude: Double? = null,
+    val destinationLongitude: Double? = null,
+    val routeGeometry: String? = null,
+    val distanceMeters: Int = 0,
+    val durationSeconds: Int = 0,
+    val vehicleType: String = "mototaxi",
+    val serviceKind: String = "passenger"
 )
 
 /** Ganancias de un período (solo viajes completados). */
@@ -75,7 +84,15 @@ class RideHistoryRepository {
         riderName = str("rider_name"),
         riderPhotoUrl = str("rider_photo_url"),
         ratingForDriver = if (isNull("rating_for_driver")) null else optInt("rating_for_driver"),
-        ratingForRider = if (isNull("rating_for_rider")) null else optInt("rating_for_rider")
+        ratingForRider = if (isNull("rating_for_rider")) null else optInt("rating_for_rider"),
+        originLatitude = if (isNull("origin_lat")) null else optDouble("origin_lat"),
+        originLongitude = if (isNull("origin_lng")) null else optDouble("origin_lng"),
+        destinationLatitude = if (isNull("destination_lat")) null else optDouble("destination_lat"),
+        destinationLongitude = if (isNull("destination_lng")) null else optDouble("destination_lng"),
+        routeGeometry = str("route_polyline").ifBlank { null },
+        distanceMeters = optInt("distance_meters"),
+        durationSeconds = optInt("duration_seconds"),
+        vehicleType = str("vehicle_type", "mototaxi"), serviceKind = str("service_kind", "passenger")
     )
 
     companion object {

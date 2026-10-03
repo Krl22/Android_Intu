@@ -1,8 +1,15 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     id("com.google.gms.google-services")
+}
+
+val localProperties = Properties().apply {
+    val propertiesFile = rootProject.file("local.properties")
+    if (propertiesFile.isFile) propertiesFile.inputStream().use { load(it) }
 }
 
 android {
@@ -15,8 +22,8 @@ android {
         applicationId = "com.intu.taxi"
         minSdk = 24
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.1"
+        versionCode = 29
+        versionName = "1.28"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -61,10 +68,12 @@ android {
     }
     defaultConfig {
         // Access token de Mapbox en recursos para uso en runtime
-        // Lee de local.properties (para builds locales/APK) o variables de entorno (para CI)
+        // Propiedades de Gradle o entorno (CI), con local.properties para desarrollo.
         val mapboxToken = providers.gradleProperty("MAPBOX_ACCESS_TOKEN").orNull
             ?: System.getenv("MAPBOX_ACCESS_TOKEN")
-            ?: ""
+            ?: localProperties.getProperty("MAPBOX_ACCESS_TOKEN")
+            ?: throw GradleException("Configura MAPBOX_ACCESS_TOKEN en local.properties, Gradle o el entorno.")
+        require(mapboxToken.startsWith("pk.")) { "MAPBOX_ACCESS_TOKEN debe ser un token público pk. de Mapbox." }
         resValue("string", "mapbox_access_token", mapboxToken)
         buildConfigField("String", "SUPABASE_URL", "\"https://vkguzpciwpfvaeyedepl.supabase.co\"")
         buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", "\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZrZ3V6cGNpd3BmdmFleWVkZXBsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMwNzYxMjYsImV4cCI6MjA3ODY1MjEyNn0.gHosYEPeqBHMjkezz5b9wuMQ6-PRFONcYrUuO62TYBc\"")

@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -12,7 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
@@ -59,7 +59,12 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import com.intu.taxi.auth.UserProfile
+import com.intu.taxi.data.SupabaseApi
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -71,13 +76,19 @@ fun ProfileCompletionScreen(
     prefilledPhoneE164: String?,
     requireEmail: Boolean,
     onSubmit: (UserProfile) -> Unit,
-    onVerifyEmail: (() -> Unit)? = null
+    onVerifyEmail: (() -> Unit)? = null,
+    prefilledEmail: String? = null,
+    initialProfile: UserProfile? = null,
+    isSaving: Boolean = false
 ) {
-    val firstName = remember { mutableStateOf("") }
-    val lastName = remember { mutableStateOf("") }
-    val birthdate = remember { mutableStateOf("") }
-    val email = remember { mutableStateOf("") }
-    val phone = remember { mutableStateOf(prefilledPhoneE164 ?: "") }
+    val firstName = remember { mutableStateOf(initialProfile?.firstName.orEmpty()) }
+    val lastName = remember { mutableStateOf(initialProfile?.lastName.orEmpty()) }
+    val birthdate = remember { mutableStateOf(initialProfile?.birthdate.orEmpty()) }
+    val accountEmail = prefilledEmail?.trim()?.takeIf { it.isNotEmpty() }
+    val email = remember(accountEmail) { mutableStateOf(accountEmail.orEmpty()) }
+    val verifiedPhone = prefilledPhoneE164?.takeIf { it.isNotBlank() }
+    val phone = remember(verifiedPhone) { mutableStateOf(verifiedPhone.orEmpty()) }
+    val phoneError = remember { mutableStateOf(false) }
     val showDatePicker = remember { mutableStateOf(false) }
     val formatter = DateTimeFormatter.ISO_LOCAL_DATE
     val todayMillis = remember { System.currentTimeMillis() }
@@ -149,6 +160,8 @@ fun ProfileCompletionScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .imePadding()
+                .verticalScroll(rememberScrollState())
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
@@ -342,13 +355,24 @@ fun ProfileCompletionScreen(
                                     }
                                 }
 
-                                // Campo de teléfono (solo lectura)
+                                // Solo se bloquea si Firebase ya verificó el número mediante OTP.
                                 TextField(
                                     value = phone.value,
-                                    onValueChange = {},
+                                    onValueChange = {
+                                        phone.value = it
+                                        phoneError.value = false
+                                    },
                                     label = { Text("Teléfono") },
                                     leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null, tint = Color(0xFF08817E)) },
-                                    readOnly = true,
+                                    readOnly = verifiedPhone != null,
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                                    placeholder = { Text("987 654 321") },
+                                    isError = phoneError.value,
+                                    supportingText = {
+                                        if (phoneError.value) Text("Ingresa un teléfono válido, por ejemplo 987 654 321.")
+                                        else if (verifiedPhone == null) Text("Número de Perú: 9 dígitos. Para otro país, incluye + y su código.")
+                                    },
                                     modifier = Modifier.fillMaxWidth(),
                                     colors = TextFieldDefaults.colors(
                                         focusedContainerColor = Color.Transparent,
@@ -363,29 +387,45 @@ fun ProfileCompletionScreen(
                                 )
 
                                 // Campo de correo
-                                TextField(
-                                    value = email.value,
-                                    onValueChange = { email.value = it },
-                                    label = { Text("Correo electrónico") },
-                                    leadingIcon = { Icon(Icons.Default.Email, contentDescription = null, tint = Color(0xFF08817E)) },
-                                    singleLine = true,
-                                    colors = TextFieldDefaults.colors(
-                                        focusedContainerColor = Color.Transparent,
-                                        unfocusedContainerColor = Color.Transparent,
-                                        focusedIndicatorColor = Color(0xFF08817E),
-                                        unfocusedIndicatorColor = Color(0xFF08817E).copy(alpha = 0.5f),
-                                        focusedLeadingIconColor = Color(0xFF08817E),
-                                        unfocusedLeadingIconColor = Color(0xFF08817E).copy(alpha = 0.7f)
-                                    ),
-                                    modifier = Modifier.fillMaxWidth()
-                                )
+                                if (accountEmail == null) {
+                                    TextField(
+                                        value = email.value,
+                                        onValueChange = { email.value = it },
+                                    label = { Text("Correo de contacto (opcional)") },
+                                    supportingText = { Text("Para ingresar con correo, vincula Google desde Cuenta.") },
+                                        leadingIcon = { Icon(Icons.Default.Email, contentDescription = null, tint = Color(0xFF08817E)) },
+                                        singleLine = true,
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                                        colors = TextFieldDefaults.colors(
+                                            focusedContainerColor = Color.Transparent,
+                                            unfocusedContainerColor = Color.Transparent,
+                                            focusedIndicatorColor = Color(0xFF08817E),
+                                            unfocusedIndicatorColor = Color(0xFF08817E).copy(alpha = 0.5f),
+                                            focusedLeadingIconColor = Color(0xFF08817E),
+                                            unfocusedLeadingIconColor = Color(0xFF08817E).copy(alpha = 0.7f)
+                                        ),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                }
 
-                                RowActions(requireEmail = requireEmail, email = email.value, onVerifyEmail = onVerifyEmail) {
+                                RowActions(
+                                    requireEmail = requireEmail,
+                                    email = email.value,
+                                    onVerifyEmail = null,
+                                    enabled = !isSaving && firstName.value.isNotBlank() && lastName.value.isNotBlank() &&
+                                        runCatching { !LocalDate.parse(birthdate.value).isAfter(LocalDate.now()) }.getOrDefault(false),
+                                    isSaving = isSaving
+                                ) {
+                                    val normalizedPhone = SupabaseApi.normalizePhone(phone.value)
+                                    if (normalizedPhone == null) {
+                                        phoneError.value = true
+                                        return@RowActions
+                                    }
                                     val profile = UserProfile(
                                         firstName = firstName.value.trim(),
                                         lastName = lastName.value.trim(),
                                         birthdate = birthdate.value.trim(),
-                                        number = phone.value.trim(),
+                                        number = normalizedPhone,
                                         email = email.value.trim().ifEmpty { null },
                                         termsAccepted = true
                                     )
@@ -401,14 +441,14 @@ fun ProfileCompletionScreen(
 }
 
 @Composable
-private fun RowActions(requireEmail: Boolean, email: String, onVerifyEmail: (() -> Unit)?, onContinue: () -> Unit) {
+private fun RowActions(requireEmail: Boolean, email: String, onVerifyEmail: (() -> Unit)?, enabled: Boolean, isSaving: Boolean, onContinue: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Button(
             onClick = onContinue,
-            enabled = !requireEmail || email.isNotBlank(),
+            enabled = enabled && (!requireEmail || email.isNotBlank()),
             modifier = Modifier.weight(1f),
             shape = RoundedCornerShape(12.dp),
             colors = ButtonDefaults.buttonColors(
@@ -422,7 +462,7 @@ private fun RowActions(requireEmail: Boolean, email: String, onVerifyEmail: (() 
                 modifier = Modifier.size(16.dp)
             )
             Spacer(modifier = Modifier.width(4.dp))
-            Text("Guardar y continuar")
+            Text(if (isSaving) "Guardando…" else "Guardar y continuar")
         }
         if (onVerifyEmail != null && email.isNotBlank()) {
             Button(

@@ -1,0 +1,7 @@
+:root { color-scheme: light; font-family: system-ui, sans-serif; color: #173435; background: #f3f7f7; }
+body { margin: 0; line-height: 1.65; }
+main { max-width: 780px; margin: 32px auto; padding: 28px; border-radius: 20px; background: white; }
+a { color: #076d69; text-underline-offset: 3px; }
+h1 { line-height: 1.2; } h2 { font-size: 1.25rem; margin-top: 28px; }
+.button { display: inline-block; padding: 12px 20px; background: #076d69; color: white; border-radius: 10px; font-weight: 600; }
+@media (max-width: 600px) { main { margin: 12px; padding: 22px; } }

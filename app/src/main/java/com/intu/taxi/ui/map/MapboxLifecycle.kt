@@ -13,7 +13,7 @@ import com.mapbox.maps.MapView
 @Composable
 fun rememberMapViewWithLifecycle(accessToken: String): MapView {
     val context: Context = LocalContext.current
-    val mapView = remember { MapView(context) }
+    val mapView = remember { createIntuMapView(context) }
 
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     DisposableEffect(lifecycle) {

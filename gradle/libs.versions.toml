@@ -28,7 +28,7 @@ androidx-compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-te
 androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
 androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigationCompose" }
 androidx-compose-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
-mapbox-maps-android = { group = "com.mapbox.maps", name = "android", version.ref = "mapboxMaps" }
+mapbox-maps-android = { group = "com.mapbox.maps", name = "android-ndk27", version.ref = "mapboxMaps" }
 mapbox-plugin-annotation = { group = "com.mapbox.maps", name = "plugin-annotation", version.ref = "mapboxMaps" }
 
 

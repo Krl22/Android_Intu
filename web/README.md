@@ -19,11 +19,13 @@ npx.cmd wrangler pages project create viajaconintu --production-branch main
 
 1. Compila el APK firmado (Android Studio o `gradlew assembleRelease`). Sube `versionCode` en
    `app/build.gradle.kts` en cada versión nueva para que Android la acepte como actualización.
-2. Súbelo (reemplaza al anterior; la página muestra solo el nuevo tamaño y fecha):
+2. Desde la raíz del repositorio, publica el APK con el helper. Inspecciona versión y firma, conserva una descarga fija por código y anuncia la versión al terminar de subir el archivo:
 
 ```powershell
-npx.cmd wrangler r2 object put intu-apk/intu.apk --file ..\app\build\outputs\apk\release\app-release.apk --content-type application/vnd.android.package-archive --remote
+.\scripts\publish-apk.ps1 -ApkPath .\app\build\outputs\apk\release\app-release.apk
 ```
+
+Para la distribución de QA, usa `app/build/outputs/apk/debug/app-debug.apk` con ese mismo helper. No subas solo `intu.apk`: el aviso de actualización necesita `latest.json` y `releases/<versionCode>/intu.apk`. La API conserva `size`/`uploaded` para la web y añade versión, Android mínimo, SHA-256 y URL fija. Si falta metadata o no corresponde al APK actual, la descarga sigue funcionando y no se anuncia una actualización. Incrementa siempre `versionCode`; el helper rechaza republicar un código anunciado.
 
 ## Publicar la página
 

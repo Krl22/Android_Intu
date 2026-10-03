@@ -1,6 +1,20 @@
 package com.intu.taxi.ui
 
 import java.util.Locale
+import com.intu.taxi.auth.countryCodes
+
+/** Número para mostrar en Cuenta, sin el prefijo de los países admitidos por la app. */
+fun nationalPhoneForDisplay(phone: String): String {
+    val trimmed = phone.trim()
+    val digits = trimmed.filter(Char::isDigit)
+    if (digits.isEmpty()) return ""
+    // El perfil antiguo puede tener un celular peruano sin el signo +.
+    if (!trimmed.startsWith("+")) return peruLocalPhone(trimmed)
+    val prefix = countryCodes.asSequence().map { it.prefijo.removePrefix("+") }.distinct()
+        .sortedByDescending { it.length }
+        .firstOrNull { digits.startsWith(it) && digits.length > it.length }
+    return prefix?.let { digits.removePrefix(it) } ?: trimmed
+}
 
 /** Monto en soles peruanos con punto decimal, p. ej. "S/ 9.10". */
 fun formatSoles(amount: Double): String = "S/ " + String.format(Locale.US, "%.2f", amount)

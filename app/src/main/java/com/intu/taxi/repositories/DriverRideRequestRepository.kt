@@ -57,6 +57,7 @@ class DriverRideRequestRepository {
         distanceMeters = optDouble("distance_meters"), durationSeconds = optDouble("duration_seconds"), estimatedPrice = optDouble("estimated_fare"),
         rideType = str("vehicle_type"), paymentMethod = str("payment_method", "efectivo"), status = str("status"),
         createdAt = runCatching { Instant.parse(str("requested_at")).toEpochMilli() }.getOrDefault(0L),
-        updatedAt = runCatching { Instant.parse(str("updated_at")).toEpochMilli() }.getOrDefault(0L)
+        updatedAt = runCatching { Instant.parse(str("updated_at")).toEpochMilli() }.getOrDefault(0L),
+        serviceKind = str("service_kind", "passenger")
     )
 }

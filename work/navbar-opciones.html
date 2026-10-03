@@ -1,0 +1,113 @@
+<style>
+#intu-nav-options .intu-stage { min-height:350px; display:grid; place-items:center; padding:20px 10px; }
+#intu-nav-options .intu-preview { --intu-bg:light-dark(#f3f7f6,#131e22); --intu-surface:light-dark(#ffffff,#213035); --intu-ink:light-dark(#1e1f47,#ecf4f2); --intu-muted:light-dark(#647479,#b5c6c8); --intu-line:light-dark(#dce8e6,#3d5157); --intu-accent:#08817e; --intu-soft:light-dark(#e3f3ef,#244b48); width:100%; max-width:390px; min-height:290px; border-radius:28px; background:var(--intu-bg); color:var(--intu-ink); font:14px/1.4 system-ui,sans-serif; overflow:hidden; display:flex; flex-direction:column; }
+#intu-nav-options .intu-context { padding:24px 22px 14px; flex:1; }
+#intu-nav-options .intu-brand { color:var(--intu-accent); font-size:16px; font-weight:700; margin-bottom:18px; letter-spacing:1px; }
+#intu-nav-options .intu-heading { margin:0 0 12px; font-size:22px; font-weight:650; }
+#intu-nav-options .intu-body { display:flex; gap:10px; align-items:center; color:var(--intu-muted); }
+#intu-nav-options .intu-bar { display:flex; align-items:center; justify-content:space-around; gap:4px; }
+#intu-nav-options .intu-nav { border:0; background:transparent; color:var(--intu-muted); display:flex; flex-direction:column; gap:5px; align-items:center; justify-content:center; min-width:64px; min-height:52px; font:500 12px/1.25 system-ui,sans-serif; padding:6px 8px; position:relative; flex:1; }
+#intu-nav-options .intu-nav svg { width:22px; height:22px; flex-shrink:0; }
+#intu-nav-options .intu-nav[aria-current='page'] { color:var(--intu-accent); }
+#intu-nav-options .intu-icon { display:grid; place-items:center; }
+#intu-nav-options .intu-gesture { width:90px; height:4px; background:var(--intu-ink); opacity:.3; border-radius:10px; margin:14px auto 10px; }
+#intu-nav-options .intu-floating .intu-bar { margin:16px 14px 0; background:var(--intu-surface); padding:8px; border-radius:var(--intu-radius,24px); box-shadow:0 8px 24px light-dark(#1739361c,#00000040); }
+#intu-nav-options .intu-floating .intu-nav[aria-current='page'] { background:var(--intu-soft); border-radius:16px; }
+#intu-nav-options .intu-minimal .intu-bar { background:var(--intu-surface); border-top:1px solid var(--intu-line); padding:12px 10px 2px; }
+#intu-nav-options .intu-minimal .intu-nav[aria-current='page']::before { content:''; position:absolute; top:-12px; width:26px; height:3px; border-radius:0 0 4px 4px; background:var(--intu-accent); }
+#intu-nav-options .intu-minimal .intu-gesture { margin-top:14px; }
+#intu-nav-options .intu-expanded .intu-bar { margin:16px 14px 0; background:var(--intu-surface); padding:10px; border-radius:var(--intu-radius,24px); box-shadow:0 8px 24px light-dark(#1739361c,#00000040); }
+#intu-nav-options .intu-expanded .intu-nav { flex:.8; }
+#intu-nav-options .intu-expanded .intu-nav[aria-current='page'] { flex:1.4; flex-direction:row; gap:8px; background:var(--intu-accent); color:#fff; border-radius:18px; }
+#intu-nav-options .intu-dock .intu-bar { margin:28px 14px 0; padding:8px 6px; border-radius:var(--intu-radius,24px); background:#1e1f47; }
+#intu-nav-options .intu-dock .intu-nav { color:#c5cbdc; padding-top:9px; }
+#intu-nav-options .intu-dock .intu-nav[aria-current='page'] { color:#fff; }
+#intu-nav-options .intu-dock .intu-nav[aria-current='page'] .intu-icon { width:48px; height:48px; margin-top:-29px; border-radius:18px; background:var(--intu-accent); border:4px solid var(--intu-bg); }
+#intu-nav-options .intu-nav { transition:background-color .2s,color .2s,flex .2s; }
+@media(prefers-reduced-motion:reduce) { #intu-nav-options .intu-nav { transition:none; } }
+@media(max-width:360px) { #intu-nav-options .intu-stage { padding:16px 0; } #intu-nav-options .intu-nav { min-width:58px; padding:6px; } }
+</style>
+<div id="intu-nav-options">
+  <div class="viz-carousel viz-dotted-background" aria-label="Opciones de barra inferior para Intu" data-previous-label="Anterior" data-next-label="Siguiente">
+    <section data-variant="Flotante" aria-label="Barra flotante">
+      <div class="intu-stage"><div class="intu-preview intu-floating">
+        <div class="intu-context"><div class="intu-brand">INTU</div><h3 class="intu-heading" aria-live="polite">Inicio</h3><div class="intu-body"><i data-lucide="map-pin" aria-hidden="true"></i><span>¿A dónde vamos?</span></div></div>
+        <nav class="intu-bar" aria-label="Navegación flotante">
+          <button class="intu-nav cursor-interaction" type="button" data-tab="Inicio" aria-current="page"><span class="intu-icon"><i data-lucide="house" aria-hidden="true"></i></span><span>Inicio</span></button>
+          <button class="intu-nav cursor-interaction" type="button" data-tab="Viajes"><span class="intu-icon"><i data-lucide="route" aria-hidden="true"></i></span><span>Viajes</span></button>
+          <button class="intu-nav cursor-interaction" type="button" data-tab="Cuenta"><span class="intu-icon"><i data-lucide="user-round" aria-hidden="true"></i></span><span>Cuenta</span></button>
+        </nav><div class="intu-gesture" aria-hidden="true"></div>
+      </div></div>
+    </section>
+    <section data-variant="Minimalista" aria-label="Barra minimalista" hidden>
+      <div class="intu-stage"><div class="intu-preview intu-minimal">
+        <div class="intu-context"><div class="intu-brand">INTU</div><h3 class="intu-heading" aria-live="polite">Inicio</h3><div class="intu-body"><i data-lucide="map-pin" aria-hidden="true"></i><span>¿A dónde vamos?</span></div></div>
+        <nav class="intu-bar" aria-label="Navegación minimalista">
+          <button class="intu-nav cursor-interaction" type="button" data-tab="Inicio" aria-current="page"><span class="intu-icon"><i data-lucide="house" aria-hidden="true"></i></span><span>Inicio</span></button>
+          <button class="intu-nav cursor-interaction" type="button" data-tab="Viajes"><span class="intu-icon"><i data-lucide="route" aria-hidden="true"></i></span><span>Viajes</span></button>
+          <button class="intu-nav cursor-interaction" type="button" data-tab="Cuenta"><span class="intu-icon"><i data-lucide="user-round" aria-hidden="true"></i></span><span>Cuenta</span></button>
+        </nav><div class="intu-gesture" aria-hidden="true"></div>
+      </div></div>
+    </section>
+    <section data-variant="Pestaña expandida" aria-label="Barra con pestaña expandida" hidden>
+      <div class="intu-stage"><div class="intu-preview intu-expanded">
+        <div class="intu-context"><div class="intu-brand">INTU</div><h3 class="intu-heading" aria-live="polite">Inicio</h3><div class="intu-body"><i data-lucide="map-pin" aria-hidden="true"></i><span>¿A dónde vamos?</span></div></div>
+        <nav class="intu-bar" aria-label="Navegación expandida">
+          <button class="intu-nav cursor-interaction" type="button" data-tab="Inicio" aria-current="page"><span class="intu-icon"><i data-lucide="house" aria-hidden="true"></i></span><span>Inicio</span></button>
+          <button class="intu-nav cursor-interaction" type="button" data-tab="Viajes"><span class="intu-icon"><i data-lucide="route" aria-hidden="true"></i></span><span>Viajes</span></button>
+          <button class="intu-nav cursor-interaction" type="button" data-tab="Cuenta"><span class="intu-icon"><i data-lucide="user-round" aria-hidden="true"></i></span><span>Cuenta</span></button>
+        </nav><div class="intu-gesture" aria-hidden="true"></div>
+      </div></div>
+    </section>
+    <section data-variant="Dock elevado" aria-label="Barra oscura con icono elevado" hidden>
+      <div class="intu-stage"><div class="intu-preview intu-dock">
+        <div class="intu-context"><div class="intu-brand">INTU</div><h3 class="intu-heading" aria-live="polite">Inicio</h3><div class="intu-body"><i data-lucide="map-pin" aria-hidden="true"></i><span>¿A dónde vamos?</span></div></div>
+        <nav class="intu-bar" aria-label="Navegación elevada">
+          <button class="intu-nav cursor-interaction" type="button" data-tab="Inicio" aria-current="page"><span class="intu-icon"><i data-lucide="house" aria-hidden="true"></i></span><span>Inicio</span></button>
+          <button class="intu-nav cursor-interaction" type="button" data-tab="Viajes"><span class="intu-icon"><i data-lucide="route" aria-hidden="true"></i></span><span>Viajes</span></button>
+          <button class="intu-nav cursor-interaction" type="button" data-tab="Cuenta"><span class="intu-icon"><i data-lucide="user-round" aria-hidden="true"></i></span><span>Cuenta</span></button>
+        </nav><div class="intu-gesture" aria-hidden="true"></div>
+      </div></div>
+    </section>
+  </div>
+</div>
+<script>
+(() => {
+  const root = document.getElementById('intu-nav-options');
+  const copy = { Inicio:'¿A dónde vamos?', Viajes:'Tu historial de viajes', Cuenta:'Tu perfil y preferencias' };
+  const saved = window.openai?.widgetState;
+  const selection = saved?.privateContent?.tabs || {};
+  function select(preview, tab) {
+    preview.querySelectorAll('[data-tab]').forEach(button => {
+      if (button.dataset.tab === tab) button.setAttribute('aria-current','page');
+      else button.removeAttribute('aria-current');
+    });
+    preview.querySelector('.intu-heading').textContent = tab;
+    preview.querySelector('.intu-body span').textContent = copy[tab];
+  }
+  root.querySelectorAll('.intu-preview').forEach(preview => {
+    const name = preview.closest('[data-variant]').dataset.variant;
+    if (copy[selection[name]]) select(preview, selection[name]);
+    preview.querySelectorAll('[data-tab]').forEach(button => button.addEventListener('click', () => {
+      select(preview, button.dataset.tab);
+      selection[name] = button.dataset.tab;
+      window.openai?.setWidgetState?.({ modelContent:{ ultimaOpcionExplorada:name }, privateContent:{ tabs:selection } }).catch(() => {});
+    }));
+    if (globalThis.Tweak) {
+      const state = { accent:'#08817e', radius:24 };
+      const render = () => { preview.style.setProperty('--intu-accent',state.accent); preview.style.setProperty('--intu-radius',state.radius+'px'); };
+      const tweak = new Tweak({ container:preview, onChange:render });
+      preview.setAttribute('aria-label',name);
+      tweak.addColorPicker(state,'accent',{label:'Color de selección',reference:'--intu-accent'});
+      if (!preview.classList.contains('intu-minimal')) tweak.addSlider(state,'radius',{label:'Redondeado',min:12,max:36,unit:'px'});
+    }
+  });
+  window.addEventListener('openai:set_globals', event => {
+    const tabs = event.detail?.globals?.widgetState?.privateContent?.tabs || {};
+    root.querySelectorAll('.intu-preview').forEach(preview => {
+      const name = preview.closest('[data-variant]').dataset.variant;
+      if (copy[tabs[name]]) { selection[name] = tabs[name]; select(preview,tabs[name]); }
+    });
+  });
+})();
+</script>

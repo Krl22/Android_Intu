@@ -1,8 +1,15 @@
 package com.intu.taxi.ui.screens
 
+import com.intu.taxi.ui.theme.AppearanceColors
 import android.widget.Toast
-import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.outlined.ExpandLess
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
+import com.intu.taxi.data.normalizedPlaceText
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,30 +23,21 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.TabRowDefaults
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import com.intu.taxi.location.AdminLocationSimulation
+import kotlinx.coroutines.CancellationException
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -64,10 +62,6 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-private val AdminTeal = Color(0xFF08817E)
-private val AdminIndigo = Color(0xFF1E1F47)
-private val AdminMuted = Color(0xFF5F6570)
-private val AdminRed = Color(0xFFB42318)
 private val RegisteredFormat = DateTimeFormatter.ofPattern("d 'de' MMMM yyyy", Locale("es", "PE"))
 
 private val StatusFilters = listOf(
@@ -85,46 +79,71 @@ private val StatusFilters = listOf(
  * [onOwnAccountDeleted] se llama si el admin elimina su propia cuenta (hay que cerrar la sesión).
  */
 @Composable
-fun AdminScreen(padding: PaddingValues, onBack: () -> Unit, onOwnAccountDeleted: () -> Unit) {
+fun AdminScreen(
+    padding: PaddingValues,
+    onBack: () -> Unit,
+    onOwnAccountDeleted: () -> Unit,
+    onTestLocationSelected: () -> Unit = {}
+) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var reloadKey by remember { mutableIntStateOf(0) }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFFF6F7F9))
-            .padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(start = 4.dp, end = 8.dp, top = 8.dp)
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver", tint = AdminIndigo)
-            }
-            Text(
-                "Administración",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                color = AdminIndigo,
-                modifier = Modifier.weight(1f)
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val uid = FirebaseAuth.getInstance().currentUser?.uid
+    val testLocation by AdminLocationSimulation.preset.collectAsState()
+    var isAdmin by remember(uid) { mutableStateOf(false) }
+    var showTestLocation by remember { mutableStateOf(false) }
+    var showTestLocationMap by remember { mutableStateOf(false) }
+    var locationBusy by remember { mutableStateOf(false) }
+    var locationError by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(uid, reloadKey) {
+        isAdmin = runCatching { AdminRepository().isAdmin() }.getOrDefault(false)
+        if (!isAdmin) AdminLocationSimulation.clear()
+    }
+    fun selectTestLocation(location: com.intu.taxi.location.TestLocation) {
+        if (locationBusy) return
+        locationBusy = true
+        locationError = null
+        showTestLocationMap = false
+        scope.launch {
+            try {
+                AdminLocationSimulation.activate(location)
+                showTestLocation = false
+                Toast.makeText(context, "Simulando ubicación en ${location.label}", Toast.LENGTH_SHORT).show()
+                onTestLocationSelected()
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) { locationError = e.message ?: "No se pudo activar la simulación." }
+            finally { locationBusy = false }
+        }
+    }
+    AdminPanelTheme {
+        if (showTestLocationMap && showTestLocation && isAdmin) {
+            TestLocationMapPicker(testLocation,
+                onDismiss = { showTestLocationMap = false },
+                onPicked = ::selectTestLocation)
+        }
+        if (showTestLocation && !showTestLocationMap && isAdmin) {
+            TestLocationDialog(
+                active = testLocation, busy = locationBusy, error = locationError,
+                onSelect = ::selectTestLocation,
+                onRealGps = { AdminLocationSimulation.clear(); showTestLocation = false },
+                onDismiss = { showTestLocation = false },
+                onChooseOnMap = { locationError = null; showTestLocationMap = true }
             )
-            IconButton(onClick = { reloadKey++ }) {
-                Icon(Icons.Default.Refresh, contentDescription = "Actualizar", tint = AdminTeal)
+        }
+
+        AdminPanelLayout(padding, tab, isAdmin, testLocation?.label, onBack,
+            onRefresh = { reloadKey++ }, onLocation = { locationError = null; showTestLocation = true },
+            onTab = { tab = it },
+            onDarkModeChange = if (isAdmin) com.intu.taxi.ui.theme.LocalAppearanceController.current.setDarkMode else null) {
+            when (tab) {
+                0 -> DriversTab(reloadKey)
+                1 -> UsersTab(reloadKey, onOwnAccountDeleted)
+                2 -> BugReportsTab(reloadKey)
+                3 -> AdminPlacesTab(reloadKey)
+                else -> AdminNotificationSettings(reloadKey)
             }
         }
-        TabRow(
-            selectedTabIndex = tab,
-            containerColor = Color.Transparent,
-            contentColor = AdminTeal,
-            indicator = { positions ->
-                TabRowDefaults.SecondaryIndicator(Modifier.tabIndicatorOffset(positions[tab]), color = AdminTeal)
-            }
-        ) {
-            Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Conductores") })
-            Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Usuarios") })
-        }
-        if (tab == 0) DriversTab(reloadKey) else UsersTab(reloadKey, onOwnAccountDeleted)
     }
 }
 
@@ -134,6 +153,7 @@ private fun DriversTab(reloadKey: Int) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     var filter by rememberSaveable { mutableStateOf<String?>("pending") }
+    var query by rememberSaveable { mutableStateOf("") }
     var drivers by remember { mutableStateOf<List<AdminDriver>?>(null) }
     var loadError by remember { mutableStateOf<String?>(null) }
     var localReload by remember { mutableIntStateOf(0) }
@@ -173,45 +193,25 @@ private fun DriversTab(reloadKey: Int) {
         }
     }
 
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = Modifier
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-    ) {
-        StatusFilters.forEach { (value, label) ->
-            FilterChip(
-                selected = filter == value,
-                onClick = { filter = value },
-                label = { Text(label) },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = AdminTeal,
-                    selectedLabelColor = Color.White
-                )
-            )
-        }
-    }
-
     val list = drivers
-    when {
-        list == null -> AdminLoading()
-        loadError != null -> AdminMessage(loadError.orEmpty())
-        list.isEmpty() -> AdminMessage(
-            if (filter == "pending") "No hay conductores esperando aprobación." else "No hay conductores en esta lista."
-        )
-        else -> LazyColumn(
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            items(list, key = { it.id }) { driver ->
-                AdminDriverCard(
-                    driver = driver,
-                    busy = busyDriverId == driver.id,
+    val needle = normalizedPlaceText(query)
+    val visible = list.orEmpty().filter { needle in normalizedPlaceText("${it.fullName} ${it.phone} ${it.email} ${it.plate} ${it.vehicle}") }
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        item { AdminSectionHeading("Conductores", "Revisa las postulaciones y gestiona quién puede recibir viajes o envíos.", list?.size) }
+        item { AdminSearchField(query, { query = it }, "Nombre, teléfono o placa") }
+        item { AdminFilters(StatusFilters, filter, { filter = it }) }
+        when {
+            list == null -> item { AdminLoading() }
+            loadError != null -> item { AdminMessage(loadError.orEmpty(), true) { localReload++ } }
+            visible.isEmpty() -> item { AdminMessage(if (query.isNotBlank()) "No hay coincidencias. Prueba con otro nombre o placa."
+                else if (filter == "pending") "No hay conductores esperando aprobación." else "No hay conductores en esta lista.") }
+            else -> items(visible, key = { it.id }) { driver ->
+                AdminDriverCard(driver, busyDriverId == driver.id,
                     onApprove = { changeStatus(driver, "approved") },
                     onReject = { pendingConfirmation = driver to "rejected" },
                     onSuspend = { pendingConfirmation = driver to "suspended" },
-                    onBackToPending = { changeStatus(driver, "pending") }
-                )
+                    onBackToPending = { changeStatus(driver, "pending") })
             }
         }
     }
@@ -231,7 +231,7 @@ private fun DriversTab(reloadKey: Int) {
                 TextButton(onClick = {
                     pendingConfirmation = null
                     changeStatus(driver, status)
-                }) { Text(if (rejecting) "Rechazar" else "Suspender", color = AdminRed) }
+                }) { Text(if (rejecting) "Rechazar" else "Suspender", color = AppearanceColors.highlight(AdminRed)) }
             },
             dismissButton = { TextButton(onClick = { pendingConfirmation = null }) { Text("Cancelar") } }
         )
@@ -239,74 +239,58 @@ private fun DriversTab(reloadKey: Int) {
 }
 
 @Composable
-private fun AdminDriverCard(
-    driver: AdminDriver,
-    busy: Boolean,
-    onApprove: () -> Unit,
-    onReject: () -> Unit,
-    onSuspend: () -> Unit,
-    onBackToPending: () -> Unit
+internal fun AdminDriverCard(
+    driver: AdminDriver, busy: Boolean, onApprove: () -> Unit, onReject: () -> Unit,
+    onSuspend: () -> Unit, onBackToPending: () -> Unit
 ) {
+    var expanded by rememberSaveable(driver.id) { mutableStateOf(false) }
     AdminCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Avatar(url = driver.photoUrl, size = 52.dp, zoomable = true, contentDescription = "Foto del conductor")
+            Avatar(url = driver.photoUrl, size = 48.dp, zoomable = true, contentDescription = "Foto del conductor")
             Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(driver.fullName.ifBlank { "Sin nombre" }, fontWeight = FontWeight.SemiBold, color = AdminIndigo)
-                if (driver.phone.isNotBlank()) Text(driver.phone, style = MaterialTheme.typography.bodySmall, color = AdminMuted)
-                if (driver.email.isNotBlank()) Text(driver.email, style = MaterialTheme.typography.bodySmall, color = AdminMuted)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(driver.fullName.ifBlank { "Sin nombre" }, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                AdminStatusChip(driver.status)
             }
-            AdminStatusChip(driver.status)
         }
-        Spacer(Modifier.height(10.dp))
+        if (driver.phone.isNotBlank()) Text(driver.phone, style = MaterialTheme.typography.bodyMedium)
+        if (driver.email.isNotBlank()) Text(driver.email, style = MaterialTheme.typography.bodySmall, color = AppearanceColors.secondary(AdminMuted))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        val vehicleType = com.intu.taxi.auth.DriverVehicleType.from(driver.vehicleType)
+        AdminDetail("Vehículo", listOf(vehicleType?.label ?: driver.vehicleType, driver.vehicle, driver.plate)
+            .filter { it.isNotBlank() }.joinToString(" · ").ifBlank { "Sin vehículo" })
+        vehicleType?.let { AdminDetail("Servicio", it.serviceLabel) }
         AdminDetail("DNI", driver.documentNumber)
-        AdminDetail("Licencia", driver.licenseNumber)
-        AdminDetail("Mototaxi", listOf(driver.vehicle, driver.plate).filter { it.isNotBlank() }.joinToString(" · ").ifBlank { "Sin vehículo" })
-        driver.registeredAt?.let {
-            AdminDetail("Registrado", it.atZone(ZoneId.systemDefault()).format(RegisteredFormat))
+        TextButton(onClick = { expanded = !expanded }, modifier = Modifier.fillMaxWidth()) {
+            Text(if (expanded) "Ocultar documentación" else "Ver documentación")
+            Icon(if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore, null)
         }
-        if (driver.ratingCount > 0) {
-            AdminDetail("Calificación", String.format(Locale.US, "%.2f (%d)", driver.rating, driver.ratingCount))
+        AnimatedVisibility(expanded) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                AdminDetail("Licencia", driver.licenseNumber)
+                driver.registeredAt?.let { AdminDetail("Registrado", it.atZone(ZoneId.systemDefault()).format(RegisteredFormat)) }
+                if (driver.ratingCount > 0) AdminDetail("Calificación", String.format(Locale.US, "%.2f (%d)", driver.rating, driver.ratingCount))
+            }
         }
-        Spacer(Modifier.height(12.dp))
         when {
             busy -> AdminLoading()
             driver.status == "pending" -> Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedButton(
-                    onClick = onReject,
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = AdminRed)
-                ) { Text("Rechazar") }
-                Button(
-                    onClick = onApprove,
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(containerColor = AdminTeal)
-                ) { Text("Aprobar") }
+                OutlinedButton(onClick = onReject, modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = AppearanceColors.highlight(AdminRed))) { Text("Rechazar") }
+                Button(onClick = onApprove, modifier = Modifier.weight(1f)) { Text("Aprobar") }
             }
-            else -> Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedButton(onClick = onBackToPending, modifier = Modifier.weight(1f)) {
-                    Text("Pasar a pendiente")
-                }
-                if (driver.status == "approved") {
-                    OutlinedButton(
-                        onClick = onSuspend,
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = AdminRed)
-                    ) { Text("Suspender") }
-                } else {
-                    Button(
-                        onClick = onApprove,
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = AdminTeal)
-                    ) { Text("Aprobar") }
-                }
+            else -> Column(Modifier.fillMaxWidth()) {
+                if (driver.status == "approved") OutlinedButton(onClick = onSuspend, modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = AppearanceColors.highlight(AdminRed))) { Text("Suspender conductor") }
+                else Button(onClick = onApprove, modifier = Modifier.fillMaxWidth()) { Text("Aprobar conductor") }
+                TextButton(onClick = onBackToPending, modifier = Modifier.fillMaxWidth()) { Text("Pasar a pendiente") }
             }
         }
     }
 }
 
 /** Acciones sobre una cuenta que se confirman antes de hacerlas. */
-private enum class UserAction { ResetDriver, ResetAccount, MakeAdmin, RemoveAdmin, Delete }
+internal enum class UserAction { ResetDriver, ResetAccount, MakeAdmin, RemoveAdmin, Delete }
 
 @Composable
 private fun UsersTab(reloadKey: Int, onOwnAccountDeleted: () -> Unit) {
@@ -314,8 +298,11 @@ private fun UsersTab(reloadKey: Int, onOwnAccountDeleted: () -> Unit) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val myUid = remember { FirebaseAuth.getInstance().currentUser?.uid }
+    var query by rememberSaveable { mutableStateOf("") }
     var users by remember { mutableStateOf<List<AdminUser>?>(null) }
     var loadError by remember { mutableStateOf<String?>(null) }
+    var accessLoading by remember { mutableStateOf(false) }
+    var accessError by remember { mutableStateOf<String?>(null) }
     var localReload by remember { mutableIntStateOf(0) }
     var busyUserId by remember { mutableStateOf<String?>(null) }
     var pendingAction by remember { mutableStateOf<Pair<AdminUser, UserAction>?>(null) }
@@ -323,12 +310,21 @@ private fun UsersTab(reloadKey: Int, onOwnAccountDeleted: () -> Unit) {
     LaunchedEffect(reloadKey, localReload) {
         users = null
         loadError = null
-        runCatching { repo.listUsers() }
-            .onSuccess { users = it }
-            .onFailure {
-                loadError = it.message ?: "No se pudo cargar la lista"
-                users = emptyList()
-            }
+        accessError = null
+        accessLoading = true
+        try {
+            val profiles = repo.listUsers()
+            users = profiles
+            try {
+                val identities = repo.listAccountAccess(profiles.map { it.id })
+                users = profiles.map { it.copy(accountAccess = identities[it.id]) }
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) { accessError = "No se pudo consultar la vinculación. Usa Actualizar para volver a intentarlo." }
+        } catch (e: CancellationException) { throw e }
+        catch (e: Exception) {
+            loadError = e.message ?: "No se pudo cargar la lista"
+            users = emptyList()
+        } finally { accessLoading = false }
     }
 
     fun run(user: AdminUser, action: UserAction) {
@@ -364,33 +360,24 @@ private fun UsersTab(reloadKey: Int, onOwnAccountDeleted: () -> Unit) {
         }
     }
 
-    Text(
-        "Reinicia una cuenta para repetir las pruebas, o elimínala por completo (también su inicio de sesión) " +
-            "para entrar como usuario nuevo. Los viajes se conservan. " +
-            "La persona debe cerrar y volver a abrir la app para ver el cambio.",
-        style = MaterialTheme.typography.bodySmall,
-        color = AdminMuted,
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
-    )
-
     val list = users
-    when {
-        list == null -> AdminLoading()
-        loadError != null -> AdminMessage(loadError.orEmpty())
-        list.isEmpty() -> AdminMessage("No hay cuentas.")
-        else -> LazyColumn(
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            items(list, key = { it.id }) { user ->
-                AdminUserCard(
-                    user = user,
-                    isMe = user.id == myUid,
-                    busy = busyUserId == user.id,
-                    onAction = { action -> pendingAction = user to action }
-                )
+    val needle = normalizedPlaceText(query)
+    val visible = list.orEmpty().filter { needle in normalizedPlaceText("${it.fullName} ${it.phone} ${it.email} ${it.id}") }
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        item { AdminSectionHeading("Usuarios", "Consulta perfiles, vinculación y actividad. Abre Gestionar cuenta para administrar permisos o repetir pruebas.", list?.size) }
+        item { AdminSearchField(query, { query = it }, "Nombre, teléfono o correo") }
+        accessError?.let { item { AdminMessage(it, true) { localReload++ } } }
+        when {
+            list == null -> item { AdminLoading() }
+            loadError != null -> item { AdminMessage(loadError.orEmpty(), true) { localReload++ } }
+            visible.isEmpty() -> item { AdminMessage(if (query.isBlank()) "No hay cuentas." else "No hay usuarios que coincidan con tu búsqueda.") }
+            else -> items(visible, key = { it.id }) { user ->
+                AdminUserCard(user, user.id == myUid, busyUserId == user.id, accessLoading,
+                    onAction = { action -> pendingAction = user to action })
             }
         }
+        item { Text("Para ver un reinicio, la persona debe cerrar y volver a abrir la app. Los viajes terminados se conservan.",
+            style = MaterialTheme.typography.bodySmall, color = AppearanceColors.secondary(AdminMuted)) }
     }
 
     pendingAction?.let { (user, action) ->
@@ -437,7 +424,7 @@ private fun UsersTab(reloadKey: Int, onOwnAccountDeleted: () -> Unit) {
                 TextButton(onClick = {
                     pendingAction = null
                     run(user, action)
-                }) { Text(confirm, color = if (action == UserAction.MakeAdmin) AdminTeal else AdminRed) }
+                }) { Text(confirm, color = AppearanceColors.highlight(if (action == UserAction.MakeAdmin) AdminTeal else AdminRed)) }
             },
             dismissButton = { TextButton(onClick = { pendingAction = null }) { Text("Cancelar") } }
         )
@@ -445,129 +432,79 @@ private fun UsersTab(reloadKey: Int, onOwnAccountDeleted: () -> Unit) {
 }
 
 @Composable
-private fun AdminUserCard(
-    user: AdminUser,
-    isMe: Boolean,
-    busy: Boolean,
-    onAction: (UserAction) -> Unit
-) {
+internal fun AdminUserCard(user: AdminUser, isMe: Boolean, busy: Boolean, accessLoading: Boolean,
+    onAction: (UserAction) -> Unit) {
+    var expanded by rememberSaveable(user.id) { mutableStateOf(false) }
+    var menu by remember { mutableStateOf(false) }
     AdminCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Avatar(url = user.photoUrl, size = 48.dp, zoomable = true)
             Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    user.fullName.ifBlank { "Perfil sin completar" } + if (isMe) " (tú)" else "",
-                    fontWeight = FontWeight.SemiBold,
-                    color = AdminIndigo
-                )
-                if (user.phone.isNotBlank()) Text(user.phone, style = MaterialTheme.typography.bodySmall, color = AdminMuted)
-                if (user.email.isNotBlank()) Text(user.email, style = MaterialTheme.typography.bodySmall, color = AdminMuted)
-            }
-            if (user.isAdmin) {
-                Text(
-                    "Admin",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = AdminIndigo,
-                    modifier = Modifier
-                        .background(Color(0xFFEEF0FB), RoundedCornerShape(50))
-                        .padding(horizontal = 10.dp, vertical = 3.dp)
-                )
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(user.fullName.ifBlank { "Perfil sin completar" } + if (isMe) " (tú)" else "",
+                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                if (user.isAdmin) AdminBadge("Administrador")
             }
         }
-        Spacer(Modifier.height(8.dp))
-        AdminDetail(
-            "Conductor",
-            when (user.driverStatus) {
-                null -> "No registrado"
-                "approved" -> "Aprobado"
-                "pending" -> "Pendiente"
-                "suspended" -> "Suspendido"
-                else -> "Rechazado"
+        if (user.email.isNotBlank()) Text(user.email, style = MaterialTheme.typography.bodySmall, color = AppearanceColors.secondary(AdminMuted))
+        if (user.phone.isNotBlank()) Text(user.phone, style = MaterialTheme.typography.bodyMedium)
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            AdminUserStat("Como pasajero", user.ridesAsRider, Modifier.weight(1f))
+            AdminUserStat("Como conductor", user.ridesAsDriver, Modifier.weight(1f))
+        }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Conductor", style = MaterialTheme.typography.bodySmall, color = AppearanceColors.secondary(AdminMuted))
+            if (user.driverStatus != null) AdminStatusChip(user.driverStatus) else AdminBadge("No registrado", AdminMuted, Color(0xFFF0F4F3))
+        }
+        TextButton(onClick = { expanded = !expanded }, modifier = Modifier.fillMaxWidth()) {
+            Text(if (expanded) "Ocultar acceso y vinculación" else "Ver acceso y vinculación")
+            Icon(if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore, null)
+        }
+        AnimatedVisibility(expanded) {
+            Column {
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                Spacer(Modifier.height(10.dp))
+                AdminAccountAccessInfo(user.id, user.email, user.phone, user.accountAccess, accessLoading)
             }
-        )
-        AdminDetail("Viajes", "${user.ridesAsRider} como pasajero · ${user.ridesAsDriver} como conductor")
-        Spacer(Modifier.height(12.dp))
-        if (busy) {
-            AdminLoading()
-        } else {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedButton(
-                    onClick = { onAction(UserAction.ResetDriver) },
-                    enabled = user.driverStatus != null,
-                    modifier = Modifier.weight(1f)
-                ) { Text("Reiniciar conductor") }
-                OutlinedButton(
-                    onClick = { onAction(UserAction.ResetAccount) },
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = AdminRed)
-                ) { Text("Reiniciar cuenta") }
+        }
+        if (busy) AdminLoading() else Box(Modifier.fillMaxWidth()) {
+            OutlinedButton(onClick = { menu = true }, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Outlined.Settings, null, Modifier.padding(end = 8.dp))
+                Text("Gestionar cuenta")
             }
-            Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedButton(
-                    onClick = { onAction(if (user.isAdmin) UserAction.RemoveAdmin else UserAction.MakeAdmin) },
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = AdminIndigo)
-                ) { Text(if (user.isAdmin) "Quitar admin" else "Hacer admin") }
-                Button(
-                    onClick = { onAction(UserAction.Delete) },
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(containerColor = AdminRed)
-                ) { Text("Eliminar cuenta") }
+            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                val actions = listOf(UserAction.ResetDriver to "Reiniciar conductor", UserAction.ResetAccount to "Reiniciar cuenta",
+                    (if (user.isAdmin) UserAction.RemoveAdmin else UserAction.MakeAdmin) to (if (user.isAdmin) "Quitar admin" else "Hacer admin"),
+                    UserAction.Delete to "Eliminar cuenta")
+                actions.forEach { (action, label) ->
+                    if (action == UserAction.Delete) HorizontalDivider()
+                    DropdownMenuItem(text = { Text(label, color = if (action == UserAction.Delete) AppearanceColors.highlight(AdminRed) else Color.Unspecified) },
+                        enabled = action != UserAction.ResetDriver || user.driverStatus != null,
+                        onClick = { menu = false; onAction(action) })
+                }
             }
         }
     }
 }
 
 @Composable
-private fun AdminCard(content: @Composable () -> Unit) {
-    Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(Modifier.padding(14.dp)) { content() }
+private fun AdminUserStat(label: String, count: Int, modifier: Modifier) {
+    androidx.compose.material3.Surface(modifier, shape = RoundedCornerShape(12.dp), color = AppearanceColors.tint(Color(0xFFF0F6F4))) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(count.toString(), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text(label, style = MaterialTheme.typography.labelSmall, color = AppearanceColors.secondary(AdminMuted))
+        }
     }
 }
 
 @Composable
-private fun AdminDetail(label: String, value: String) {
-    Row(Modifier.padding(vertical = 2.dp)) {
-        Text("$label: ", style = MaterialTheme.typography.bodyMedium, color = AdminMuted)
-        Text(value.ifBlank { "—" }, style = MaterialTheme.typography.bodyMedium, color = Color(0xFF1C1C1E))
-    }
-}
-
-@Composable
-private fun AdminStatusChip(status: String) {
+internal fun AdminStatusChip(status: String) {
     val (label, fg, bg) = when (status) {
         "approved" -> Triple("Aprobado", Color(0xFF067647), Color(0xFFE8F6EE))
-        "pending" -> Triple("Pendiente", Color(0xFFB45309), Color(0xFFFEF3E2))
-        "suspended" -> Triple("Suspendido", AdminRed, Color(0xFFFDECEA))
-        else -> Triple("Rechazado", AdminRed, Color(0xFFFDECEA))
+        "pending" -> Triple("Pendiente", Color(0xFF99641C), Color(0xFFFFF2DB))
+        "suspended" -> Triple("Suspendido", AdminRed, Color(0xFFFFEDE9))
+        else -> Triple("Rechazado", AdminRed, Color(0xFFFFEDE9))
     }
-    Text(
-        label,
-        style = MaterialTheme.typography.labelMedium,
-        color = fg,
-        modifier = Modifier
-            .background(bg, RoundedCornerShape(50))
-            .padding(horizontal = 10.dp, vertical = 3.dp)
-    )
-}
-
-@Composable
-private fun AdminLoading() {
-    Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
-        CircularProgressIndicator(color = AdminTeal, strokeWidth = 3.dp)
-    }
-}
-
-@Composable
-private fun AdminMessage(text: String) {
-    Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-        Text(text, color = AdminMuted)
-    }
+    AdminBadge(label, fg, bg)
 }

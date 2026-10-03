@@ -18,13 +18,35 @@ class RideRequestRepository {
         originLatitude: Double, originLongitude: Double, originAddress: String,
         destinationLatitude: Double, destinationLongitude: Double, destinationAddress: String,
         distanceMeters: Double, durationSeconds: Double, estimatedPrice: Double,
-        rideType: String, paymentMethod: String
+        rideType: String, paymentMethod: String, routeGeometry: String? = null,
+        delivery: com.intu.taxi.models.DeliveryDetails? = null,
+        preferredVehicleBrand: String? = null
     ): Result<String> = runCatching {
+        val vehicleType = com.intu.taxi.auth.DriverVehicleType.requireCode(rideType)
+        check((vehicleType == "motorcycle") == (delivery != null)) { "Completa los datos del envío antes de solicitarlo." }
+        require(preferredVehicleBrand == null || (vehicleType == "mototaxi" && preferredVehicleBrand in setOf("honda", "bajaj"))) {
+            "Selecciona una opción de moto válida."
+        }
         // El nombre del pasajero se copia del perfil de Supabase al crear el viaje
         val uid = FirebaseAuth.getInstance().currentUser?.uid ?: error("Inicia sesión para continuar.")
         AuthRepository().syncProfileToSupabase(uid)
+        if (delivery != null) {
+            val details = delivery.normalized()
+            return@runCatching SupabaseApi.rpc("create_delivery_request", JSONObject()
+                .put("p_origin_lat", originLatitude).put("p_origin_lng", originLongitude).put("p_origin_address", originAddress)
+                .put("p_destination_lat", destinationLatitude).put("p_destination_lng", destinationLongitude).put("p_destination_address", destinationAddress)
+                .put("p_distance_meters", distanceMeters.toInt()).put("p_duration_seconds", durationSeconds.toInt())
+                .put("p_route_polyline", routeGeometry ?: JSONObject.NULL)
+                .put("p_payment_method", if (paymentMethod == "yape_plin") "yape_plin" else "efectivo")
+                .put("p_details", JSONObject().put("recipient_name", details.recipientName).put("recipient_phone", details.recipientPhone)
+                    .put("description", details.description).put("pickup_reference", details.pickupReference)
+                    .put("delivery_reference", details.deliveryReference).put("payer", details.payer.code)
+                    .put("small_package_confirmed", details.smallPackageConfirmed)))
+                .getString("id")
+        }
         val body = JSONObject()
-            .put("vehicle_type", "mototaxi")
+            .put("vehicle_type", vehicleType)
+            .put("preferred_vehicle_brand", preferredVehicleBrand ?: JSONObject.NULL)
             .put("origin_lat", originLatitude).put("origin_lng", originLongitude)
             .put("origin_address", originAddress)
             .put("destination_lat", destinationLatitude).put("destination_lng", destinationLongitude)
@@ -32,6 +54,7 @@ class RideRequestRepository {
             .put("distance_meters", distanceMeters.toInt())
             .put("duration_seconds", durationSeconds.toInt())
             .put("payment_method", if (paymentMethod == "yape_plin") "yape_plin" else "efectivo")
+        routeGeometry?.let { body.put("route_polyline", it) }
         val response = SupabaseApi.request("POST", "rides", body, "return=representation")
         org.json.JSONArray(response).getJSONObject(0).getString("id")
     }

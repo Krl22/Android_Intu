@@ -61,6 +61,22 @@ La app no puede aprobar choferes por sí sola.
 9. Al terminar, el chofer recibe el pago directo y pulsa **Confirmar pago y finalizar**.
 10. El pasajero debe ver la confirmación y cerrar con **Listo**.
 
+## Catálogo de lugares (1.4)
+
+La migración `20261001044050_places_catalog.sql` ya está aplicada. Los 55 candidatos de Satipo están en borrador y requieren confirmar la entrada de recojo antes de publicar. Cuenta → Administración → Lugares permite crear, editar, publicar y desactivar.
+
+Probar búsqueda por nombre y alias sin tildes, selección del destino, actualización manual, retiro de un lugar y conservación del catálogo sin conexión. El catálogo vacío ofrece elegir el destino en el mapa. Detalles y guía: `docs/poi/README.md`.
+
 ## Compilación
 
-El workflow `Android MVP` genera `intu-mvp-debug`. Requiere los secretos de GitHub `MAPBOX_ACCESS_TOKEN` y `MAPBOX_DOWNLOADS_TOKEN`.
+El workflow `Android MVP` genera `intu-mvp-debug`. Requiere el secreto de GitHub `MAPBOX_ACCESS_TOKEN`. Los artefactos de Mapbox usados por el proyecto se descargan sin un token privado.
+
+Para desarrollo local en Windows, configurar `sdk.dir` y `MAPBOX_ACCESS_TOKEN` en `local.properties` (ignorado por Git). La preparación y los comandos están en `docs/DEV_SETUP.md`.
+
+## Búsqueda híbrida de Intu 1.5
+
+- En Inicio, buscar un lugar publicado y comprobar que aparece en «Lugares de Intu», antes de las calles de Mapbox.
+- Buscar «jirón manuel prado» o «jirón julio»: deben aparecer calles de Satipo en «Calles y direcciones», aunque no haya coincidencias del catálogo.
+- Elegir una calle y comprobar el destino en el mapa. Repetir en «Dirección del marcador» al ajustar recojo y destino.
+- Escribir rápido y cambiar la consulta: los resultados de la búsqueda anterior deben desaparecer y no reaparecer cuando termine su petición.
+- Sin conexión, comprobar que los lugares del catálogo guardado y «Elegir en mapa» siguen disponibles.

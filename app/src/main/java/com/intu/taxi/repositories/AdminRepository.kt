@@ -23,7 +23,8 @@ data class AdminDriver(
     val ratingCount: Int,
     val registeredAt: Instant?,
     val vehicle: String,
-    val plate: String
+    val plate: String,
+    val vehicleType: String = ""
 )
 
 /** Cuenta de la app (pasajero, conductor o admin), para reiniciarla, eliminarla o hacerla admin. */
@@ -36,7 +37,8 @@ data class AdminUser(
     val driverStatus: String?,
     val isAdmin: Boolean,
     val ridesAsRider: Int,
-    val ridesAsDriver: Int
+    val ridesAsDriver: Int,
+    val accountAccess: AdminAccountAccess? = null
 )
 
 /** Funciones del panel de administración. El servidor rechaza todo si la cuenta no es admin. */
@@ -73,6 +75,19 @@ class AdminRepository {
                 ridesAsDriver = row.optInt("rides_as_driver", 0)
             )
         }
+    }
+
+    /** Solo el servidor puede consultar Firebase Auth de otros usuarios; valida el permiso admin. */
+    suspend fun listAccountAccess(userIds: List<String>): Map<String, AdminAccountAccess> {
+        val result = mutableMapOf<String, AdminAccountAccess>()
+        for (batch in userIds.distinct().chunked(100)) {
+            val data = FirebaseFunctions.getInstance().getHttpsCallable("adminGetAccountAccess")
+                .call(mapOf("userIds" to batch)).await().data
+            val accounts = AdminAccountAccess.fromCallable(data)
+            check(batch.all { it in accounts }) { "Faltan cuentas en la consulta de accesos. Actualiza el panel." }
+            result.putAll(accounts.filterKeys { it in batch })
+        }
+        return result
     }
 
     /**
@@ -130,6 +145,7 @@ class AdminRepository {
         registeredAt = runCatching { OffsetDateTime.parse(str("created_at")).toInstant() }.getOrNull(),
         vehicle = listOf(str("brand"), str("model"), if (isNull("year")) "" else optInt("year").toString(), str("color"))
             .filter { it.isNotBlank() }.joinToString(" "),
-        plate = str("plate")
+        plate = str("plate"),
+        vehicleType = str("vehicle_type")
     )
 }

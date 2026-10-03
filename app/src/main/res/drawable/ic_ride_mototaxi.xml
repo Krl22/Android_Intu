@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+
+
+    <path
+        android:fillColor="#08817E"
+        android:pathData="M6,24 h24 a7,7 0 0 1 7,7 v5 h-22 a9,9 0 0 1 -9,-9 z" />
+
+    <!-- Toldo superior curvo -->
+    <path
+        android:fillColor="#202538"
+        android:pathData="M8,14 h20 c6,0 10,4 11,9 l-5,0 c-2,-3 -5,-6 -10,-6 h-16 z" />
+
+    <!-- Parabrisas -->
+    <path
+        android:fillColor="#C9E8E3"
+        android:fillAlpha="0.9"
+        android:pathData="M10,16 h14 a5,5 0 0 1 5,5 v3 h-17 z" />
+
+    <!-- Franja amarilla lateral -->
+    <path
+        android:fillColor="#A9DAD2"
+        android:pathData="M6,27 h31 v2 h-30 z" />
+
+    <!-- Puerta lateral -->
+    <path
+        android:fillColor="#066A68"
+        android:pathData="M20,22 h10 v9 h-10 z" />
+
+    <!-- Rueda delantera pequeña -->
+    <path
+        android:fillColor="#212121"
+        android:pathData="M7,36 a3,3 0 1 0 6,0 a3,3 0 1 0 -6,0" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M9.5,36 a1,1 0 1 0 2,0 a1,1 0 1 0 -2,0" />
+
+    <!-- Ruedas traseras dobles -->
+    <path
+        android:fillColor="#212121"
+        android:pathData="M33,36 a3,3 0 1 0 6,0 a3,3 0 1 0 -6,0" />
+   
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M35.5,36 a1,1 0 1 0 2,0 a1,1 0 1 0 -2,0" />
+   
+
+    <!-- Faros delanteros -->
+    <path
+        android:fillColor="#F7F5D9"
+        android:pathData="M8,26 a2,2 0 1 0 4,0 a2,2 0 1 0 -4,0" />
+    <path
+        android:fillColor="#F7F5D9"
+        android:pathData="M13,26 a2,2 0 1 0 4,0 a2,2 0 1 0 -4,0" />
+
+    <!-- Línea inferior / sombra -->
+    <path
+        android:strokeColor="#2F3136"
+        android:strokeWidth="1"
+        android:fillColor="#00000000"
+        android:pathData="M5,39 h38" />
+
+    <!-- Toque de brillo delantero -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.3"
+        android:pathData="M8,24 h12 v2 h-12 z" />
+
+</vector>

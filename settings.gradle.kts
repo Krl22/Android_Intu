@@ -16,20 +16,13 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        // Mapbox Maven con token de descargas (usamos propiedad MAPBOX_DOWNLOADS_TOKEN)
-        val mapboxToken = providers.gradleProperty("MAPBOX_DOWNLOADS_TOKEN").orNull
-            ?: System.getenv("MAPBOX_DOWNLOADS_TOKEN")
+        // Los artefactos del Maps SDK se descargan sin credenciales.
         maven {
             url = uri("https://api.mapbox.com/downloads/v2/releases/maven")
             isAllowInsecureProtocol = false
-            credentials {
-                username = "mapbox"
-                password = mapboxToken
-            }
         }
     }
 }
 
 rootProject.name = "Intu"
 include(":app")
- 

@@ -1,5 +1,7 @@
 package com.intu.taxi.ui.screens
 
+import com.intu.taxi.ui.theme.AppearanceColors
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -57,7 +59,8 @@ import com.intu.taxi.auth.DriverProfile
 fun DriverDataCollectionScreen(
     onSubmit: (DriverProfile) -> Unit,
     onCancel: () -> Unit,
-    isConversion: Boolean = true
+    isConversion: Boolean = true,
+    isSubmitting: Boolean = false
 ) {
     var vehicleType by remember { mutableStateOf("Mototaxi") }
     var vehicleBrand by remember { mutableStateOf("") }
@@ -71,13 +74,13 @@ fun DriverDataCollectionScreen(
     var modelExpanded by remember { mutableStateOf(false) }
     var isCustomModel by remember { mutableStateOf(false) }
     var yearExpanded by remember { mutableStateOf(false) }
-    
+
     // Estados de animación
     val cardVisible = remember { mutableStateOf(false) }
     val titleVisible = remember { mutableStateOf(false) }
     val contentVisible = remember { mutableStateOf(false) }
     val buttonsVisible = remember { mutableStateOf(false) }
-    
+
     // Generar lista de años (desde 1990 hasta el año actual + 1)
     val currentYear = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
     val years = (1990..currentYear + 1).map { it.toString() }.reversed()
@@ -96,15 +99,15 @@ fun DriverDataCollectionScreen(
     }
 
     // Tipos de vehículo disponibles
-    val vehicleTypes = listOf("Mototaxi" to Icons.Default.LocalTaxi)
-    
+    val vehicleTypes = listOf("Mototaxi" to Icons.Default.LocalTaxi, "Moto lineal" to Icons.Default.TwoWheeler)
+
     // Marcas de vehículo por tipo
     val vehicleBrandsByType = mapOf(
         "Carro" to listOf("Toyota", "Honda", "Nissan", "Chevrolet", "Ford", "Hyundai", "Kia", "Volkswagen", "Mazda", "Otra"),
-        "Moto" to listOf("Honda", "Yamaha", "Suzuki", "Kawasaki", "Bajaj", "TVS", "Otra"),
+        "Moto lineal" to listOf("Honda", "Yamaha", "Suzuki", "Kawasaki", "Bajaj", "TVS", "Otra"),
         "Mototaxi" to listOf("Honda", "Bajaj")
     )
-    
+
     // Modelos de vehículo por marca
     val vehicleModelsByBrand = mapOf(
         "Honda" to listOf("Wave 125", "GL150", "GL125", "CGL 125 Tool", "XR 150", "XR 125", "CB 125", "CB 190", "Otro"),
@@ -126,7 +129,7 @@ fun DriverDataCollectionScreen(
 
     // Fondo con gradiente animado
     val backgroundAlpha = remember { Animatable(0f) }
-    
+
     LaunchedEffect(Unit) {
         backgroundAlpha.animateTo(
             targetValue = 1f,
@@ -136,7 +139,7 @@ fun DriverDataCollectionScreen(
             )
         )
     }
-    
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -161,7 +164,7 @@ fun DriverDataCollectionScreen(
             repeat(3) { index ->
                 val bubbleAlpha = remember { Animatable(0f) }
                 val bubbleOffset = remember { Animatable(50f) }
-                
+
                 LaunchedEffect(Unit) {
                     delay((200 + index * 150).toLong())
                     launch {
@@ -183,7 +186,7 @@ fun DriverDataCollectionScreen(
                         )
                     }
                 }
-                
+
                 Box(
                     modifier = Modifier
                         .size((80 + index * 40).dp)
@@ -227,7 +230,7 @@ fun DriverDataCollectionScreen(
                         .fillMaxWidth(0.92f),
                     shape = RoundedCornerShape(24.dp),
                     colors = CardDefaults.cardColors(
-                        containerColor = Color.White.copy(alpha = 0.95f)
+                        containerColor = AppearanceColors.surface.copy(alpha = 0.95f)
                     ),
                     elevation = CardDefaults.cardElevation(12.dp)
                 ) {
@@ -286,13 +289,13 @@ fun DriverDataCollectionScreen(
                                     if (isConversion) "Convertirse en conductor" else "Datos de conductor",
                                     style = MaterialTheme.typography.headlineSmall,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF1E1F47),
+                                    color = AppearanceColors.ink,
                                     textAlign = TextAlign.Center
                                 )
                                 Text(
-                                    if (isConversion) "Completa tu información para comenzar a generar ingresos" else "Ingresa la información de tu vehículo",
+                                    if (isConversion) "Regístrate con mototaxi o moto lineal para reparto" else "Ingresa la información de tu vehículo",
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = Color(0xFF08817E),
+                                    color = AppearanceColors.accent,
                                     textAlign = TextAlign.Center
                                 )
                             }
@@ -329,14 +332,14 @@ fun DriverDataCollectionScreen(
                                         onValueChange = {},
                                         readOnly = true,
                                         label = { Text("Tipo de vehículo") },
-                                        leadingIcon = { 
+                                        leadingIcon = {
                                             Icon(
                                                 vehicleTypes.find { it.first == vehicleType }?.second ?: Icons.Default.DirectionsCar,
                                                 contentDescription = null,
                                                 tint = Color(0xFF08817E)
                                             )
                                         },
-                                        trailingIcon = { 
+                                        trailingIcon = {
                                             Icon(
                                                 Icons.Default.ArrowDropDown,
                                                 contentDescription = "Seleccionar tipo"
@@ -359,17 +362,37 @@ fun DriverDataCollectionScreen(
                                     ) {
                                         vehicleTypes.forEach { (type, icon) ->
                                             DropdownMenuItem(
-                                                text = { Text(type) },
+                                                text = {
+                                                    Column {
+                                                        Text(type)
+                                                        Text(
+                                                            com.intu.taxi.auth.DriverVehicleType.from(type)?.serviceLabel.orEmpty(),
+                                                            style = MaterialTheme.typography.bodySmall,
+                                                            color = AppearanceColors.accent
+                                                        )
+                                                    }
+                                                },
                                                 leadingIcon = { Icon(icon, contentDescription = null, tint = Color(0xFF08817E)) },
                                                 onClick = {
                                                     vehicleType = type
                                                     vehicleBrand = "" // Limpiar la marca cuando cambia el tipo
+                                                    vehicleModel = ""
+                                                    isCustomModel = false
                                                     expanded = false
                                                 }
                                             )
                                         }
                                     }
                                 }
+
+                                Text(
+                                    if (vehicleType == "Moto lineal")
+                                        "Courier / repartidor. Tu solicitud será revisada por Intu antes de recibir pedidos de paquetes pequeños."
+                                    else "Transporte de pasajeros. Tu solicitud será revisada por Intu.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = AppearanceColors.accent,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
 
                                 // Marca del vehículo (dinámica según tipo)
                                 if (vehicleType.isNotBlank() && vehicleBrandsByType.containsKey(vehicleType)) {
@@ -383,7 +406,7 @@ fun DriverDataCollectionScreen(
                                             readOnly = true,
                                             label = { Text("Marca del vehículo") },
                                             leadingIcon = { Icon(Icons.AutoMirrored.Filled.BrandingWatermark, contentDescription = null, tint = Color(0xFF08817E)) },
-                                            trailingIcon = { 
+                                            trailingIcon = {
                                                 Icon(
                                                     Icons.Default.ArrowDropDown,
                                                     contentDescription = "Seleccionar marca"
@@ -428,13 +451,13 @@ fun DriverDataCollectionScreen(
                                         enabled = false, // Deshabilitado hasta que se seleccione tipo
                                         colors = TextFieldDefaults.colors(
                                             focusedContainerColor = Color.Transparent,
-                                            unfocusedContainerColor = Color(0xFFF5F5F5), // Fondo gris claro para estado deshabilitado
+                                            unfocusedContainerColor = AppearanceColors.tint(Color(0xFFF5F5F5)), // Fondo gris claro para estado deshabilitado
                                             focusedIndicatorColor = Color(0xFF08817E),
                                             unfocusedIndicatorColor = Color(0xFF08817E).copy(alpha = 0.5f),
-                                            disabledTextColor = Color.Gray,
-                                            disabledLabelColor = Color.Gray,
-                                            disabledLeadingIconColor = Color.Gray,
-                                            disabledContainerColor = Color(0xFFF5F5F5) // Fondo consistente para estado deshabilitado
+                                            disabledTextColor = AppearanceColors.secondary(Color.Gray),
+                                            disabledLabelColor = AppearanceColors.secondary(Color.Gray),
+                                            disabledLeadingIconColor = AppearanceColors.secondary(Color.Gray),
+                                            disabledContainerColor = AppearanceColors.tint(Color(0xFFF5F5F5)) // Fondo consistente para estado deshabilitado
                                         ),
                                         modifier = Modifier.fillMaxWidth(),
                                         textStyle = MaterialTheme.typography.bodyMedium
@@ -444,7 +467,7 @@ fun DriverDataCollectionScreen(
                                 // Modelo del vehículo (dinámico según marca)
                                 if (vehicleBrand.isNotBlank() && vehicleModelsByBrand.containsKey(vehicleBrand)) {
                                     val availableModels = vehicleModelsByBrand[vehicleBrand] ?: emptyList()
-                                    
+
                                     if (isCustomModel) {
                                         // Campo de texto personalizado
                                         TextField(
@@ -475,7 +498,7 @@ fun DriverDataCollectionScreen(
                                                 readOnly = true,
                                                 label = { Text("Modelo del vehículo") },
                                                 leadingIcon = { Icon(Icons.Default.ModelTraining, contentDescription = null, tint = Color(0xFF08817E)) },
-                                                trailingIcon = { 
+                                                trailingIcon = {
                                                     Icon(
                                                         Icons.Default.ArrowDropDown,
                                                         contentDescription = "Seleccionar modelo"
@@ -520,13 +543,13 @@ fun DriverDataCollectionScreen(
                                         enabled = false, // Deshabilitado hasta que se seleccione marca
                                         colors = TextFieldDefaults.colors(
                                             focusedContainerColor = Color.Transparent,
-                                            unfocusedContainerColor = Color(0xFFF5F5F5), // Fondo gris claro para estado deshabilitado
+                                            unfocusedContainerColor = AppearanceColors.tint(Color(0xFFF5F5F5)), // Fondo gris claro para estado deshabilitado
                                             focusedIndicatorColor = Color(0xFF08817E),
                                             unfocusedIndicatorColor = Color(0xFF08817E).copy(alpha = 0.5f),
-                                            disabledTextColor = Color.Gray,
-                                            disabledLabelColor = Color.Gray,
-                                            disabledLeadingIconColor = Color.Gray,
-                                            disabledContainerColor = Color(0xFFF5F5F5) // Fondo consistente para estado deshabilitado
+                                            disabledTextColor = AppearanceColors.secondary(Color.Gray),
+                                            disabledLabelColor = AppearanceColors.secondary(Color.Gray),
+                                            disabledLeadingIconColor = AppearanceColors.secondary(Color.Gray),
+                                            disabledContainerColor = AppearanceColors.tint(Color(0xFFF5F5F5)) // Fondo consistente para estado deshabilitado
                                         ),
                                         modifier = Modifier.fillMaxWidth(),
                                         textStyle = MaterialTheme.typography.bodyMedium
@@ -543,7 +566,7 @@ fun DriverDataCollectionScreen(
                                         onValueChange = { vehicleYear = it.filter { char -> char.isDigit() }.take(4) },
                                         label = { Text("Año del vehículo") },
                                         leadingIcon = { Icon(Icons.Default.CalendarToday, contentDescription = null, tint = Color(0xFF08817E)) },
-                                        trailingIcon = { 
+                                        trailingIcon = {
                                             Icon(
                                                 Icons.Default.ArrowDropDown,
                                                 contentDescription = "Seleccionar año"
@@ -561,7 +584,7 @@ fun DriverDataCollectionScreen(
                                         textStyle = MaterialTheme.typography.bodyMedium,
                                         readOnly = true
                                     )
-                                    
+
                                     DropdownMenu(
                                         expanded = yearExpanded,
                                         onDismissRequest = { yearExpanded = false },
@@ -571,12 +594,12 @@ fun DriverDataCollectionScreen(
                                     ) {
                                         years.forEach { year ->
                                             DropdownMenuItem(
-                                                text = { 
+                                                text = {
                                                     Text(
                                                         text = year,
                                                         style = MaterialTheme.typography.bodyLarge,
                                                         fontWeight = if (year == vehicleYear) FontWeight.Bold else FontWeight.Normal,
-                                                        color = if (year == vehicleYear) Color(0xFF08817E) else Color.Black
+                                                        color = if (year == vehicleYear) Color(0xFF08817E) else AppearanceColors.ink
                                                     )
                                                 },
                                                 onClick = {
@@ -665,12 +688,12 @@ fun DriverDataCollectionScreen(
                                     ) {
                                         Button(
                                             onClick = {
-                                                if (vehicleType.isNotBlank() && vehicleBrand.isNotBlank() && 
+                                                if (vehicleType.isNotBlank() && vehicleBrand.isNotBlank() &&
                                                     vehicleModel.isNotBlank() && vehicleYear.isNotBlank() &&
                                                     licensePlate.isNotBlank() && driverLicense.isNotBlank() && documentNumber.length == 8) {
-                                                    
+
                                                     val driverProfile = DriverProfile(
-                                                        vehicleType = vehicleType,
+                                                        vehicleType = com.intu.taxi.auth.DriverVehicleType.requireCode(vehicleType),
                                                         vehicleBrand = vehicleBrand,
                                                         vehicleModel = vehicleModel,
                                                         vehicleYear = vehicleYear,
@@ -681,7 +704,7 @@ fun DriverDataCollectionScreen(
                                                     onSubmit(driverProfile)
                                                 }
                                             },
-                                            enabled = vehicleType.isNotBlank() && vehicleBrand.isNotBlank() && 
+                                            enabled = !isSubmitting && vehicleType.isNotBlank() && vehicleBrand.isNotBlank() &&
                                                      vehicleModel.isNotBlank() && vehicleYear.isNotBlank() &&
                                                      licensePlate.isNotBlank() && driverLicense.isNotBlank() && documentNumber.length == 8,
                                             modifier = Modifier
@@ -694,7 +717,7 @@ fun DriverDataCollectionScreen(
                                             )
                                         ) {
                                             Text(
-                                                if (isConversion) "Convertirse en conductor" else "Guardar",
+                                                if (isSubmitting) "Enviando…" else if (isConversion) "Enviar solicitud" else "Guardar",
                                                 style = MaterialTheme.typography.titleSmall,
                                                 fontWeight = FontWeight.SemiBold
                                             )

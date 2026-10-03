@@ -25,7 +25,8 @@ fun CreativeDriverSearchIndicator(
     isVisible: Boolean,
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
-    isCancelling: Boolean = false
+    isCancelling: Boolean = false,
+    delivery: Boolean = false
 ) {
     if (!isVisible) return
 
@@ -303,7 +304,7 @@ fun CreativeDriverSearchIndicator(
                     
                     // Texto principal
                     Text(
-                        text = "Buscando conductor",
+                        text = if (delivery) "Buscando repartidor" else "Buscando conductor",
                         style = MaterialTheme.typography.headlineSmall,
                         color = Color(0xFFE8F8F7), // Color más brillante para mejor contraste
                         fontWeight = FontWeight.Bold, // Más peso para mejor legibilidad

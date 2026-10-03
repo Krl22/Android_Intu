@@ -15,11 +15,51 @@
       },
       "oauth_client": [
         {
+          "client_id": "882060234231-bts98ggd9nh966hbrq5v5suf8as10o3h.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.intu.taxi",
+            "certificate_hash": "5cf84a4ae0bdddfa08ff4cf5fd1efa14ff0d7fd9"
+          }
+        },
+        {
           "client_id": "882060234231-f0oj20408pvcq8uukv1bmofp2gcsako4.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.intu.taxi",
             "certificate_hash": "69ca861bf6395db729a95d59f1ffb5a5261a2183"
+          }
+        },
+        {
+          "client_id": "882060234231-j28ql7cngbo0roh144fnkle4p60dtj06.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.intu.taxi",
+            "certificate_hash": "7a4ec69cae01b4b8a5eeeff832d833e176c0efd0"
+          }
+        },
+        {
+          "client_id": "882060234231-qud7qepg8ovf9g3bt7tkdmb2jauj8cbg.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.intu.taxi",
+            "certificate_hash": "5a2038d05aeaf7fb3426f08c867706a98e564c1b"
+          }
+        },
+        {
+          "client_id": "882060234231-tlb2k3gnhehd5hg635erl16jqej4buj0.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.intu.taxi",
+            "certificate_hash": "4ec9816a4041c3387fd9bdc203e85c0080ce649b"
+          }
+        },
+        {
+          "client_id": "882060234231-vg63mie9ecbkr5tip4gtera0vhsl4qs7.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.intu.taxi",
+            "certificate_hash": "a1153a61a1ac420e20470be2c474dc597825a295"
           }
         },
         {

@@ -23,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.intu.taxi.ui.theme.AppearanceColors
 import com.intu.taxi.models.DriverRideRequest
 
 @Composable
@@ -53,7 +54,7 @@ fun IncomingRideRequestCard(
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
+            colors = CardDefaults.cardColors(containerColor = AppearanceColors.surface),
             elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
         ) {
             Column(
@@ -77,15 +78,15 @@ fun IncomingRideRequestCard(
                     
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = request.userName.ifBlank { "Pasajero" },
+                            text = request.userName.ifBlank { if (request.isDelivery) "Quien envía" else "Pasajero" },
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp,
-                            color = Color(0xFF1E1F47)
+                            color = AppearanceColors.ink
                         )
                         Text(
                             text = "${String.format(java.util.Locale.US, "%.1f", distanceInKm)} km de distancia",
                             fontSize = 12.sp,
-                            color = Color.Gray
+                            color = AppearanceColors.secondary(Color.Gray)
                         )
                     }
                     
@@ -93,7 +94,7 @@ fun IncomingRideRequestCard(
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.background(
-                            color = Color(0xFFF5F5F5),
+                            color = AppearanceColors.tint(Color(0xFFF5F5F5)),
                             shape = RoundedCornerShape(8.dp)
                         ).padding(horizontal = 8.dp, vertical = 4.dp)
                     ) {
@@ -105,13 +106,15 @@ fun IncomingRideRequestCard(
                         Text(
                             text = if (request.paymentMethod == "efectivo") "Efectivo" else "Yape",
                             fontSize = 12.sp,
-                            color = Color.DarkGray
+                            color = AppearanceColors.secondary(Color.DarkGray)
                         )
                     }
                 }
                 
                 Spacer(modifier = Modifier.height(12.dp))
                 
+                if (request.isDelivery) Text("Envío en moto lineal", fontWeight = FontWeight.SemiBold,
+                    color = AppearanceColors.highlight(Color(0xFF08817E)), modifier = Modifier.padding(bottom = 8.dp))
                 // Información del viaje
                 Column {
                     // Origen
@@ -128,7 +131,7 @@ fun IncomingRideRequestCard(
                         Text(
                             text = request.originAddress,
                             fontSize = 14.sp,
-                            color = Color.DarkGray,
+                            color = AppearanceColors.secondary(Color.DarkGray),
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f)
@@ -151,7 +154,7 @@ fun IncomingRideRequestCard(
                         Text(
                             text = request.destinationAddress,
                             fontSize = 14.sp,
-                            color = Color.DarkGray,
+                            color = AppearanceColors.secondary(Color.DarkGray),
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f)
@@ -169,17 +172,17 @@ fun IncomingRideRequestCard(
                     Text(
                         text = "${String.format(java.util.Locale.US, "%.1f", request.distanceMeters / 1000.0)} km",
                         fontSize = 12.sp,
-                        color = Color.Gray
+                        color = AppearanceColors.secondary(Color.Gray)
                     )
                     Text(
                         text = "${kotlin.math.max(1, kotlin.math.round(request.durationSeconds / 60).toInt())} min",
                         fontSize = 12.sp,
-                        color = Color.Gray
+                        color = AppearanceColors.secondary(Color.Gray)
                     )
                     Text(
                         text = com.intu.taxi.ui.formatSoles(request.estimatedPrice),
                         fontSize = 12.sp,
-                        color = Color(0xFF08817E),
+                        color = AppearanceColors.highlight(Color(0xFF08817E)),
                         fontWeight = FontWeight.Bold
                     )
                 }

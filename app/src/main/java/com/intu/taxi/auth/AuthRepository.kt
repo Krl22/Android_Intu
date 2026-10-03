@@ -4,6 +4,7 @@ import android.app.Activity
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.google.firebase.FirebaseException
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.AuthCredential
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.PhoneAuthCredential
@@ -64,34 +65,44 @@ class AuthRepository(
         return result.user
     }
 
-    suspend fun linkWithCredential(credential: PhoneAuthCredential): FirebaseUser? {
-        val user = auth.currentUser ?: return null
-        val result = user.linkWithCredential(credential).await()
-        return result.user
+    suspend fun linkWithCredential(credential: PhoneAuthCredential, expectedUid: String): FirebaseUser {
+        val user = requireCurrentUser(expectedUid)
+        val linked = if (user.providerData.any { it.providerId == PhoneAuthProvider.PROVIDER_ID }) {
+            user.updatePhoneNumber(credential).await()
+            user
+        } else user.linkWithCredential(credential).await().user ?: error("No se pudo vincular el número.")
+        check(linked.uid == expectedUid) { "La cuenta cambió durante la verificación. Intenta de nuevo desde Cuenta." }
+        requireCurrentUser(expectedUid).getIdToken(true).await()
+        return linked
     }
 
-    suspend fun linkWithGoogleAccount(account: GoogleSignInAccount): FirebaseUser? {
-        val user = auth.currentUser ?: return null
+    suspend fun linkWithGoogleAccount(account: GoogleSignInAccount, expectedUid: String): FirebaseUser {
         val credential = GoogleAuthProvider.getCredential(account.idToken, null)
-        return try {
-            val result = user.linkWithCredential(credential).await()
-            result.user
-        } catch (e: FirebaseAuthUserCollisionException) {
-            // Ya existe otra cuenta con ese correo de Google; informar a la UI para resolver.
-            throw e
-        }
+        return linkGoogleCredential(credential, expectedUid)
     }
+
+    suspend fun linkGoogleCredential(credential: AuthCredential, expectedUid: String): FirebaseUser {
+        require(credential.provider == GoogleAuthProvider.PROVIDER_ID)
+        val user = requireCurrentUser(expectedUid)
+        val linked = user.linkWithCredential(credential).await().user ?: error("No se pudo vincular Google.")
+        check(linked.uid == expectedUid) { "La cuenta cambió. Intenta de nuevo desde Cuenta." }
+        requireCurrentUser(expectedUid).getIdToken(true).await()
+        return linked
+    }
+
+    private fun requireCurrentUser(expectedUid: String): FirebaseUser =
+        auth.currentUser?.takeIf { it.uid == expectedUid } ?: error("Tu sesión cambió. Inicia sesión y vuelve a intentarlo.")
 
     fun startPhoneVerification(
         activity: Activity,
         phoneE164: String,
-        timeoutMinutes: Long = 10,
+        timeoutMinutes: Long = 1,
         callbacks: PhoneAuthProvider.OnVerificationStateChangedCallbacks,
         forceResendingToken: PhoneAuthProvider.ForceResendingToken? = null
     ) {
-        // Firebase solo soporta 0–120s para auto-retrieval en Android.
-        // El código SMS puede seguir siendo válido ~10 minutos, pero el auto-retrieval expira antes.
-        val safeSeconds = minOf(TimeUnit.MINUTES.toSeconds(timeoutMinutes), 120)
+        require(PhoneFormatter.normalizeMobile(phoneE164) == phoneE164) { "Ingresa un celular válido para recibir el SMS." }
+        auth.setLanguageCode("es")
+        val safeSeconds = TimeUnit.MINUTES.toSeconds(timeoutMinutes).coerceIn(0, 120)
         val builder = PhoneAuthOptions.newBuilder(auth)
             .setPhoneNumber(phoneE164)
             .setTimeout(safeSeconds, TimeUnit.SECONDS)
@@ -102,12 +113,19 @@ class AuthRepository(
     }
 
     suspend fun signInWithPhoneCredential(credential: PhoneAuthCredential): FirebaseUser? {
+        auth.currentUser?.let { current ->
+            check(current.providerData.any { it.providerId == PhoneAuthProvider.PROVIDER_ID }) { "Ya tienes una sesión. Vincula el número desde Cuenta." }
+            // A failed profile fetch may leave the SMS sign-in complete. Retrying must retain this account.
+            current.reauthenticate(credential).await()
+            return requireCurrentUser(current.uid)
+        }
         val result = auth.signInWithCredential(credential).await()
         return result.user
     }
 
     /** Guarda el perfil en Supabase, la única fuente de datos del perfil. */
     suspend fun saveUserProfile(uid: String, profile: UserProfile) {
+        requireCurrentUser(uid)
         SupabaseApi.ensureCurrentProfile(
             firstName = profile.firstName,
             lastName = profile.lastName,
@@ -206,6 +224,7 @@ class AuthRepository(
      * perfil en Firestore: si en Supabase falta algo y Firestore lo tiene, se copia una sola vez.
      */
     suspend fun getUserProfile(uid: String): UserProfile? {
+        requireCurrentUser(uid)
         val remote = SupabaseApi.currentProfile()?.toUserProfile()
         if (remote != null && remote.isComplete()) return remote
 
@@ -227,7 +246,8 @@ class AuthRepository(
                 SupabaseApi.syncDriver(
                     documentNumber = legacy.documentNumber.orEmpty(),
                     licenseNumber = legacy.driverLicense.orEmpty(),
-                    vehicleType = "mototaxi",
+                    vehicleType = if (legacy.vehicleType.isNullOrBlank()) DriverVehicleType.MOTOTAXI.code
+                        else DriverVehicleType.requireCode(legacy.vehicleType),
                     brand = legacy.vehicleBrand.orEmpty(),
                     model = legacy.vehicleModel.orEmpty(),
                     year = legacy.vehicleYear?.toIntOrNull(),
@@ -282,10 +302,12 @@ class AuthRepository(
     }
 
     suspend fun saveDriverProfile(uid: String, driverProfile: DriverProfile) {
+        check(auth.currentUser?.uid == uid) { "Inicia sesión para continuar." }
+        val vehicleType = DriverVehicleType.requireCode(driverProfile.vehicleType)
         SupabaseApi.syncDriver(
             documentNumber = driverProfile.documentNumber,
             licenseNumber = driverProfile.driverLicense,
-            vehicleType = "mototaxi",
+            vehicleType = vehicleType,
             brand = driverProfile.vehicleBrand,
             model = driverProfile.vehicleModel,
             year = driverProfile.vehicleYear.toIntOrNull(),
@@ -296,28 +318,49 @@ class AuthRepository(
     suspend fun hasCompleteDriverProfile(uid: String): Boolean {
         return try {
             val driverProfile = getDriverProfile(uid)
-            driverProfile != null && 
-            driverProfile.vehicleType.isNotBlank() &&
-            driverProfile.vehicleBrand.isNotBlank() &&
-            driverProfile.vehicleModel.isNotBlank() &&
-            driverProfile.vehicleYear.isNotBlank() &&
-            driverProfile.licensePlate.isNotBlank() &&
-            driverProfile.driverLicense.isNotBlank() &&
-            driverProfile.documentNumber.matches(Regex("^[0-9]{8}$"))
+            driverProfile?.isCompleteDriverProfile() == true
         } catch (e: Exception) {
             // Si hay error al obtener el perfil de conductor, asumimos que no está completo
             false
         }
     }
 
+    private fun DriverProfile.isCompleteDriverProfile() =
+        DriverVehicleType.from(vehicleType) != null && vehicleBrand.isNotBlank() &&
+            vehicleModel.isNotBlank() && vehicleYear.isNotBlank() && licensePlate.isNotBlank() &&
+            driverLicense.isNotBlank() && documentNumber.matches(Regex("^[0-9]{8}$"))
+
+    suspend fun getDriverAccess(uid: String): DriverAccess {
+        requireCurrentUser(uid)
+        val driver = getDriverProfile(uid)
+        val type = DriverVehicleType.from(driver?.vehicleType)
+        val available = type?.let {
+            SupabaseApi.rows("vehicle_types?code=eq.${SupabaseApi.encode(it.code)}&select=is_active&limit=1")
+                .optJSONObject(0)?.optBoolean("is_active", false) == true
+        } ?: false
+        return DriverAccess(
+            status = SupabaseApi.driverStatus(),
+            completeProfile = driver?.isCompleteDriverProfile() == true,
+            serviceAvailable = available,
+            vehicleType = type
+        )
+    }
+
     suspend fun setDriverMode(uid: String, isDriver: Boolean) {
+        check(auth.currentUser?.uid == uid) { "Inicia sesión para continuar." }
+        if (isDriver) {
+            val access = getDriverAccess(uid)
+            check(access.canDrive) {
+                access.message ?: "Tu solicitud de conductor debe estar aprobada antes de activar este modo."
+            }
+        }
         SupabaseApi.ensureCurrentProfile(driverMode = isDriver)
     }
 
     suspend fun getDriverMode(uid: String): Boolean {
         return try {
             val userProfile = getUserProfile(uid)
-            userProfile?.isDriver ?: false
+            userProfile?.isDriver == true && getDriverAccess(uid).canDrive
         } catch (e: Exception) {
             false
         }
@@ -336,9 +379,10 @@ class AuthRepository(
     }
 
 
-    fun sendEmailVerification(): Boolean {
+    suspend fun sendEmailVerification(): Boolean {
         val user = auth.currentUser ?: return false
-        user.sendEmailVerification()
+        if (user.email.isNullOrBlank()) return false
+        user.sendEmailVerification().await()
         return true
     }
 }

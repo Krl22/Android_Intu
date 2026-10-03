@@ -1,5 +1,6 @@
 package com.intu.taxi.ui.screens
 
+import com.intu.taxi.ui.theme.AppearanceColors
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -21,6 +22,7 @@ import androidx.compose.material.icons.filled.TwoWheeler
 import androidx.compose.material.icons.filled.LocalTaxi
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,6 +50,7 @@ import com.google.android.gms.auth.api.signin.GoogleSignInStatusCodes
 import com.intu.taxi.auth.AuthRepository
 import com.intu.taxi.auth.UserProfile
 import com.intu.taxi.data.PaymentPreferences
+import com.intu.taxi.ui.nationalPhoneForDisplay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import com.intu.taxi.auth.DriverProfile
@@ -68,7 +71,8 @@ fun AccountScreenEnhanced(
     onDriverChange: (Boolean) -> Unit,
     onLogout: (() -> Unit)? = null,
     onNavigateToDriverDataCollection: (() -> Unit)? = null,
-    onOpenAdmin: (() -> Unit)? = null
+    onOpenAdmin: (() -> Unit)? = null,
+    onCheckUpdates: () -> Unit = {}
 ) {
     val repo = remember { AuthRepository() }
     val auth = FirebaseAuth.getInstance()
@@ -84,9 +88,17 @@ fun AccountScreenEnhanced(
     var profileError by remember { mutableStateOf<String?>(null) }
     var statusMessage by remember { mutableStateOf<String?>(null) }
     var hasCompleteDriverProfile by remember { mutableStateOf(false) }
-    var checkingDriverProfile by remember { mutableStateOf(false) }
+    var checkingDriverProfile by remember { mutableStateOf(true) }
+    var driverAccess by remember { mutableStateOf(com.intu.taxi.auth.DriverAccess(null, false)) }
+    var driverStatusLoaded by remember { mutableStateOf(false) }
+    var refreshKey by remember { mutableIntStateOf(0) }
+    var showSavedPlaces by remember { mutableStateOf(false) }
+    var showBugReport by remember { mutableStateOf(false) }
+    var showTerms by remember { mutableStateOf(false) }
+    var showAccountDeletion by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val activity = checkNotNull(androidx.activity.compose.LocalActivity.current)
     
     var googleLinked by remember {
         mutableStateOf(
@@ -94,8 +106,10 @@ fun AccountScreenEnhanced(
         )
     }
     
-    var emailVerificationSent by remember { mutableStateOf(false) }
-    var googleLinkingInProgress by remember { mutableStateOf(false) }
+
+    var googleLinkingInProgress by rememberSaveable { mutableStateOf(false) }
+    var googleLinkUid by rememberSaveable { mutableStateOf<String?>(null) }
+    var phoneLinkUid by rememberSaveable { mutableStateOf<String?>(null) }
     
     // Refresh Google account status
     val refreshGoogleStatus: () -> Unit = {
@@ -115,31 +129,17 @@ fun AccountScreenEnhanced(
             
             scope.launch {
                 try {
-                    val user = repo.linkWithGoogleAccount(account)
-                    if (user != null) {
-                        googleLinked = true
-                        statusMessage = "Cuenta de Google vinculada exitosamente"
-                        // Refresh the Google status to ensure UI updates
-                        refreshGoogleStatus()
-                        // Clear status message after 5 seconds
-                        kotlinx.coroutines.delay(5000)
-                        statusMessage = null
-                    } else {
-                        statusMessage = "Error al vincular cuenta de Google"
-                        // Clear status message after 3 seconds
-                        kotlinx.coroutines.delay(3000)
-                        statusMessage = null
-                    }
+                    val user = repo.linkWithGoogleAccount(account, googleLinkUid ?: error("Tu sesión cambió. Intenta de nuevo."))
+                    googleLinked = true
+                    val synced = runCatching { repo.syncProfileToSupabase(user.uid) }.isSuccess
+                    refreshKey++
+                    statusMessage = if (synced) "Google vinculado. Puedes entrar con Google o tu teléfono a esta misma cuenta."
+                        else "Google vinculado. Revisa tu conexión para actualizar los datos del perfil."
+                    refreshGoogleStatus()
                 } catch (e: com.google.firebase.auth.FirebaseAuthUserCollisionException) {
-                    statusMessage = "Esta cuenta de Google ya está vinculada a otro usuario"
-                    // Clear status message after 5 seconds
-                    kotlinx.coroutines.delay(5000)
-                    statusMessage = null
+                    statusMessage = com.intu.taxi.auth.authErrorMessage(e, linking = true)
                 } catch (e: Exception) {
-                    statusMessage = "Error al vincular cuenta: ${e.message}"
-                    // Clear status message after 3 seconds
-                    kotlinx.coroutines.delay(3000)
-                    statusMessage = null
+                    statusMessage = com.intu.taxi.auth.authErrorMessage(e, linking = true)
                 } finally {
                     googleLinkingInProgress = false
                 }
@@ -152,6 +152,24 @@ fun AccountScreenEnhanced(
         }
     }
     
+    phoneLinkUid?.let { expectedUid ->
+        androidx.compose.ui.window.Dialog(onDismissRequest = { phoneLinkUid = null },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = false)) {
+            Surface(Modifier.fillMaxWidth().fillMaxHeight(0.94f).padding(12.dp), shape = RoundedCornerShape(24.dp)) {
+                PhoneAuthScreen(activity = activity, repo = repo, linking = true,
+                    initialPhone = auth.currentUser?.phoneNumber ?: profile?.number.orEmpty(),
+                    onCancel = { phoneLinkUid = null }, onVerified = { credential ->
+                        val linkedUser = repo.linkWithCredential(credential, expectedUid)
+                        val synced = runCatching { repo.syncProfileToSupabase(linkedUser.uid) }.isSuccess
+                        phoneLinkUid = null
+                        refreshKey++
+                        statusMessage = if (synced) "Número vinculado. Puedes entrar por SMS a esta misma cuenta."
+                            else "Número vinculado. Revisa tu conexión para actualizar los datos del perfil."
+                    })
+            }
+        }
+    }
+
     // Animation states
     var headerVisible by remember { mutableStateOf(false) }
     var contentVisible by remember { mutableStateOf(false) }
@@ -173,156 +191,56 @@ fun AccountScreenEnhanced(
         contentVisible = true
     }
     
-    LaunchedEffect(authUser?.uid) {
+    LaunchedEffect(authUser?.uid, refreshKey) {
         loadingProfile = true
+        checkingDriverProfile = true
+        driverStatusLoaded = false
         profileError = null
         val uid = authUser?.uid
-        if (uid != null) {
-            try {
-                profile = repo.getUserProfile(uid)
-                // Debug: Log the profile data to understand what's happening
-                println("DEBUG: Profile loaded - email: ${profile?.email}, firstName: ${profile?.firstName}, lastName: ${profile?.lastName}")
-                println("DEBUG: Firebase Auth email: ${authUser?.email}")
-                
-                // Check if user has complete driver profile
-                checkingDriverProfile = true
-                hasCompleteDriverProfile = repo.hasCompleteDriverProfile(uid)
-                checkingDriverProfile = false
-            } catch (e: Exception) {
-                profileError = "Error: ${e.message ?: "Error desconocido"}"
-                checkingDriverProfile = false
-                println("DEBUG: Error loading profile: ${e.message}")
+        try {
+            if (uid == null) error("Inicia sesión para continuar.")
+            profile = repo.getUserProfile(uid)
+            driverAccess = repo.getDriverAccess(uid)
+            hasCompleteDriverProfile = driverAccess.completeProfile
+            driverStatusLoaded = true
+            if ((isDriver || profile?.isDriver == true) && !driverAccess.canDrive) {
+                repo.setDriverMode(uid, false)
+                onDriverChange(false)
+                profile = profile?.copy(isDriver = false)
             }
-        } else {
-            // No user logged in
-            profileError = "No hay usuario autenticado"
+        } catch (e: Exception) {
+            profileError = e.message ?: "No se pudo cargar tu cuenta."
+        } finally {
+            checkingDriverProfile = false
+            loadingProfile = false
+            refreshGoogleStatus()
         }
-        googleLinked = auth.currentUser?.providerData?.any { it.providerId == GoogleAuthProvider.PROVIDER_ID } == true
-        loadingProfile = false
-        refreshGoogleStatus()
     }
 
-    // Refresh driver profile status when screen becomes visible
-    LaunchedEffect(Unit) {
-        // Additional refresh for driver profile status when returning to this screen
-        val uid = authUser?.uid
-        if (uid != null) {
+    val canBecomeDriver: () -> Boolean = { driverStatusLoaded && driverAccess.canDrive }
+    val handleDriverModeChange: (Boolean) -> Unit = { newMode ->
+        if (!checkingDriverProfile) scope.launch {
             checkingDriverProfile = true
             try {
-                // Refresh complete driver profile status
-                hasCompleteDriverProfile = repo.hasCompleteDriverProfile(uid)
-                println("DEBUG: Driver profile refresh - hasCompleteDriverProfile: $hasCompleteDriverProfile")
-                
-                // Also refresh the user profile to ensure latest data
-                val updatedProfile = repo.getUserProfile(uid)
-                if (updatedProfile != null) {
-                    profile = updatedProfile
-                    println("DEBUG: Refreshed user profile after returning to screen")
-                }
+                val uid = authUser?.uid ?: error("Inicia sesión para continuar.")
+                repo.setDriverMode(uid, newMode)
+                onDriverChange(newMode)
+                profile = profile?.copy(isDriver = newMode)
+                profileError = null
             } catch (e: Exception) {
-                println("DEBUG: Error refreshing driver profile: ${e.message}")
+                profileError = e.message ?: "No se pudo cambiar de modo."
+                refreshKey++
             } finally {
                 checkingDriverProfile = false
             }
         }
     }
 
-    // Check if user can become a driver
-    val canBecomeDriver: () -> Boolean = {
-        val displayEmail = profile?.email ?: authUser?.email
-        val isEmailVerified = authUser?.isEmailVerified == true
-        val hasGoogleAccount = googleLinked
-        val hasDriverData = hasCompleteDriverProfile
-        !displayEmail.isNullOrEmpty() && isEmailVerified && hasGoogleAccount && hasDriverData
-    }
+    if (showSavedPlaces) SavedPlacesDialog(onDismiss = { showSavedPlaces = false })
+    if (showBugReport) BugReportDialog(onDismiss = { showBugReport = false })
+    if (showTerms) TermsDialog(onDismiss = { showTerms = false })
+    if (showAccountDeletion) AccountDeletionDialog(onDismiss = { showAccountDeletion = false })
 
-    // Handle driver mode change with validation
-    val handleDriverModeChange: (Boolean) -> Unit = { newDriverMode ->
-        scope.launch {
-            println("DEBUG: Driver mode change triggered - newMode=$newDriverMode")
-            if (newDriverMode) {
-                val displayEmail = profile?.email ?: authUser?.email
-                val isEmailVerified = authUser?.isEmailVerified == true
-                val hasGoogleAccount = googleLinked
-                val hasDriverData = hasCompleteDriverProfile
-                val uid = authUser?.uid
-                
-                // Perfil y aprobación actualizados desde Supabase
-                var remoteApproved: Boolean? = null
-                var actualIsApproved: Boolean? = null
-                if (uid != null) {
-                    try {
-                        val remoteProfile = repo.getUserProfile(uid)
-                        actualIsApproved = repo.getIsApprovedValue(uid)
-                        remoteApproved = actualIsApproved
-                        profile = remoteProfile
-                    } catch (e: Exception) {
-                        println("DEBUG: No se pudo actualizar el perfil: ${e.message}")
-                    }
-                }
-                
-                // Supabase es la única fuente de verdad para la aprobación manual.
-                val finalApproved = actualIsApproved == true
-                println("DEBUG: Validation -> emailEmpty=${displayEmail.isNullOrEmpty()}, emailVerified=$isEmailVerified, googleLinked=$hasGoogleAccount, hasDriverData=$hasDriverData")
-                println("DEBUG: Approval check -> profile.isApproved: ${profile?.isApproved}, remoteApproved: $remoteApproved, finalApproved: $finalApproved")
-
-                when {
-                    displayEmail.isNullOrEmpty() -> {
-                        profileError = "Debes tener un correo electrónico para ser conductor"
-                    }
-                    !isEmailVerified -> {
-                        profileError = "Debes verificar tu correo electrónico para ser conductor"
-                    }
-                    !hasGoogleAccount -> {
-                        profileError = "Debes vincular tu cuenta de Google para ser conductor"
-                    }
-                    !hasDriverData -> {
-                        onNavigateToDriverDataCollection?.invoke()
-                    }
-                    !finalApproved -> {
-                        println("DEBUG: APPROVAL ERROR - email=${displayEmail}, verified=$isEmailVerified, google=$hasGoogleAccount, driverData=$hasDriverData, profileApproved=${profile?.isApproved}, remoteApproved=$remoteApproved, actualIsApproved=$actualIsApproved, finalApproved=$finalApproved")
-                        
-                        profileError = "Tu perfil de conductor está pendiente de aprobación manual. Te avisaremos cuando puedas conectarte."
-                    }
-                    else -> {
-                        val uid2 = authUser?.uid
-                        if (uid2 != null) {
-                            try {
-                                repo.setDriverMode(uid2, true)
-                                onDriverChange(newDriverMode)
-                                profile = profile?.copy(isDriver = true)
-                            } catch (e: Exception) {
-                                profileError = "Error al actualizar el perfil: ${e.message}"
-                            }
-                        } else {
-                            onDriverChange(newDriverMode)
-                        }
-                    }
-                }
-            } else {
-                onDriverChange(newDriverMode)
-            }
-        }
-    }
-
-    // Refresh driver profile status
-    val refreshDriverProfile: () -> Unit = {
-        val uid = authUser?.uid
-        if (uid != null) {
-            scope.launch {
-                checkingDriverProfile = true
-                try {
-                    hasCompleteDriverProfile = repo.hasCompleteDriverProfile(uid)
-                    println("DEBUG: Refreshed driver profile - hasCompleteDriverProfile: $hasCompleteDriverProfile")
-                } catch (e: Exception) {
-                    println("DEBUG: Error refreshing driver profile: ${e.message}")
-                } finally {
-                    checkingDriverProfile = false
-                }
-            }
-        }
-    }
-    
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -367,7 +285,7 @@ fun AccountScreenEnhanced(
                         .fillMaxWidth()
                         .padding(top = 16.dp)
                 ) {
-                    val showDriverStats = isDriver || (hasCompleteDriverProfile && profile?.isDriver == true)
+                    val showDriverStats = isDriver && driverAccess.canDrive
                     if (showDriverStats) {
                         DriverStatsSection()
                         Spacer(modifier = Modifier.height(16.dp))
@@ -444,40 +362,15 @@ fun AccountScreenEnhanced(
                         }
                     }
                     
-                    // Define email verification click handler
-                    val onEmailVerificationClick: () -> Unit = {
-                        if (authUser?.isEmailVerified == false) {
-                            scope.launch {
-                                try {
-                                    val success = repo.sendEmailVerification()
-                                    if (success) {
-                                        emailVerificationSent = true
-                                        statusMessage = "Correo de verificación enviado. Por favor revisa tu bandeja de entrada."
-                                        // Clear status message after 5 seconds
-                                        kotlinx.coroutines.delay(5000)
-                                        statusMessage = null
-                                    } else {
-                                        statusMessage = "No se pudo enviar el correo de verificación."
-                                        // Clear status message after 3 seconds
-                                        kotlinx.coroutines.delay(3000)
-                                        statusMessage = null
-                                    }
-                                } catch (e: Exception) {
-                                    statusMessage = "Error al enviar correo: ${e.message}"
-                                    // Clear status message after 3 seconds
-                                    kotlinx.coroutines.delay(3000)
-                                    statusMessage = null
-                                }
-                            }
-                        }
-                    }
-                    
                     SettingsSection(
                         authUser = authUser,
                         profile = profile,
                         googleLinked = googleLinked,
                         googleLinkingInProgress = googleLinkingInProgress,
                         onGoogleLinkClick = {
+                            statusMessage = null
+                            googleLinkUid = auth.currentUser?.uid
+                            googleLinkingInProgress = true
                             // Launch Google Sign-In for account linking
                             val gso = com.google.android.gms.auth.api.signin.GoogleSignInOptions.Builder(
                                 com.google.android.gms.auth.api.signin.GoogleSignInOptions.DEFAULT_SIGN_IN
@@ -488,7 +381,8 @@ fun AccountScreenEnhanced(
                             val googleSignInClient = com.google.android.gms.auth.api.signin.GoogleSignIn.getClient(context, gso)
                             googleSignInLauncher.launch(googleSignInClient.signInIntent)
                         },
-                        onEmailVerificationClick = onEmailVerificationClick,
+                        onPhoneLinkClick = { phoneLinkUid = auth.currentUser?.uid },
+
                         isDriver = isDriver,
                         onLogout = onLogout,
                         canBecomeDriver = canBecomeDriver,
@@ -499,7 +393,15 @@ fun AccountScreenEnhanced(
                         repo = repo,
                         onProfileUpdate = { updatedProfile -> profile = updatedProfile },
                         currentPaymentMethod = currentPaymentMethod,
-                        paymentPreferences = paymentPreferences
+                        paymentPreferences = paymentPreferences,
+                        driverAccess = driverAccess,
+                        driverStatusLoaded = driverStatusLoaded,
+                        onRefreshDriverStatus = { refreshKey++ },
+                        onSavedPlaces = { showSavedPlaces = true },
+                        onBugReport = { showBugReport = true },
+                        onTerms = { showTerms = true },
+                        onAccountDeletion = { showAccountDeletion = true },
+                        onCheckUpdates = onCheckUpdates
                     )
                 }
             }
@@ -604,7 +506,7 @@ private fun EnhancedHeaderSection(
                     ambientColor = Color.Black.copy(alpha = 0.2f)
                 ),
             colors = CardDefaults.cardColors(
-                containerColor = Color.White.copy(alpha = 0.2f)
+                containerColor = AppearanceColors.surface.copy(alpha = 0.2f)
             ),
             border = BorderStroke(1.dp, Color.White.copy(alpha = 0.3f)),
             shape = RoundedCornerShape(24.dp)
@@ -622,7 +524,7 @@ private fun EnhancedHeaderSection(
                     )
             ) {
                 // Driver mode toggle - show for existing drivers or users with complete driver profile
-                val showDriverToggle = isDriver || hasCompleteDriverProfile || (profile?.isDriver == true)
+                val showDriverToggle = canBecomeDriver()
                 if (showDriverToggle) {
                     Column(
                         modifier = Modifier
@@ -643,7 +545,7 @@ private fun EnhancedHeaderSection(
                                     .size(12.dp)
                                     .padding(top = 4.dp),
                                 strokeWidth = 2.dp,
-                                color = Color(0xFF08817E)
+                                color = AppearanceColors.highlight(Color(0xFF08817E))
                             )
                         }
                     }
@@ -705,7 +607,7 @@ private fun EnhancedHeaderSection(
                             modifier = Modifier
                                 .size(32.dp)
                                 .clip(CircleShape)
-                                .background(Color.White)
+                                .background(AppearanceColors.surface)
                                 .align(Alignment.BottomEnd)
                                 .border(2.dp, Color(0xFF08817E), CircleShape),
                             contentAlignment = Alignment.Center
@@ -714,7 +616,7 @@ private fun EnhancedHeaderSection(
                                 imageVector = Icons.Default.PhotoCamera,
                                 contentDescription = null,
                                 modifier = Modifier.size(16.dp),
-                                tint = Color(0xFF08817E)
+                                tint = AppearanceColors.highlight(Color(0xFF08817E))
                             )
                         }
                     }
@@ -732,7 +634,10 @@ private fun EnhancedHeaderSection(
                         else -> {
                             val displayName = listOfNotNull(profile?.firstName, profile?.lastName)
                                 .joinToString(" ").ifBlank { authUser?.displayName ?: "Mi cuenta" }
-                            val phoneLabel = profile?.number ?: authUser?.phoneNumber ?: "Sin número"
+                            val phoneNumber = profile?.number?.takeIf { it.isNotBlank() }
+                                ?: authUser?.phoneNumber?.takeIf { it.isNotBlank() }
+                            val phoneLabel = phoneNumber?.let(::nationalPhoneForDisplay)?.ifBlank { "Sin número" }
+                                ?: "Sin número"
                             
                             Text(
                                 displayName,
@@ -744,7 +649,6 @@ private fun EnhancedHeaderSection(
                             Text(
                                 when {
                                     isDriver -> "Conductor • $phoneLabel"
-                                    profile?.isDriver == true -> "Conductor • $phoneLabel"
                                     else -> phoneLabel
                                 },
                                 style = MaterialTheme.typography.bodyMedium,
@@ -788,7 +692,7 @@ private fun DriverStatsSection() {
             .fillMaxWidth()
             .padding(horizontal = 16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = Color.White.copy(alpha = 0.9f)
+            containerColor = AppearanceColors.surface.copy(alpha = 0.9f)
         ),
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
@@ -808,7 +712,7 @@ private fun DriverStatsSection() {
                     Icon(
                         imageVector = icon,
                         contentDescription = null,
-                        tint = Color(0xFF08817E),
+                        tint = AppearanceColors.highlight(Color(0xFF08817E)),
                         modifier = Modifier.size(24.dp)
                     )
                     Spacer(modifier = Modifier.height(4.dp))
@@ -816,12 +720,12 @@ private fun DriverStatsSection() {
                         value,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF1C1C1E)
+                        color = AppearanceColors.foreground(Color(0xFF1C1C1E))
                     )
                     Text(
                         label,
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFF6B7280)
+                        color = AppearanceColors.secondary(Color(0xFF6B7280))
                     )
                 }
             }
@@ -836,7 +740,8 @@ private fun SettingsSection(
     googleLinked: Boolean,
     googleLinkingInProgress: Boolean,
     onGoogleLinkClick: () -> Unit,
-    onEmailVerificationClick: () -> Unit,
+    onPhoneLinkClick: () -> Unit,
+
     isDriver: Boolean,
     onLogout: (() -> Unit)?,
     canBecomeDriver: () -> Boolean,
@@ -847,14 +752,22 @@ private fun SettingsSection(
     repo: AuthRepository,
     onProfileUpdate: (UserProfile?) -> Unit,
     currentPaymentMethod: String,
-    paymentPreferences: PaymentPreferences
+    paymentPreferences: PaymentPreferences,
+    driverAccess: com.intu.taxi.auth.DriverAccess,
+    driverStatusLoaded: Boolean,
+    onRefreshDriverStatus: () -> Unit,
+    onSavedPlaces: () -> Unit,
+    onBugReport: () -> Unit,
+    onTerms: () -> Unit,
+    onAccountDeletion: () -> Unit,
+    onCheckUpdates: () -> Unit
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = Color.White.copy(alpha = 0.95f)
+            containerColor = AppearanceColors.surface.copy(alpha = 0.95f)
         ),
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
@@ -863,25 +776,14 @@ private fun SettingsSection(
             modifier = Modifier.padding(vertical = 8.dp)
         ) {
             // Email verification - prioritize Firestore profile email, fallback to Firebase Auth
-            val displayEmail = profile?.email ?: authUser?.email
-            println("DEBUG UI: Display email - profile.email: ${profile?.email}, authUser.email: ${authUser?.email}, final: $displayEmail")
-            SettingsItemEnhanced(
-                icon = Icons.Default.Email,
-                title = "Correo electrónico",
-                subtitle = displayEmail ?: "Sin correo",
-                actionText = if (authUser?.isEmailVerified == true) "Verificado" else "Verificar",
-                actionColor = if (authUser?.isEmailVerified == true) Color(0xFF10B981) else Color(0xFFF59E0B),
-                onClick = onEmailVerificationClick
-            )
-            
             // Google account
             SettingsItemEnhanced(
                 icon = Icons.Default.Link,
-                title = "Cuenta de Google",
+                title = "Acceso con Google",
                 subtitle = when {
                     googleLinkingInProgress -> "Vinculando..."
-                    googleLinked -> "Vinculado"
-                    else -> "No vinculado"
+                    googleLinked -> authUser?.email ?: "Vinculado a esta cuenta"
+                    else -> "Vincula Google para entrar también con tu correo"
                 },
                 actionText = when {
                     googleLinkingInProgress -> "Procesando..."
@@ -898,6 +800,18 @@ private fun SettingsSection(
                         onGoogleLinkClick()
                     }
                 },
+                enabled = !googleLinkingInProgress
+            )
+            val verifiedPhone = authUser?.phoneNumber?.takeIf { it.isNotBlank() }
+            SettingsItemEnhanced(
+                icon = Icons.Default.Phone,
+                title = "Acceso con teléfono",
+                subtitle = verifiedPhone?.let(::nationalPhoneForDisplay)
+                    ?: profile?.number?.takeIf { it.isNotBlank() }?.let { "${nationalPhoneForDisplay(it)} · Pendiente de verificar por SMS" }
+                    ?: "Verifica tu celular para entrar por SMS",
+                actionText = if (verifiedPhone == null) "Vincular" else "Cambiar",
+                actionColor = Color(0xFF08817E),
+                onClick = onPhoneLinkClick,
                 enabled = !googleLinkingInProgress
             )
             
@@ -921,17 +835,17 @@ private fun SettingsSection(
             )
             
             // Earn as driver - only show for non-drivers who need to complete driver info
-                    val shouldShowDriverOption = !isDriver && !hasCompleteDriverProfile && (profile?.isDriver != true)
+                    val shouldShowDriverOption = driverStatusLoaded && driverAccess.canApply
                     if (shouldShowDriverOption) {
                         SettingsItemEnhanced(
                             icon = Icons.Default.DirectionsCar,
                             title = "Ganar como conductor",
-                            subtitle = "Conduce y genera ingresos",
+                            subtitle = "Mototaxi o moto lineal para reparto",
                             actionText = "Comenzar",
                             actionColor = Color(0xFF08817E),
                             onClick = {
                                 // Check email verification first
-                                val displayEmail = profile?.email ?: authUser?.email
+                                val displayEmail = authUser?.email
                                 if (displayEmail.isNullOrEmpty()) {
                                     onShowError("Debes agregar un correo electrónico primero")
                                 } else if (authUser?.isEmailVerified != true) {
@@ -945,63 +859,61 @@ private fun SettingsSection(
                         )
                     }
             
+            if (driverStatusLoaded && driverAccess.message != null) {
+                SettingsItemEnhanced(
+                    icon = Icons.Default.Info,
+                    title = if (driverAccess.status == "pending") "Solicitud en revisión"
+                        else if (driverAccess.vehicleType == com.intu.taxi.auth.DriverVehicleType.MOTORCYCLE) "Solicitud de repartidor"
+                        else "Solicitud de conductor",
+                    subtitle = driverAccess.message.orEmpty(),
+                    actionText = "Actualizar",
+                    onClick = onRefreshDriverStatus
+                )
+            }
+
             // Saved addresses
             SettingsItemEnhanced(
                 icon = Icons.Default.Place,
                 title = "Direcciones guardadas",
                 subtitle = "Casa, trabajo y favoritas",
                 actionText = "Editar",
-                onClick = { /* Navigate to addresses */ }
-            )
-            
-            // Trip history
-            val tripHistoryTitle = when {
-                isDriver -> "Historial de viajes (conductor)"
-                profile?.isDriver == true -> "Historial de viajes (conductor)"
-                else -> "Historial de viajes"
-            }
-            SettingsItemEnhanced(
-                icon = Icons.Default.History,
-                title = tripHistoryTitle,
-                subtitle = "Ver todos tus viajes",
-                actionText = "Ver",
-                onClick = { /* Navigate to trip history */ }
-            )
-            
-            // Language
-            SettingsItemEnhanced(
-                icon = Icons.Default.Language,
-                title = "Idioma",
-                subtitle = "Español",
-                actionText = "Cambiar",
-                onClick = { /* Navigate to language settings */ }
-            )
-            
-            // Notifications
-            SettingsItemEnhanced(
-                icon = Icons.Default.Notifications,
-                title = "Notificaciones",
-                subtitle = "Configurar alertas",
-                actionText = "Configurar",
-                onClick = { /* Navigate to notifications */ }
+                onClick = onSavedPlaces
             )
             
             // Support
             SettingsItemEnhanced(
                 icon = Icons.Default.Support,
-                title = "Soporte",
-                subtitle = "Ayuda y contacto",
-                actionText = "Contactar",
-                onClick = { /* Navigate to support */ }
+                title = "Reportar un error",
+                subtitle = "Cuéntanos qué falló en Intu",
+                actionText = "Reportar",
+                onClick = onBugReport
             )
             
             // Terms and privacy
+            SettingsItemEnhanced(
+                icon = Icons.Outlined.SystemUpdate,
+                title = "Actualizaciones",
+                subtitle = "Intu ${com.intu.taxi.BuildConfig.VERSION_NAME} · Buscar una nueva versión",
+                actionText = "Comprobar",
+                actionColor = Color(0xFF08817E),
+                onClick = onCheckUpdates
+            )
+
             SettingsItemEnhanced(
                 icon = Icons.Default.Description,
                 title = "Términos y privacidad",
                 subtitle = "Políticas de la app",
                 actionText = "Abrir",
-                onClick = { /* Navigate to terms */ }
+                onClick = onTerms
+            )
+
+            SettingsItemEnhanced(
+                icon = Icons.Default.DeleteOutline,
+                title = "Eliminar cuenta",
+                subtitle = "Solicita eliminar tu cuenta y tus datos",
+                actionText = "Solicitar",
+                actionColor = MaterialTheme.colorScheme.error,
+                onClick = onAccountDeletion
             )
             
             // Driver approval section removed - approval is now handled server-side
@@ -1070,13 +982,13 @@ private fun SettingsItemEnhanced(
                     title,
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Medium,
-                    color = Color(0xFF1C1C1E)
+                    color = AppearanceColors.foreground(Color(0xFF1C1C1E))
                 )
                 subtitle?.let {
                     Text(
                         it,
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFF6B7280),
+                        color = AppearanceColors.secondary(Color(0xFF6B7280)),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -1092,7 +1004,7 @@ private fun SettingsItemEnhanced(
                     Text(
                         it,
                         style = MaterialTheme.typography.bodySmall,
-                        color = actionColor,
+                        color = AppearanceColors.highlight(actionColor),
                         fontWeight = FontWeight.Medium
                     )
                 }
@@ -1131,7 +1043,7 @@ private fun DriverModeToggleEnhanced(
             containerColor = when {
                 !enabled -> Color.Gray.copy(alpha = 0.3f)
                 checked -> Color(0xFF08817E)
-                else -> Color.White.copy(alpha = 0.8f)
+                else -> AppearanceColors.surface.copy(alpha = 0.8f)
             }
         ),
         shape = RoundedCornerShape(20.dp),
@@ -1148,14 +1060,14 @@ private fun DriverModeToggleEnhanced(
             Icon(
                 imageVector = if (checked) Icons.Default.DirectionsCar else Icons.Default.Person,
                 contentDescription = null,
-                tint = if (checked && enabled) Color.White else if (!enabled) Color.Gray else Color(0xFF6B7280),
+                tint = if (checked && enabled) Color.White else if (!enabled) AppearanceColors.secondary(Color.Gray) else AppearanceColors.muted,
                 modifier = Modifier.size(18.dp)
             )
             Text(
                 if (checked) "Conductor" else "Pasajero",
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Bold,
-                color = if (checked && enabled) Color.White else if (!enabled) Color.Gray else Color(0xFF6B7280)
+                color = if (checked && enabled) Color.White else if (!enabled) AppearanceColors.secondary(Color.Gray) else AppearanceColors.muted
             )
         }
     }

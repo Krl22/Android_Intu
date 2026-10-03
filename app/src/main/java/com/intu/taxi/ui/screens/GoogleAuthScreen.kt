@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
@@ -42,6 +44,8 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.width
@@ -49,6 +53,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.ui.draw.alpha
@@ -64,6 +70,11 @@ import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
 import com.intu.taxi.auth.AuthRepository
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
+import com.intu.taxi.ui.theme.IntuTheme
 
 @Composable
 fun GoogleAuthScreen(
@@ -184,6 +195,7 @@ fun GoogleAuthScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
@@ -207,7 +219,7 @@ fun GoogleAuthScreen(
                     Column(
                         Modifier
                             .fillMaxWidth()
-                            .padding(32.dp),
+                            .padding(24.dp),
                         verticalArrangement = Arrangement.spacedBy(24.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
@@ -312,57 +324,68 @@ fun GoogleAuthScreen(
                                     }
                                 }
 
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                ) {
-                                    Button(
-                                        onClick = onCancel,
-                                        modifier = Modifier.weight(1f),
-                                        shape = RoundedCornerShape(12.dp),
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = Color(0xFF1C1C1E).copy(alpha = 0.8f),
-                                            contentColor = Color.White
-                                        )
-                                    ) {
-                                        Icon(
-                                            Icons.Default.ArrowBack,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text("Cancelar")
+                                GoogleAuthActions(
+                                    onCancel = onCancel,
+                                    onRetry = {
+                                        val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                                            .requestIdToken(ctx.getString(com.intu.taxi.R.string.default_web_client_id))
+                                            .requestEmail()
+                                            .build()
+                                        val client = GoogleSignIn.getClient(ctx, gso)
+                                        launcher.launch(client.signInIntent)
                                     }
-
-                                    Button(
-                                        onClick = {
-                                            val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-                                                .requestIdToken(ctx.getString(com.intu.taxi.R.string.default_web_client_id))
-                                                .requestEmail()
-                                                .build()
-                                            val client = GoogleSignIn.getClient(ctx, gso)
-                                            launcher.launch(client.signInIntent)
-                                        },
-                                        modifier = Modifier.weight(1f),
-                                        shape = RoundedCornerShape(12.dp),
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = Color(0xFF08817E),
-                                            contentColor = Color.White
-                                        )
-                                    ) {
-                                        Icon(
-                                            Icons.Default.Email,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text("Reintentar")
-                                    }
-                                }
+                                )
                             }
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GoogleAuthActions(onCancel: () -> Unit, onRetry: () -> Unit) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Button(
+            onClick = onRetry,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
+            shape = RoundedCornerShape(12.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF08817E), contentColor = Color.White)
+        ) {
+            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Reintentar", style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
+        }
+        OutlinedButton(
+            onClick = onCancel,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
+            shape = RoundedCornerShape(12.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF5F6570))
+        ) {
+            Text("Cancelar", style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
+        }
+    }
+}
+
+@Preview(name = "Google: botones en ancho estrecho", widthDp = 220, showBackground = true)
+@Composable
+private fun GoogleAuthActionsNarrowPreview() {
+    IntuTheme { GoogleAuthActions(onCancel = {}, onRetry = {}) }
+}
+
+@Preview(name = "Google: botones con texto ampliado", widthDp = 220, fontScale = 2f, showBackground = true)
+@Composable
+private fun GoogleAuthActionsLargeTextPreview() {
+    IntuTheme {
+        // Also applies the enlarged text when this preview is opened on a QA device.
+        CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, 2f)) {
+            Box(Modifier.fillMaxSize().background(Color.White), contentAlignment = Alignment.Center) {
+                Column(Modifier.width(220.dp)) { GoogleAuthActions(onCancel = {}, onRetry = {}) }
             }
         }
     }

@@ -48,8 +48,12 @@ data class ActiveRide(
     val driverPhotoUrl: String = "",
     val riderPhotoUrl: String = "",
     // El conductor aceptó este viaje mientras terminaba otro; irá por el pasajero al acabarlo
-    val driverOnOtherTrip: Boolean = false
+    val driverOnOtherTrip: Boolean = false,
+    val vehicleType: String = "mototaxi",
+    val serviceKind: String = "passenger",
+    val delivery: DeliveryDetails? = null
 ) {
+    val isDelivery: Boolean get() = serviceKind == "delivery"
     companion object {
         private fun readGeoPoint(value: Any?): GeoPoint? {
             return when (value) {

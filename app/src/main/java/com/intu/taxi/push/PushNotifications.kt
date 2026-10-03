@@ -23,6 +23,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
+import com.intu.taxi.repositories.AdminNotificationRepository
 import org.json.JSONObject
 
 /**
@@ -32,6 +35,9 @@ import org.json.JSONObject
 object PushNotifications {
     /** Mismo id que usa la Cloud Function ridePush y el manifest. */
     const val RIDE_CHANNEL = "ride_updates"
+    const val ADMIN_CHANNEL = "admin_activity"
+    const val ADMIN_TYPE_EXTRA = "intu_admin_type"
+    const val ADMIN_UID_EXTRA = "intu_admin_uid"
 
     fun createChannel(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
@@ -42,6 +48,11 @@ object PushNotifications {
                 enableVibration(true)
             }
         )
+        manager.createNotificationChannel(NotificationChannel(ADMIN_CHANNEL, "Actividad de Intu", NotificationManager.IMPORTANCE_HIGH).apply {
+            description = "Usuarios, solicitudes, postulaciones y reportes para administradores"
+            enableVibration(true)
+            lockscreenVisibility = NotificationCompat.VISIBILITY_PRIVATE
+        })
     }
 
     /** Registra este teléfono para recibir avisos de la cuenta con sesión. Requiere que el perfil exista. */
@@ -81,6 +92,19 @@ class IntuMessagingService : FirebaseMessagingService() {
      * del conductor en línea; en ese caso el aviso se muestra a mano.
      */
     override fun onMessageReceived(message: RemoteMessage) {
+        if (message.data["kind"] == "admin_activity") {
+            val activity = AdminActivityMessage.parse(message.data) ?: return
+            // Data-only FCM calls this in foreground and background. Finish inside the callback
+            // lifetime; no detached coroutine that Android could kill before showing the alert.
+            val allowed = runCatching { runBlocking {
+                withTimeoutOrNull(8_000) {
+                    canDisplayAdminActivity(activity, { FirebaseAuth.getInstance().currentUser?.uid },
+                        { AdminNotificationRepository().get(timeoutMillis = 6_000) })
+                } == true
+            } }.getOrDefault(false)
+            if (allowed) showAdminActivity(activity)
+            return
+        }
         if (DriverSession.appInForeground) return
         val notification = message.notification ?: return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
@@ -103,5 +127,28 @@ class IntuMessagingService : FirebaseMessagingService() {
         // Mismo tag que usa Android para el viaje: el nuevo estado reemplaza al anterior
         val tag = message.data["rideId"]?.takeIf { it.isNotBlank() } ?: "ride"
         runCatching { NotificationManagerCompat.from(this).notify(tag, 0, built) }
+    }
+
+    private fun showAdminActivity(activity: AdminActivityMessage) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
+        PushNotifications.createChannel(this)
+        val openApp = Intent(this, com.intu.taxi.MainActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            .setData(android.net.Uri.Builder().scheme("intu").authority("admin-activity").appendPath(activity.eventId).build())
+            .putExtra(PushNotifications.ADMIN_TYPE_EXTRA, activity.type.key)
+            .putExtra(PushNotifications.ADMIN_UID_EXTRA, activity.recipientUid)
+        val built = NotificationCompat.Builder(this, PushNotifications.ADMIN_CHANNEL)
+            .setSmallIcon(R.drawable.ic_stat_intu)
+            .setColor(ContextCompat.getColor(this, R.color.intu_teal))
+            .setContentTitle(activity.title).setContentText(activity.body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(activity.body))
+            .setPriority(NotificationCompat.PRIORITY_HIGH).setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setAutoCancel(true)
+            .setContentIntent(PendingIntent.getActivity(this, 0, openApp,
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
+            .build()
+        // Unique event tags keep separate requests visible; a repeated delivery replaces itself.
+        runCatching { NotificationManagerCompat.from(this).notify("admin:${activity.eventId}", 0, built) }
     }
 }

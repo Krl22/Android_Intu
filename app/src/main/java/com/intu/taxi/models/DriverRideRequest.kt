@@ -19,8 +19,11 @@ data class DriverRideRequest(
     val paymentMethod: String = "",
     val status: String = "",
     val createdAt: Long = 0L,
-    val updatedAt: Long = 0L
+    val updatedAt: Long = 0L,
+    val serviceKind: String = "passenger",
+    val delivery: DeliveryDetails? = null
 ) {
+    val isDelivery: Boolean get() = serviceKind == "delivery"
     // Función para calcular la distancia desde la ubicación actual del conductor
     fun calculateDistanceFrom(driverLatitude: Double, driverLongitude: Double): Double {
         val R = 6371e3 // Radio de la Tierra en metros

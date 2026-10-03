@@ -1,5 +1,14 @@
 package com.intu.taxi.ui.screens
 
+import com.intu.taxi.ui.theme.AppearanceColors
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.collectAsState
+
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -58,6 +67,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.testTag
 import android.widget.Toast
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.viewinterop.AndroidView
@@ -68,6 +79,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.material3.Text
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -120,19 +132,22 @@ import androidx.compose.animation.core.LinearEasing
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.intu.taxi.R
 import com.intu.taxi.ui.map.rememberMapViewWithLifecycle
+import com.intu.taxi.ui.map.PinSelectionMapController
+import com.intu.taxi.ui.map.pointUnderCenterPin
 import com.mapbox.geojson.Point
 import com.mapbox.maps.CameraOptions
 import com.mapbox.maps.Style
 import com.mapbox.maps.extension.style.style
 
 import com.mapbox.maps.plugin.locationcomponent.location
-import com.mapbox.maps.plugin.scalebar.scalebar
-import com.mapbox.maps.plugin.locationcomponent.OnIndicatorPositionChangedListener
+import com.intu.taxi.location.AdminLocationSimulation
+import com.intu.taxi.ui.map.MapLocationBinding
 import com.mapbox.maps.plugin.gestures.gestures
 import com.mapbox.maps.plugin.gestures.OnMoveListener
 import com.mapbox.android.gestures.MoveGestureDetector
@@ -149,7 +164,12 @@ import android.graphics.Path
 import android.graphics.Color as AndroidColor
  
 import android.location.Geocoder
-import java.net.URLEncoder
+import com.intu.taxi.data.CatalogPlace
+import com.intu.taxi.data.searchCatalog
+import com.intu.taxi.data.mergePlaceSearchResults
+import com.intu.taxi.repositories.AddressSearchRepository
+import com.intu.taxi.repositories.PlaceCatalogRepository
+import kotlinx.coroutines.CancellationException
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
@@ -175,6 +195,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.lifecycle.Lifecycle
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import com.intu.taxi.ui.map.TripMap
+import com.intu.taxi.ui.map.TripRoute
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -188,276 +209,58 @@ import kotlinx.coroutines.tasks.await
 private const val HEADER_SHIFT_FRACTION_KEYBOARD = 0.25f
 private const val HEADER_SHIFT_FRACTION_PIN = 0.5f
 
-// Modelo de datos para las opciones de viaje
-data class RideOptionData(
-    val name: String,
-    val price: Double,
-    val minutes: Double,
-    val leadingContent: (@Composable () -> Unit)?,
-    val colors: List<Color>
-)
-
- 
-
-@Composable
-private fun RideOptionSlideCard(
-    option: RideOptionData,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-    index: Int
-) {
-    val scale by animateFloatAsState(
-        targetValue = if (isSelected) 1.05f else 0.95f,
-        animationSpec = tween(durationMillis = 300),
-        label = "slideScale"
-    )
-    
-    val alpha by animateFloatAsState(
-        targetValue = if (isSelected) 1f else 0.7f,
-        animationSpec = tween(durationMillis = 300),
-        label = "slideAlpha"
-    )
-    
-    Card(
-        modifier = Modifier
-            .width(200.dp)
-            .fillMaxHeight()
-            .scale(scale)
-            .alpha(alpha)
-            .clickable { onClick() },
-        colors = CardDefaults.cardColors(
-            containerColor = Color.White.copy(alpha = if (isSelected) 0.95f else 0.8f)
-        ),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = if (isSelected) 16.dp else 8.dp
-        ),
-        shape = RoundedCornerShape(24.dp),
-        border = BorderStroke(
-            width = if (isSelected) 3.dp else 1.dp,
-            brush = Brush.linearGradient(
-                colors = if (isSelected) option.colors else listOf(Color(0xFFE0E0E0), Color(0xFFE0E0E0))
-            )
-        )
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween
-        ) {
-            // Header con nombre y selección
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 8.dp),
-                    contentAlignment = Alignment.TopEnd
-                ) {
-                    if (isSelected) {
-                        Icon(
-                            Icons.Filled.CheckCircle,
-                            contentDescription = "Seleccionado",
-                            tint = option.colors[0],
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                }
-                
-                Text(
-                    text = option.name.replaceFirstChar { it.titlecase() },
-                    style = MaterialTheme.typography.titleMedium,
-                    color = Color(0xFF1C1C1E),
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center
-                )
-            }
-            
-            // Imagen del vehículo
-            Box(
-                modifier = Modifier
-                    .size(100.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(
-                        brush = Brush.linearGradient(
-                            colors = option.colors,
-                            start = Offset(0f, 0f),
-                            end = Offset(100f, 100f)
-                        )
-                    )
-                    .border(
-                        width = 2.dp,
-                        brush = Brush.linearGradient(
-                            colors = listOf(
-                                Color.White.copy(alpha = 0.4f),
-                                Color.White.copy(alpha = 0.1f)
-                            )
-                        ),
-                        shape = RoundedCornerShape(20.dp)
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                option.leadingContent?.invoke() ?: Icon(
-                    Icons.Outlined.DirectionsCar,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(60.dp)
-                )
-            }
-            
-            // Información de precio y tiempo
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                val priceStr = com.intu.taxi.ui.formatSoles(option.price)
-                val etaMin = kotlin.math.max(1.0, option.minutes)
-                val etaStr = String.format(Locale.getDefault(), "~%.0f min", etaMin)
-                
-                Text(
-                    text = priceStr,
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = option.colors[0],
-                    fontWeight = FontWeight.Bold
-                )
-                
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(top = 4.dp)
-                ) {
-                    Icon(
-                        Icons.Outlined.Schedule,
-                        contentDescription = null,
-                        tint = Color(0xFF6E6E73),
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = etaStr,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFF6E6E73)
-                    )
-                }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun RideOptionsSlider(
-    options: List<RideOptionData>,
-    selectedOptionName: String?,
-    onOptionSelected: (String) -> Unit,
-    initialSelectedIndex: Int = 0
-) {
-    val listState = rememberLazyListState()
-    val snappingLayout = remember(listState) { SnapLayoutInfoProvider(listState) }
-    val flingBehavior = rememberSnapFlingBehavior(snappingLayout)
-    val density = LocalDensity.current
-    
-    // Posicionar el carousel en el elemento inicial seleccionado
-    LaunchedEffect(Unit) {
-        if (initialSelectedIndex < options.size) {
-            listState.scrollToItem(initialSelectedIndex)
-            onOptionSelected(options[initialSelectedIndex].name)
-        }
-    }
-    
-    // Autoseleccionar la opción cuando el usuario se detiene en ella
-    LaunchedEffect(listState.isScrollInProgress) {
-        if (!listState.isScrollInProgress) {
-            // Obtener el índice del elemento más centrado en la pantalla
-            val layoutInfo = listState.layoutInfo
-            val viewportCenter = layoutInfo.viewportEndOffset / 2
-            
-            var closestItemIndex = 0
-            var minDistance = Float.MAX_VALUE
-            
-            layoutInfo.visibleItemsInfo.forEach { itemInfo ->
-                val itemCenter = itemInfo.offset + itemInfo.size / 2
-                val distance = kotlin.math.abs(itemCenter - viewportCenter)
-                
-                if (distance < minDistance) {
-                    minDistance = distance.toFloat()
-                    closestItemIndex = itemInfo.index
-                }
-            }
-            
-            // Seleccionar el elemento más cercano al centro
-            if (closestItemIndex < options.size) {
-                onOptionSelected(options[closestItemIndex].name)
-            }
-        }
-    }
-    
-    Column {
-        LazyRow(
-            state = listState,
-            flingBehavior = flingBehavior,
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(220.dp)
-        ) {
-            itemsIndexed(options) { index, option ->
-                RideOptionSlideCard(
-                    option = option,
-                    isSelected = (selectedOptionName == option.name),
-                    onClick = { onOptionSelected(option.name) },
-                    index = index
-                )
-            }
-        }
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 16.dp),
-            horizontalArrangement = Arrangement.Center
-        ) {
-            options.forEachIndexed { index, _ ->
-                val isSelected = (selectedOptionName == options[index].name)
-                val color by animateColorAsState(
-                    targetValue = if (isSelected) Color(0xFF08817E) else Color(0xFFE0E0E0),
-                    animationSpec = tween(durationMillis = 300),
-                    label = "indicatorColor"
-                )
-                Box(
-                    modifier = Modifier
-                        .padding(horizontal = 4.dp)
-                        .size(if (isSelected) 10.dp else 8.dp)
-                        .clip(CircleShape)
-                        .background(color)
-                )
-            }
-        }
-    }
-}
-
 @Composable
 fun HomeScreen(
     padding: PaddingValues,
+    routeLoader: (suspend (Point, Point) -> TripRoute?)? = null,
+    rideRequestSender: (suspend (RideBooking) -> Result<String>)? = null,
+    locationProvider: com.mapbox.maps.plugin.locationcomponent.LocationProvider? = null,
     onBottomBarVisibilityChanged: (Boolean) -> Unit = {}
 ) {
     val mapboxToken = stringResource(id = com.intu.taxi.R.string.mapbox_access_token)
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
 
     var hasLocationPermission by rememberSaveable { mutableStateOf(false) }
     // No persistir el modo pin entre recomposiciones/navegaciones para no ocultar el BottomBar al iniciar
     var isSelectingDestination by remember { mutableStateOf(false) }
     var selectedDestination by remember { mutableStateOf<Point?>(null) }
     var pickupLocation by remember { mutableStateOf<Point?>(null) }
-    var isSelectingPickup by remember { mutableStateOf(false) }
-    var destinationBeforePickup by remember { mutableStateOf<Point?>(null) }
-    var moveListenerRef by remember { mutableStateOf<OnMoveListener?>(null) }
+    var showPickupPicker by remember { mutableStateOf(false) }
+    var selectedPickup by remember { mutableStateOf<Point?>(null) }
+    var isCreatingRideRequest by remember { mutableStateOf(false) }
+    var isCalculatingDestinationRoute by remember { mutableStateOf(false) }
+    var pendingDestination by remember { mutableStateOf<Point?>(null) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
+    val placesUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
+    val savedPlacesStore = remember(placesUid) {
+        placesUid.takeIf { it.isNotBlank() }?.let { com.intu.taxi.data.SavedPlaces(context, it) }
+    }
+    val savedPlacesFlow = remember(savedPlacesStore) {
+        savedPlacesStore?.changes ?: kotlinx.coroutines.flow.flowOf(emptyList<com.intu.taxi.data.SavedPlace>())
+    }
+    val savedPlaces by savedPlacesFlow.collectAsState(initial = savedPlacesStore?.read().orEmpty())
+    val catalogRepository = remember { PlaceCatalogRepository(context) }
+    var catalog by remember { mutableStateOf(catalogRepository.cached()) }
+    var catalogLoading by remember { mutableStateOf(false) }
+    var catalogError by remember { mutableStateOf<String?>(null) }
+    var catalogRefresh by remember { mutableStateOf(0) }
+    LaunchedEffect(placesUid, catalogRefresh) {
+        catalogLoading = true
+        catalogError = null
+        try { catalog = catalogRepository.sync(force = catalogRefresh > 0) }
+        catch (e: CancellationException) { throw e }
+        catch (e: Exception) { catalogError = e.message ?: "No se pudieron actualizar los lugares." }
+        finally { catalogLoading = false }
+    }
+    var showSavedPlaces by remember { mutableStateOf(false) }
     var pinSearchQuery by rememberSaveable { mutableStateOf("") }
+    val testLocation by AdminLocationSimulation.preset.collectAsState()
     var userLocation by remember { mutableStateOf<Point?>(null) }
-    var suggestions by remember { mutableStateOf(listOf<GeocodeSuggestion>()) }
-    var pinSuggestions by remember { mutableStateOf(listOf<GeocodeSuggestion>()) }
+    var suggestions by remember { mutableStateOf(listOf<CatalogPlace>()) }
+    var pinSuggestions by remember { mutableStateOf(listOf<CatalogPlace>()) }
     var isSearchFocused by remember { mutableStateOf(false) }
     var isPinSearchFocused by remember { mutableStateOf(false) }
     var hasUserInteractedWithPinSearch by remember { mutableStateOf(false) }
@@ -473,9 +276,16 @@ fun HomeScreen(
     val pinSizeDp = 42.dp
     // No persistir el panel de opciones de viaje para que el BottomBar se muestre al entrar
     var isRideOptionsVisible by remember { mutableStateOf(false) }
+    val showingRideOptions = isRideOptionsVisible && !showPickupPicker
+    val isSelectingPoint = isSelectingDestination || showPickupPicker
+    val selectedPoint = if (showPickupPicker) selectedPickup else selectedDestination
     var routeDistanceMeters by remember { mutableStateOf<Double?>(null) }
     var routeDurationSeconds by remember { mutableStateOf<Double?>(null) }
-    var selectedRideOptionName by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedMotoOptionCode by rememberSaveable { mutableStateOf<String?>(com.intu.taxi.models.MotoOption.ANY.code) }
+    var isDelivery by rememberSaveable { mutableStateOf(false) }
+    var pendingDeliveryOrigin by remember { mutableStateOf<Point?>(null) }
+    var pendingDeliveryRoute by remember { mutableStateOf<TripRoute?>(null) }
+    var deliveryDraft by remember { mutableStateOf<com.intu.taxi.models.DeliveryDetails?>(null) }
     
     // Estado de direcciones para el diálogo de búsqueda
     var originAddress by remember { mutableStateOf<String>("") }
@@ -518,6 +328,7 @@ fun HomeScreen(
         runCatching { activeRideRepository.findOpenRideForRider(uid) }
             .getOrNull()?.let { ride ->
                 currentRideRequestId = ride.rideId
+                isDelivery = ride.isDelivery
                 isSearchingDriver = ride.status == "searching"
                 activeRide = if (ride.status == "searching") null else ride
             }
@@ -527,7 +338,216 @@ fun HomeScreen(
     val paymentPreferences = remember { PaymentPreferences(context) }
     var selectedPaymentMethod by remember { mutableStateOf("efectivo") }
     val httpClient = remember { OkHttpClient() }
+    val addressSearchRepository = remember(mapboxToken) { AddressSearchRepository(mapboxToken) }
+
+    // Descarta solo la preparación del viaje; nunca cancela una solicitud ya enviada.
+    fun returnHomeFromPreparation() {
+        isRideOptionsVisible = false
+        isSelectingDestination = false
+        showPickupPicker = false
+        selectedPickup = null
+        pendingDestination = null
+        isCalculatingDestinationRoute = false
+        selectedDestination = null
+        confirmedDestination = null
+        confirmedDestOffset = null
+        pickupLocation = null
+        routePoints = emptyList()
+        routeOffsets = emptyList()
+        routeDistanceMeters = null
+        routeDurationSeconds = null
+        rideOptionsPanelHeightPx = 0
+        selectedMotoOptionCode = com.intu.taxi.models.MotoOption.ANY.code
+        isDelivery = false
+        pendingDeliveryOrigin = null
+        pendingDeliveryRoute = null
+        deliveryDraft = null
+        originAddress = ""
+        destinationAddress = ""
+        estimatedPrice = 0.0
+        searchQuery = ""
+        pinSearchQuery = ""
+        suggestions = emptyList()
+        pinSuggestions = emptyList()
+        isSearchFocused = false
+        isPinSearchFocused = false
+        hasUserInteractedWithPinSearch = false
+        errorMessage = null
+        focusManager.clearFocus(force = true)
+        keyboard?.hide()
+        onBottomBarVisibilityChanged(true)
+        userLocation?.let { point ->
+            mapViewRef?.mapboxMap?.setCamera(CameraOptions.Builder()
+                .center(point).zoom(14.0).bearing(0.0).pitch(0.0)
+                .padding(EdgeInsets(0.0, 0.0, 0.0, 0.0)).build())
+        }
+    }
+
+    BackHandler(enabled = (isRideOptionsVisible || isSelectingPoint || isCalculatingDestinationRoute ||
+        isSearchFocused || searchQuery.isNotBlank()) && !showSavedPlaces &&
+        !isCreatingRideRequest && !isSearchingDriver && currentRideRequestId == null && activeRide == null) {
+        returnHomeFromPreparation()
+    }
+
+    suspend fun loadBookingRoute(origin: Point, destination: Point): TripRoute? =
+        if (routeLoader != null) routeLoader(origin, destination) else TripMap.fetchRoute(mapboxToken, origin, destination)
+
+    fun confirmDestination(destination: Point) {
+        if (isCalculatingDestinationRoute || isCreatingRideRequest) return
+        errorMessage = null
+        selectedDestination = destination
+        isCalculatingDestinationRoute = true
+        pendingDestination = destination
+    }
+
+    LaunchedEffect(pendingDestination, userLocation != null) {
+        val destination = pendingDestination ?: return@LaunchedEffect
+        val origin = pickupLocation ?: userLocation ?: return@LaunchedEffect
+        try {
+            val route = loadBookingRoute(origin, destination)
+                ?: throw IllegalStateException("No se pudo calcular la ruta. Revisa tu conexión e intenta de nuevo.")
+            // A route that finishes after Back must not reopen the discarded draft.
+            if (pendingDestination != destination) return@LaunchedEffect
+            routePoints = route.points
+            routeOffsets = mapViewRef?.mapboxMap?.let { map -> route.points.map { point ->
+                val pixel = map.pixelForCoordinate(point)
+                Offset(pixel.x.toFloat(), pixel.y.toFloat())
+            } }.orEmpty()
+            routeDistanceMeters = route.distanceMeters
+            routeDurationSeconds = route.durationSeconds
+            confirmedDestination = destination
+            mapViewRef?.mapboxMap?.pixelForCoordinate(destination)?.let { pixel ->
+                confirmedDestOffset = Offset(pixel.x.toFloat(), pixel.y.toFloat())
+            }
+            isSelectingDestination = false
+            isRideOptionsVisible = true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            errorMessage = e.message ?: "No se pudo calcular la ruta. Intenta de nuevo."
+            Toast.makeText(context, errorMessage, Toast.LENGTH_LONG).show()
+        } finally {
+            if (pendingDestination == destination) {
+                pendingDestination = null
+                isCalculatingDestinationRoute = false
+            }
+        }
+    }
+
+    if (isCalculatingDestinationRoute && !isSelectingDestination) AlertDialog(
+        onDismissRequest = ::returnHomeFromPreparation,
+        title = { Text("Preparando tu viaje") },
+        text = { Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            CircularProgressIndicator()
+            Text(if (userLocation == null) "Buscando tu ubicación…" else "Calculando la ruta…")
+        } },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = ::returnHomeFromPreparation) { Text("Cancelar") } }
+    )
+
+    fun requestRideFromPickup(origin: Point, delivery: com.intu.taxi.models.DeliveryDetails? = null, routeSnapshot: TripRoute? = null) {
+        val destination = confirmedDestination ?: return
+        val option = com.intu.taxi.models.MotoOption.fromCode(selectedMotoOptionCode) ?: return
+        val rideType = option.vehicleType
+        if (isCreatingRideRequest || currentRideRequestId != null) return
+        isCreatingRideRequest = true
+        errorMessage = null
+        scope.launch {
+            try {
+                val route = routeSnapshot ?: loadBookingRoute(origin, destination)
+                    ?: throw IllegalStateException("No se pudo calcular la ruta desde el punto de recojo. Intenta de nuevo.")
+                val booking = RideBooking(origin, destination, route, rideType, selectedPaymentMethod, delivery, option.preferredBrand)
+                pickupLocation = origin
+                routePoints = route.points
+                routeDistanceMeters = route.distanceMeters
+                routeDurationSeconds = route.durationSeconds
+                estimatedPrice = booking.estimatedPrice
+                val result = if (rideRequestSender != null) rideRequestSender(booking) else {
+                    check(FirebaseAuth.getInstance().currentUser != null) { "Inicia sesión para solicitar el viaje." }
+                    originAddress = readableAddress(context, httpClient, mapboxToken, origin) ?: "Punto de recojo en el mapa"
+                    destinationAddress = readableAddress(context, httpClient, mapboxToken, destination) ?: "Destino en el mapa"
+                    rideRequestRepository.createRideRequest(
+                        originLatitude = origin.latitude(), originLongitude = origin.longitude(), originAddress = originAddress,
+                        destinationLatitude = destination.latitude(), destinationLongitude = destination.longitude(), destinationAddress = destinationAddress,
+                        distanceMeters = route.distanceMeters, durationSeconds = route.durationSeconds, estimatedPrice = booking.estimatedPrice,
+                        rideType = rideType, paymentMethod = booking.paymentMethod,
+                        routeGeometry = LineString.fromLngLats(route.points).toJson(), delivery = delivery, preferredVehicleBrand = option.preferredBrand
+                    )
+                }
+                result.onSuccess { requestId ->
+                    currentRideRequestId = requestId
+                    isSearchingDriver = true
+                    isRideOptionsVisible = false
+                }.onFailure { error -> errorMessage = error.message ?: "No se pudo solicitar el viaje. Intenta de nuevo." }
+                showPickupPicker = false
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                errorMessage = e.message ?: "No se pudo solicitar el viaje. Intenta de nuevo."
+                showPickupPicker = false
+            } finally { isCreatingRideRequest = false }
+        }
+    }
+
+    LaunchedEffect(pendingDeliveryOrigin) {
+        val origin = pendingDeliveryOrigin ?: return@LaunchedEffect
+        val destination = confirmedDestination ?: return@LaunchedEffect
+        try {
+            pendingDeliveryRoute = loadBookingRoute(origin, destination)
+                ?: error("No se pudo calcular la ruta del envío. Intenta de nuevo.")
+        } catch (e: CancellationException) { throw e }
+        catch (e: Exception) {
+            errorMessage = e.message ?: "No se pudo preparar el envío."
+            pendingDeliveryOrigin = null
+        }
+    }
+    val deliveryOrigin = pendingDeliveryOrigin
+    val deliveryRoute = pendingDeliveryRoute
+    if (deliveryOrigin != null && deliveryRoute == null) AlertDialog(
+        onDismissRequest = { pendingDeliveryOrigin = null }, title = { Text("Preparando envío") },
+        text = { Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            CircularProgressIndicator(Modifier.size(24.dp)); Text("Calculando la tarifa desde el recojo…")
+        } }, confirmButton = {}, dismissButton = { TextButton(onClick = { pendingDeliveryOrigin = null }) { Text("Cancelar") } }
+    )
+    if (deliveryOrigin != null && deliveryRoute != null) DeliveryDetailsDialog(
+        fare = com.intu.taxi.models.ServiceFare.estimate(deliveryRoute.distanceMeters, deliveryRoute.durationSeconds, true),
+        initial = deliveryDraft,
+        onDismiss = { pendingDeliveryOrigin = null; pendingDeliveryRoute = null },
+        onConfirm = { details ->
+            deliveryDraft = details
+            pendingDeliveryOrigin = null
+            pendingDeliveryRoute = null
+            requestRideFromPickup(deliveryOrigin, details, deliveryRoute)
+        }
+    )
+
+    fun beginPickupSelection() {
+        val initial = pickupLocation ?: userLocation ?: return
+        errorMessage = null
+        selectedPickup = initial
+        pinSearchQuery = ""
+        pinSuggestions = emptyList()
+        hasUserInteractedWithPinSearch = false
+        isPinSearchFocused = false
+        focusManager.clearFocus(force = true)
+        keyboard?.hide()
+        showPickupPicker = true
+        mapViewRef?.mapboxMap?.setCamera(CameraOptions.Builder().center(initial).zoom(16.0)
+            .bearing(0.0).pitch(0.0).padding(EdgeInsets(0.0, 0.0, 0.0, 0.0)).build())
+    }
+
+    if (showPickupPicker && isCreatingRideRequest) AlertDialog(
+        onDismissRequest = {},
+        title = { Text(if (isDelivery) "Solicitando envío" else "Solicitando viaje") },
+        text = { Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            CircularProgressIndicator()
+            Text("Calculando la ruta desde tu punto de recojo…")
+        } },
+        confirmButton = {}
+    )
     
+    if (showSavedPlaces && placesUid.isNotBlank()) SavedPlacesDialog(onDismiss = { showSavedPlaces = false })
+
     // Load saved payment method
     LaunchedEffect(Unit) {
         paymentPreferences.paymentMethod.collect { method ->
@@ -547,10 +567,11 @@ fun HomeScreen(
     LaunchedEffect(currentRideRequestId) {
         currentRideRequestId?.let { requestId ->
             // Mientras haya viaje abierto, un servicio mantiene la app al día aunque esté minimizada
-            com.intu.taxi.rider.RiderTrip.searching(requestId)
+            com.intu.taxi.rider.RiderTrip.searching(requestId, isDelivery)
             com.intu.taxi.rider.RideTrackingService.start(context)
             activeRideRepository.getActiveRideByRequestId(requestId).collect { ride ->
                 if (ride == null) return@collect
+                isDelivery = ride.isDelivery
                 com.intu.taxi.rider.RiderTrip.update(ride)
                 when (ride.status) {
                     // Sin conductor todavía, o el conductor canceló y la solicitud volvió a abrirse
@@ -591,7 +612,7 @@ fun HomeScreen(
     // Estado global para animar el header tanto en modo teclado como en modo pin
     val isKeyboardVisible = WindowInsets.ime.getBottom(density) > 0
     val headerShiftTarget = when {
-        isSelectingDestination -> HEADER_SHIFT_FRACTION_PIN
+        isSelectingPoint -> HEADER_SHIFT_FRACTION_PIN
         isKeyboardVisible -> HEADER_SHIFT_FRACTION_KEYBOARD
         else -> 0f
     }
@@ -630,79 +651,55 @@ fun HomeScreen(
         mapViewRef = mapView
         // Para saber si la app está visible (con la app minimizada la cámara se mueve sin animación)
         val lifecycleOwner = LocalLifecycleOwner.current
-        AndroidView(factory = { mapView }, modifier = Modifier.fillMaxSize())
+        AndroidView(factory = { mapView }, modifier = Modifier.fillMaxSize().testTag("home-map"))
 
+        val mapStyle = com.intu.taxi.ui.theme.intuMapStyle()
         var isStyleLoaded by remember { mutableStateOf(false) }
-        LaunchedEffect(mapViewRef) {
+        LaunchedEffect(mapViewRef, mapStyle) {
             val view = mapViewRef
-            if (view != null && !isStyleLoaded) {
-                view.mapboxMap.loadStyle(style(style = Style.MAPBOX_STREETS) { }) {
+            if (view != null) {
+                view.mapboxMap.loadStyle(style(style = mapStyle) { }) {
                     isStyleLoaded = true
-                    driverAnnotationManager = view.annotations.createPointAnnotationManager()
-                    if (!hasLocationPermission) {
-                        locationPermissionLauncher.launch(
-                            arrayOf(
-                                Manifest.permission.ACCESS_FINE_LOCATION,
-                                Manifest.permission.ACCESS_COARSE_LOCATION
-                            )
-                        )
+                    if (driverAnnotationManager == null) driverAnnotationManager = view.annotations.createPointAnnotationManager()
+                }
+            }
+        }
+        LaunchedEffect(isStyleLoaded, testLocation) {
+            if (isStyleLoaded && !hasLocationPermission && testLocation == null && locationProvider == null) {
+                locationPermissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+            }
+        }
+        MapLocationBinding(mapView, isStyleLoaded, hasLocationPermission || locationProvider != null,
+            if (locationProvider == null) testLocation else null, realLocationProvider = locationProvider) { point, first ->
+            val replacingLocation = userLocation != null
+            userLocation = point
+            if (first) {
+                if (activeRide == null && !isSearchingDriver) {
+                    if (replacingLocation) {
+                        // A draft route must not retain a pickup from the previous test city.
+                        pickupLocation = null
+                        selectedDestination = null
+                        confirmedDestination = null
+                        confirmedDestOffset = null
+                        routePoints = emptyList()
+                        routeOffsets = emptyList()
+                        routeDistanceMeters = null
+                        routeDurationSeconds = null
+                        isRideOptionsVisible = false
+                        isSelectingDestination = false
+                        showPickupPicker = false
+                        originAddress = ""
+                        onBottomBarVisibilityChanged(true)
                     }
-                    view.location.updateSettings { enabled = hasLocationPermission }
-                    view.scalebar.enabled = false
-                    if (hasLocationPermission) {
-                        val indicatorListener = object : OnIndicatorPositionChangedListener {
-                            override fun onIndicatorPositionChanged(point: Point) {
-                                val isValid = point.latitude() in -90.0..90.0 &&
-                                        point.longitude() in -180.0..180.0 &&
-                                        !(point.latitude() == 0.0 && point.longitude() == 0.0)
-                                val target = if (isValid) point else Point.fromLngLat(-71.0589, 42.3601)
-                                val zoom = if (isValid) 14.0 else 12.0
-                                view.mapboxMap.setCamera(
-                                    CameraOptions.Builder()
-                                        .center(target)
-                                        .zoom(zoom)
-                                        .build()
-                                )
-                                userLocation = target
-                                view.location.removeOnIndicatorPositionChangedListener(this)
-                            }
-                        }
-                        view.location.addOnIndicatorPositionChangedListener(indicatorListener)
-                    } else {
-                        val bostonLocation = Point.fromLngLat(-71.0589, 42.3601)
-                        view.mapboxMap.setCamera(
-                            CameraOptions.Builder()
-                                .center(bostonLocation)
-                                .zoom(12.0)
-                                .build()
-                        )
-                        userLocation = bostonLocation
-                    }
+                    mapView.mapboxMap.setCamera(CameraOptions.Builder().center(point)
+                        .zoom(if (hasLocationPermission || testLocation != null) 14.0 else 12.0).build())
                 }
             }
         }
 
         // Overlay para dibujar la ruta con efectos visuales mejorados
         // Mostrar la ruta durante opciones de viaje, búsqueda y viaje activo
-        if (routeOffsets.isNotEmpty() && (isRideOptionsVisible || isSearchingDriver || activeRide != null)) {
-            // Animación de gradiente para la ruta
-            val routeAnimation by animateFloatAsState(
-                targetValue = 1f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(durationMillis = 3000, easing = LinearEasing)
-                ),
-                label = "routeGradientAnimation"
-            )
-            
-            // Animación de pulso para el brillo
-            val pulseAnimation by animateFloatAsState(
-                targetValue = 1f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(durationMillis = 2000, easing = LinearEasing)
-                ),
-                label = "routePulseAnimation"
-            )
-            
+        if (routeOffsets.isNotEmpty() && (showingRideOptions || isSearchingDriver || activeRide != null)) {
             androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
                 val path = androidx.compose.ui.graphics.Path()
                 val sizeMap = mapView.mapboxMap.getSize()
@@ -723,142 +720,57 @@ fun HomeScreen(
                     }
                 }
                 
-                // Dibujar línea base con gradiente animado
-                val gradientColors = listOf(
-                    Color(0xFF08817E), // Teal principal
-                    Color(0xFF0FB9B1), // Teal claro
-                    Color(0xFF1E1F47), // Índigo
-                    Color(0xFF3A3B7B)  // Índigo claro
-                )
-                
-                // Crear gradiente lineal animado
-                val gradientBrush = Brush.linearGradient(
-                    colors = gradientColors,
-                    start = Offset(0f, size.height * (1f - routeAnimation)),
-                    end = Offset(size.width * routeAnimation, 0f)
-                )
-                
-                // Línea principal con gradiente
+                // A subtle casing keeps the route readable without glow or sparkles.
                 drawPath(
                     path = path,
-                    brush = gradientBrush,
+                    color = com.intu.taxi.ui.map.TripRouteStyle.casingColor,
                     style = androidx.compose.ui.graphics.drawscope.Stroke(
-                        width = 8.dp.toPx(),
+                        width = com.intu.taxi.ui.map.TripRouteStyle.casingWidthDp.toPx(),
                         cap = androidx.compose.ui.graphics.StrokeCap.Round,
                         join = androidx.compose.ui.graphics.StrokeJoin.Round
                     )
                 )
-                
-                // Línea exterior con brillo
-                val glowBrush = Brush.linearGradient(
-                    colors = listOf(
-                        Color(0xFF08817E).copy(alpha = 0.3f * pulseAnimation),
-                        Color(0xFF0FB9B1).copy(alpha = 0.5f * pulseAnimation),
-                        Color(0xFF1E1F47).copy(alpha = 0.3f * pulseAnimation)
-                    ),
-                    start = Offset(0f, size.height * (1f - routeAnimation)),
-                    end = Offset(size.width * routeAnimation, 0f)
-                )
-                
                 drawPath(
                     path = path,
-                    brush = glowBrush,
+                    color = com.intu.taxi.ui.map.TripRouteStyle.lineColor,
                     style = androidx.compose.ui.graphics.drawscope.Stroke(
-                        width = 16.dp.toPx() * pulseAnimation,
+                        width = com.intu.taxi.ui.map.TripRouteStyle.lineWidthDp.toPx(),
                         cap = androidx.compose.ui.graphics.StrokeCap.Round,
                         join = androidx.compose.ui.graphics.StrokeJoin.Round
                     )
                 )
-                
-                // Línea interior brillante
-                val innerBrush = Brush.linearGradient(
-                    colors = listOf(
-                        Color.White.copy(alpha = 0.8f),
-                        Color(0xFF0FB9B1).copy(alpha = 0.9f)
-                    ),
-                    start = Offset(0f, size.height * (1f - routeAnimation)),
-                    end = Offset(size.width * routeAnimation, 0f)
-                )
-                
-                drawPath(
-                    path = path,
-                    brush = innerBrush,
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(
-                        width = 3.dp.toPx(),
-                        cap = androidx.compose.ui.graphics.StrokeCap.Round,
-                        join = androidx.compose.ui.graphics.StrokeJoin.Round
-                    )
-                )
-                
-                // Puntos de destello a lo largo de la ruta
-                if (routeOffsets.size > 1) {
-                    val sparkles = 5
-                    for (i in 0 until sparkles) {
-                        val progress = (i.toFloat() / sparkles + routeAnimation) % 1f
-                        val index = (progress * (routeOffsets.size - 1)).toInt()
-                        if (index < routeOffsets.size) {
-                            val sparkleOffset = routeOffsets[index]
-                            if (sparkleOffset.x in 0f..w && sparkleOffset.y in 0f..h) {
-                                drawCircle(
-                                    color = Color.White.copy(alpha = 0.8f * pulseAnimation),
-                                    radius = 4.dp.toPx() * pulseAnimation,
-                                    center = sparkleOffset,
-                                    blendMode = androidx.compose.ui.graphics.BlendMode.Screen
-                                )
-                            }
-                        }
-                    }
-                }
             }
         }
-
         // Icono de destino confirmado anclado al punto geo
         val confirmedOffset = confirmedDestOffset
-        if (confirmedDestination != null && confirmedOffset != null && (isRideOptionsVisible || isSearchingDriver)) {
+        if (confirmedDestination != null && confirmedOffset != null && (showingRideOptions || isSearchingDriver)) {
             val iconSize = 42.dp
             val xDp = with(density) { confirmedOffset.x.toDp() }
             val yDp = with(density) { confirmedOffset.y.toDp() }
             Box(modifier = Modifier.fillMaxSize()) {
-                Icon(
-                    Icons.Outlined.Place,
-                    contentDescription = null,
-                    tint = Color(0xFF08817E),
-                    modifier = Modifier
-                        .size(iconSize)
+                com.intu.taxi.ui.map.RoutePin(
+                    description = "Destino confirmado",
+                    modifier = Modifier.size(iconSize)
                         .offset(x = xDp - iconSize / 2, y = yDp - iconSize)
+                        .testTag("home-confirmed-destination-pin")
                 )
                 // Botón de regresar - SOLO visible durante opciones de viaje, NO durante búsqueda
-                if (isRideOptionsVisible && !isSearchingDriver) {
+                if (showingRideOptions && !isSearchingDriver) {
                     Card(
                         modifier = Modifier
                             .align(Alignment.TopStart)
                             .padding(16.dp)
                             .size(40.dp)
-                            .clickable {
-                                // Regresar al estado inicial
-                                isRideOptionsVisible = false
-                                routeOffsets = emptyList()
-                                routePoints = emptyList()
-                                pickupLocation = null
-                                routeDistanceMeters = null
-                                routeDurationSeconds = null
-                        confirmedDestination = null
-                        confirmedDestOffset = null
-                        isSelectingDestination = false
-                        // Limpiar búsqueda y sugerencias
-                        searchQuery = ""
-                        suggestions = emptyList()
-                        onBottomBarVisibilityChanged(true)
-                    },
+                            .clickable(onClick = ::returnHomeFromPreparation),
                     shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.9f)),
+                    colors = CardDefaults.cardColors(containerColor = AppearanceColors.surface.copy(alpha = 0.9f)),
                     elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                 ) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Regresar",
-                            tint = Color(0xFF1C1C1E)
+                            tint = AppearanceColors.foreground(Color(0xFF1C1C1E))
                         )
                     }
                 }
@@ -1017,10 +929,10 @@ fun HomeScreen(
 
         // Actualizar la ruta cuando el mapa se mueve (para que se "pegue" al mapa)
         // Mantener la ruta anclada durante opciones de viaje, búsqueda y viaje activo
-        LaunchedEffect(isRideOptionsVisible, isSearchingDriver, activeRide, routePoints) {
+        LaunchedEffect(showingRideOptions, isSearchingDriver, activeRide, routePoints) {
             val gestures = mapView.gestures
             routeMoveListenerRef?.let { gestures.removeOnMoveListener(it) }
-            if ((isRideOptionsVisible || isSearchingDriver || activeRide != null) && routePoints.isNotEmpty()) {
+            if ((showingRideOptions || isSearchingDriver || activeRide != null) && routePoints.isNotEmpty()) {
                 val listener = object : OnMoveListener {
                     override fun onMoveBegin(detector: MoveGestureDetector) {}
                     override fun onMove(detector: MoveGestureDetector): Boolean {
@@ -1054,10 +966,10 @@ fun HomeScreen(
 
         // Recalcular offsets también en cambios de cámara (zoom/tilt), para evitar saltos abruptos
         // Mantener la ruta anclada durante opciones de viaje, búsqueda y viaje activo
-        DisposableEffect(isRideOptionsVisible, isSearchingDriver, activeRide, routePoints) {
+        DisposableEffect(showingRideOptions, isSearchingDriver, activeRide, routePoints) {
             val map = mapView.mapboxMap
             val cameraListener: (com.mapbox.maps.extension.observable.eventdata.CameraChangedEventData) -> Unit = {
-                if ((isRideOptionsVisible || isSearchingDriver || activeRide != null) && routePoints.isNotEmpty()) {
+                if ((showingRideOptions || isSearchingDriver || activeRide != null) && routePoints.isNotEmpty()) {
                     routeOffsets = routePoints.map { p ->
                         val sc = map.pixelForCoordinate(p)
                         Offset(sc.x.toFloat(), sc.y.toFloat())
@@ -1072,203 +984,56 @@ fun HomeScreen(
             onDispose { map.removeOnCameraChangeListener(cameraListener) }
         }
 
-        // Actualizar destino según se mueva el mapa cuando el modo está activo
-        LaunchedEffect(isSelectingDestination) {
-            val gestures = mapView.gestures
-            moveListenerRef?.let { gestures.removeOnMoveListener(it) }
-            if (isSelectingDestination) {
-                // Oculta el BottomNavbar mientras se muestra el pin
-                onBottomBarVisibilityChanged(false)
-                // Inicializa destino a la PUNTA del pin (centro-bottom)
-                val center = mapView.mapboxMap.cameraState.center
-                val centerPx = mapView.mapboxMap.pixelForCoordinate(center)
-                val tipOffsetPx = with(density) { (pinSizeDp / 2).toPx() }
-                val tipSC = com.mapbox.maps.ScreenCoordinate(centerPx.x, centerPx.y + tipOffsetPx)
-                selectedDestination = mapView.mapboxMap.coordinateForPixel(tipSC)
-                // Geocodificar dirección inicial
-                scope.launch {
-                    val p = selectedDestination
-                    val addr = p?.let { readableAddress(context, httpClient, mapboxToken, it) }
-                    pinSearchQuery = addr ?: "Ubicación seleccionada"
+        // La punta del pin y el centro de los gestos comparten el mismo píxel del mapa.
+        DisposableEffect(mapView, isSelectingPoint, showPickupPicker) {
+            val controller = if (isSelectingPoint) PinSelectionMapController(mapView) { point ->
+                val previous = if (showPickupPicker) selectedPickup else selectedDestination
+                if (previous == null || TripMap.metersBetween(previous, point) > 0.1) {
+                    if (showPickupPicker) selectedPickup = point else selectedDestination = point
                 }
-                val listener = object : OnMoveListener {
-                    override fun onMoveBegin(detector: MoveGestureDetector) {}
-                    override fun onMove(detector: MoveGestureDetector): Boolean {
-                        val c = mapView.mapboxMap.cameraState.center
-                        val cPx = mapView.mapboxMap.pixelForCoordinate(c)
-                        val tipOffsetPx = with(density) { (pinSizeDp / 2).toPx() }
-                        val tipSC = com.mapbox.maps.ScreenCoordinate(cPx.x, cPx.y + tipOffsetPx)
-                        selectedDestination = mapView.mapboxMap.coordinateForPixel(tipSC)
-                        return false
-                    }
-                    override fun onMoveEnd(detector: MoveGestureDetector) {
-                        val c = mapView.mapboxMap.cameraState.center
-                        val cPx = mapView.mapboxMap.pixelForCoordinate(c)
-                        val tipOffsetPx = with(density) { (pinSizeDp / 2).toPx() }
-                        val tipSC = com.mapbox.maps.ScreenCoordinate(cPx.x, cPx.y + tipOffsetPx)
-                        selectedDestination = mapView.mapboxMap.coordinateForPixel(tipSC)
-                        // Geocodificar al terminar el movimiento
-                        scope.launch {
-                            val tip = selectedDestination
-                            val addr = tip?.let { readableAddress(context, httpClient, mapboxToken, it) }
-                            pinSearchQuery = addr ?: "Ubicación seleccionada"
-                        }
-                    }
-                }
-                gestures.addOnMoveListener(listener)
-                moveListenerRef = listener
-            } else {
-                // Restaura la visibilidad del BottomNavbar (puede sobreescribirse por opciones de viaje)
-                onBottomBarVisibilityChanged(true)
-                moveListenerRef = null
+            } else null
+            onDispose { controller?.close() }
+        }
+
+        // Esperar a que termine el movimiento, incluida la inercia, antes de resolver la dirección.
+        LaunchedEffect(isSelectingPoint, selectedPoint, isPinSearchFocused, hasUserInteractedWithPinSearch) {
+            val point = selectedPoint
+            if (isSelectingPoint && point != null && !isPinSearchFocused && !hasUserInteractedWithPinSearch) {
+                kotlinx.coroutines.delay(500)
+                pinSearchQuery = readableAddress(context, httpClient, mapboxToken, point) ?: "Ubicación seleccionada"
             }
         }
 
         // Control centralizado de visibilidad del BottomNavbar:
         // oculto si está activo el modo pin, panel de opciones de viaje, búsqueda de conductor o un viaje.
         val hasActiveRide = activeRide != null
-        LaunchedEffect(isSelectingDestination, isRideOptionsVisible, isSearchingDriver, hasActiveRide) {
-            val visible = !(isSelectingDestination || isRideOptionsVisible || isSearchingDriver || hasActiveRide)
+        LaunchedEffect(isSelectingPoint, isRideOptionsVisible, isSearchingDriver, hasActiveRide) {
+            val visible = !(isSelectingPoint || isRideOptionsVisible || isSearchingDriver || hasActiveRide)
             onBottomBarVisibilityChanged(visible)
         }
 
-        // Sugerencias de búsqueda cuando el header está visible (no modo pin)
-        LaunchedEffect(searchQuery, isSelectingDestination, userLocation) {
-            if (!isSelectingDestination && searchQuery.trim().length >= 2) {
-                // Pequeño debounce para evitar múltiples llamadas rápidas
-                kotlinx.coroutines.delay(300)
-                val center = userLocation
-                if (center != null) {
-                    val bbox = computeBBoxMiles(center, 15.0)
-                    val url = buildGeocodingUrl(
-                        token = mapboxToken,
-                        query = searchQuery.trim(),
-                        center = center,
-                        bbox = bbox
-                    )
-                    scope.launch(Dispatchers.IO) {
-                        val request = Request.Builder().url(url).get().build()
-                        var newSuggestions: List<GeocodeSuggestion> = emptyList()
-                        try {
-                            var bodyStr = "{}"
-                            httpClient.newCall(request).execute().use { response ->
-                                if (response.isSuccessful) {
-                                    bodyStr = response.body?.string() ?: "{}"
-                                }
-                            }
-                            val json = JSONObject(bodyStr)
-                            val features = json.optJSONArray("features")
-                            newSuggestions = (0 until (features?.length() ?: 0)).map { i ->
-                                val f = features!!.getJSONObject(i)
-                                val text = f.optString("text")
-                                val addressNum = f.optString("address")
-                                val centerArr = f.optJSONArray("center")
-                                val lon = centerArr?.optDouble(0) ?: 0.0
-                                val lat = centerArr?.optDouble(1) ?: 0.0
-
-                                val title = buildString {
-                                    if (addressNum.isNotBlank()) append("$addressNum ")
-                                    append(text)
-                                }.trim()
-
-                                val ctx = f.optJSONArray("context")
-                                val parts = mutableListOf<String>()
-                                for (j in 0 until (ctx?.length() ?: 0)) {
-                                    val c = ctx!!.getJSONObject(j)
-                                    val id = c.optString("id")
-                                    val t = c.optString("text")
-                                    val allowed = id.startsWith("place.") || id.startsWith("locality.") || id.startsWith("neighborhood.")
-                                    val excluded = id.startsWith("region.") || id.startsWith("postcode.") || id.startsWith("country.") || id.startsWith("district.")
-                                    if (allowed && !excluded && t.isNotBlank()) parts.add(t)
-                                }
-                                val subtitle = if (parts.isNotEmpty()) parts.joinToString(", ") else null
-
-                                GeocodeSuggestion(
-                                    title = title,
-                                    subtitle = subtitle,
-                                    point = Point.fromLngLat(lon, lat)
-                                )
-                            }
-                        } catch (_: Exception) {
-                            newSuggestions = emptyList()
-                        }
-                        withContext(Dispatchers.Main) { suggestions = newSuggestions }
-                    }
-                }
-            } else {
-                suggestions = emptyList()
-            }
+        // Local catalog results appear immediately, before the debounced Mapbox address results.
+        LaunchedEffect(searchQuery, isSelectingPoint, userLocation, catalog) {
+            suggestions = if (!isSelectingPoint) searchCatalog(searchQuery, catalog.places,
+                userLocation?.latitude(), userLocation?.longitude()) else emptyList()
+        }
+        LaunchedEffect(pinSearchQuery, isSelectingPoint, userLocation, catalog) {
+            pinSuggestions = if (isSelectingPoint) searchCatalog(pinSearchQuery, catalog.places,
+                userLocation?.latitude(), userLocation?.longitude()) else emptyList()
+        }
+        val searchProximity = userLocation?.let { it.latitude() to it.longitude() }
+        val addressSearch = rememberAddressSearch(searchQuery,
+            isSearchFocused && !isSelectingPoint && !isRideOptionsVisible && !isSearchingDriver && activeRide == null,
+            proximity = searchProximity) {
+            addressSearchRepository.search(it, userLocation?.latitude(), userLocation?.longitude())
+        }
+        val pinAddressSearch = rememberAddressSearch(pinSearchQuery,
+            isSelectingPoint && isPinSearchFocused && hasUserInteractedWithPinSearch,
+            proximity = searchProximity) {
+            addressSearchRepository.search(it, userLocation?.latitude(), userLocation?.longitude())
         }
 
-        // Sugerencias de búsqueda para el modo pin
-        LaunchedEffect(pinSearchQuery, isSelectingDestination, userLocation) {
-            if (isSelectingDestination && pinSearchQuery.trim().length >= 2) {
-                // Pequeño debounce para evitar múltiples llamadas rápidas
-                kotlinx.coroutines.delay(300)
-                val center = userLocation
-                if (center != null) {
-                    val bbox = computeBBoxMiles(center, 15.0)
-                    val url = buildGeocodingUrl(
-                        token = mapboxToken,
-                        query = pinSearchQuery.trim(),
-                        center = center,
-                        bbox = bbox
-                    )
-                    scope.launch(Dispatchers.IO) {
-                        val request = Request.Builder().url(url).get().build()
-                        var newSuggestions: List<GeocodeSuggestion> = emptyList()
-                        try {
-                            var bodyStr = "{}"
-                            httpClient.newCall(request).execute().use { response ->
-                                if (response.isSuccessful) {
-                                    bodyStr = response.body?.string() ?: "{}"
-                                }
-                            }
-                            val json = JSONObject(bodyStr)
-                            val features = json.optJSONArray("features")
-                            newSuggestions = (0 until (features?.length() ?: 0)).map { i ->
-                                val f = features!!.getJSONObject(i)
-                                val text = f.optString("text")
-                                val addressNum = f.optString("address")
-                                val centerArr = f.optJSONArray("center")
-                                val lon = centerArr?.optDouble(0) ?: 0.0
-                                val lat = centerArr?.optDouble(1) ?: 0.0
-
-                                val title = buildString {
-                                    if (addressNum.isNotBlank()) append("$addressNum ")
-                                    append(text)
-                                }.trim()
-
-                                val ctx = f.optJSONArray("context")
-                                val parts = mutableListOf<String>()
-                                for (j in 0 until (ctx?.length() ?: 0)) {
-                                    val c = ctx!!.getJSONObject(j)
-                                    val id = c.optString("id")
-                                    val t = c.optString("text")
-                                    val allowed = id.startsWith("place.") || id.startsWith("locality.") || id.startsWith("neighborhood.")
-                                    val excluded = id.startsWith("region.") || id.startsWith("postcode.") || id.startsWith("country.") || id.startsWith("district.")
-                                    if (allowed && !excluded && t.isNotBlank()) parts.add(t)
-                                }
-                                val subtitle = if (parts.isNotEmpty()) parts.joinToString(", ") else null
-
-                                GeocodeSuggestion(
-                                    title = title,
-                                    subtitle = subtitle,
-                                    point = Point.fromLngLat(lon, lat)
-                                )
-                            }
-                        } catch (_: Exception) {
-                            newSuggestions = emptyList()
-                        }
-                        withContext(Dispatchers.Main) { pinSuggestions = newSuggestions }
-                    }
-                }
-            } else {
-                pinSuggestions = emptyList()
-            }
-        }
-
-        if (!isSelectingDestination && !isRideOptionsVisible && !isSearchingDriver && activeRide == null) {
+        if (!isSelectingPoint && !isRideOptionsVisible && !isSearchingDriver && activeRide == null) {
             // Estado inicial: mostrar header completo con gradiente, títulos y atajos
             Box(
                 modifier = Modifier
@@ -1343,72 +1108,46 @@ fun HomeScreen(
                     } else {
                         Spacer(modifier = Modifier.height(12.dp))
                     }
-                    Box(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
                         HeaderSearchBar(
                             value = searchQuery,
                             onValueChange = { searchQuery = it },
                             onFocusChange = { focused -> isSearchFocused = focused },
+                            placeholderText = "¿A dónde vamos?",
                             modifier = Modifier.padding(horizontal = 8.dp)
                         )
-                        // Dropdown de sugerencias
-                        if (suggestions.isNotEmpty()) {
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp)
-                                    .offset(y = 56.dp)
-                                    .shadow(4.dp, RoundedCornerShape(12.dp)),
-                                colors = CardDefaults.cardColors(containerColor = Color.White),
-                                elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Column(modifier = Modifier.padding(vertical = 6.dp)) {
-                                    suggestions.take(6).forEach { s ->
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .clickable {
-                                                    // Mover el mapa al punto elegido
-                                                    mapView.mapboxMap.setCamera(
-                                                        CameraOptions.Builder()
-                                                            .center(s.point)
-                                                            .zoom(14.0)
-                                                            .build()
-                                                    )
-                                                    // Activar modo pin y fijar destino al punto seleccionado
-                                                    isSelectingDestination = true
-                                                    selectedDestination = s.point
-                                                    // Actualizar el campo de búsqueda con el título elegido
-                                                    searchQuery = s.title
-                                                    // Ocultar sugerencias
-                                                    suggestions = emptyList()
-                                                }
-                                                .padding(horizontal = 12.dp, vertical = 10.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Icon(Icons.Outlined.Place, contentDescription = null, tint = Color(0xFF1C1C1E))
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            Column(modifier = Modifier.fillMaxWidth()) {
-                                                Text(text = s.title, color = Color(0xFF1C1C1E), style = MaterialTheme.typography.bodyMedium)
-                                                if (s.subtitle != null) {
-                                                    Text(text = s.subtitle, color = Color(0xFF6E6E73), style = MaterialTheme.typography.bodySmall)
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
+                        if (isSearchFocused && searchQuery.trim().length >= 2) {
+                            PlaceSearchPanel(mergePlaceSearchResults(suggestions, addressSearch.results), catalog.places.isNotEmpty(), catalogLoading, catalogError,
+                                onSelect = { place ->
+                                    val point = Point.fromLngLat(place.longitude, place.latitude)
+                                    mapView.mapboxMap.setCamera(CameraOptions.Builder().center(point).zoom(16.0).build())
+                                    selectedDestination = point
+                                    searchQuery = place.name
+                                    suggestions = emptyList()
+                                    isSelectingDestination = true
+                                }, onRefresh = { catalogRefresh++ },
+                                onPickMap = { searchQuery = ""; isSelectingDestination = true },
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                                addressLoading = addressSearch.loading, addressError = addressSearch.error)
                         }
                     }
                     Spacer(modifier = Modifier.height(30.dp))
                     ShortcutRowHeader(
                         onPinClick = { isSelectingDestination = !isSelectingDestination },
-                        isPinActive = isSelectingDestination
+                        isPinActive = isSelectingDestination,
+                        places = savedPlaces,
+                        onSavedPlaceClick = { place ->
+                            val destination = Point.fromLngLat(place.longitude, place.latitude)
+                            searchQuery = place.name
+                            suggestions = emptyList()
+                            confirmDestination(destination)
+                        },
+                        onConfigurePlace = { showSavedPlaces = true }
                     )
                 }
                 }
             }
-        } else if (isSelectingDestination && !isSearchingDriver && activeRide == null) {
+        } else if (isSelectingPoint && !isSearchingDriver && activeRide == null) {
             // Modo pin: usar la misma animación global (25% de página)
             Box(
                 modifier = Modifier
@@ -1464,24 +1203,16 @@ fun HomeScreen(
                                 .align(Alignment.Start)
                                 .padding(top = 16.dp, start = 16.dp)
                                 .size(40.dp)
-                                .clickable {
-                                    // Reset al estado inicial
-                                    isSelectingDestination = false
-                                    selectedDestination = null
-                                    searchQuery = ""
-                                    pinSearchQuery = ""
-                                    pinSuggestions = emptyList()
-                                    hasUserInteractedWithPinSearch = false
-                                },
+                                .clickable(enabled = !isCreatingRideRequest, onClick = ::returnHomeFromPreparation),
                             shape = RoundedCornerShape(12.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.9f)),
+                            colors = CardDefaults.cardColors(containerColor = AppearanceColors.surface.copy(alpha = 0.9f)),
                             elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                         ) {
                             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                     contentDescription = "Regresar",
-                                    tint = Color(0xFF1C1C1E)
+                                    tint = AppearanceColors.foreground(Color(0xFF1C1C1E))
                                 )
                             }
                         }
@@ -1491,6 +1222,9 @@ fun HomeScreen(
                                 .padding(top = 12.dp, start = 16.dp, end = 16.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
+                            Text(if (showPickupPicker) "Elegir punto de recojo" else "Elige tu destino",
+                                style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold,
+                                color = Color.White, modifier = Modifier.padding(bottom = 12.dp))
                             HeaderSearchBar(
                                 value = pinSearchQuery, 
                                 onValueChange = { 
@@ -1502,7 +1236,7 @@ fun HomeScreen(
                                     if (focused) hasUserInteractedWithPinSearch = true
                                 },
                                 modifier = Modifier.padding(horizontal = 8.dp),
-                                placeholderText = "Dirección del marcador",
+                                placeholderText = if (showPickupPicker) "Dirección de recojo" else "Dirección del marcador",
                                 showClearButton = true,
                                 onClearClick = { 
                                     pinSearchQuery = ""
@@ -1511,63 +1245,19 @@ fun HomeScreen(
                                 },
                                 showMicButton = false
                             )
-                            // Dropdown de sugerencias para búsqueda de pin
-                            if (pinSuggestions.isNotEmpty() && hasUserInteractedWithPinSearch) {
-                                Card(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 16.dp)
-                                        .offset(y = 8.dp)
-                                        .shadow(4.dp, RoundedCornerShape(12.dp)),
-                                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                                    elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
-                                    shape = RoundedCornerShape(12.dp)
-                                ) {
-                                    LazyColumn(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        contentPadding = PaddingValues(vertical = 8.dp)
-                                    ) {
-                                        items(pinSuggestions) { suggestion ->
-                                            Column(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .clickable {
-                                                        // Mover el pin a la ubicación seleccionada
-                                                        selectedDestination = suggestion.point
-                                                        pinSearchQuery = suggestion.title
-                                                        pinSuggestions = emptyList()
-                                                        hasUserInteractedWithPinSearch = false
-                                                        // Centrar el mapa en el nuevo punto
-                                                        mapView.mapboxMap.setCamera(
-                                                            CameraOptions.Builder()
-                                                                .center(suggestion.point)
-                                                                .zoom(15.0)
-                                                                .build()
-                                                        )
-                                                    }
-                                                    .padding(horizontal = 16.dp, vertical = 12.dp)
-                                            ) {
-                                                Text(
-                                                    text = suggestion.title,
-                                                    style = MaterialTheme.typography.bodyMedium,
-                                                    color = Color(0xFF1C1C1E)
-                                                )
-                                                if (suggestion.subtitle != null) {
-                                                    Text(
-                                                        text = suggestion.subtitle,
-                                                        style = MaterialTheme.typography.bodySmall,
-                                                        color = Color(0xFF8E8E93)
-                                                    )
-                                                }
-                                            }
-                                            Divider(
-                                                color = Color(0xFFE5E5EA),
-                                                thickness = 1.dp,
-                                                modifier = Modifier.padding(horizontal = 16.dp)
-                                            )
-                                        }
-                                    }
-                                }
+                            if (hasUserInteractedWithPinSearch && pinSearchQuery.trim().length >= 2) {
+                                PlaceSearchPanel(mergePlaceSearchResults(pinSuggestions, pinAddressSearch.results), catalog.places.isNotEmpty(), catalogLoading, catalogError,
+                                    onSelect = { place ->
+                                        val point = Point.fromLngLat(place.longitude, place.latitude)
+                                        if (showPickupPicker) selectedPickup = point else selectedDestination = point
+                                        pinSearchQuery = place.name
+                                        pinSuggestions = emptyList()
+                                        hasUserInteractedWithPinSearch = false
+                                        mapView.mapboxMap.setCamera(CameraOptions.Builder().center(point).zoom(16.0).build())
+                                    }, onRefresh = { catalogRefresh++ },
+                                    onPickMap = { pinSearchQuery = ""; hasUserInteractedWithPinSearch = false },
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                                    addressLoading = pinAddressSearch.loading, addressError = pinAddressSearch.error)
                             }
                         }
                     }
@@ -1575,368 +1265,35 @@ fun HomeScreen(
             }
         }
 
-        // Panel de opciones tipo Uber cuando el destino está confirmado
+        // The drawer has two visible positions; it never dismisses the booking step.
         AnimatedVisibility(
-            visible = isRideOptionsVisible && !isSearchingDriver,
+            visible = showingRideOptions && !isSearchingDriver,
             enter = fadeIn() + slideInVertically(initialOffsetY = { it })
         ) {
             val km = (routeDistanceMeters ?: 0.0) / 1000.0
             val minutes = (routeDurationSeconds ?: 0.0) / 60.0
-            // Vista previa de la misma fórmula que Supabase vuelve a calcular al crear el viaje.
-            val mototaxiFare = kotlin.math.round(maxOf(4.0, 2.5 + km + 0.1 * minutes) * 10.0) / 10.0
-
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.BottomCenter
-            ) {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 16.dp, end = 16.dp, bottom = 60.dp)
-                        .onGloballyPositioned { coords -> rideOptionsPanelHeightPx = coords.size.height },
-                    colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.9f)),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 20.dp),
-                    shape = RoundedCornerShape(28.dp),
-                    border = BorderStroke(
-                        width = 1.dp,
-                        brush = Brush.linearGradient(
-                            colors = listOf(
-                                Color(0xFF08817E).copy(alpha = 0.4f),
-                                Color(0xFF1E1F47).copy(alpha = 0.4f)
-                            )
-                        )
-                    )
-                ) {
-                    Column(modifier = Modifier.padding(24.dp)) {
-                        // Header moderno con icono y título
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(bottom = 20.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .background(
-                                        brush = Brush.linearGradient(
-                                            colors = listOf(Color(0xFF08817E), Color(0xFF1E1F47))
-                                        )
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    Icons.Filled.DirectionsCar,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(28.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Column {
-                                Text(
-                                    "Elige tu viaje",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    color = Color(0xFF1C1C1E),
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    "Tarifa calculada por distancia y tiempo",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = Color(0xFF6E6E73)
-                                )
-                            }
-                        }
-                        
-                        // Crear lista de opciones con colores dinámicos
-                        val optionRows = listOf(
-                            RideOptionData(
-                                name = "Mototaxi",
-                                price = mototaxiFare,
-                                minutes = minutes,
-                                leadingContent = {
-                                    Icon(
-                                        Icons.Filled.DirectionsCar,
-                                        contentDescription = "Mototaxi",
-                                        tint = Color(0xFF08817E),
-                                        modifier = Modifier.size(52.dp)
-                                    )
-                                },
-                                colors = listOf(Color(0xFF08817E), Color(0xFF1E1F47))
-                            )
-                        )
-
-                        // Slider horizontal de opciones
-                        RideOptionsSlider(
-                            options = optionRows,
-                            selectedOptionName = selectedRideOptionName,
-                            onOptionSelected = { selectedRideOptionName = it },
-                            initialSelectedIndex = 0
-                        )
-                        
-                        Spacer(modifier = Modifier.height(8.dp))
-                        
-                        // Compact payment method selection
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 20.dp, vertical = 12.dp)
-                                .clickable { 
-                                    // Toggle payment method
-                                    val newMethod = if (selectedPaymentMethod == "efectivo") "yape_plin" else "efectivo"
-                                    selectedPaymentMethod = newMethod
-                                    scope.launch {
-                                        paymentPreferences.savePaymentMethod(newMethod)
-                                    }
-                                },
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                // Icono más grande para efectivo o Yape
-                                if (selectedPaymentMethod == "efectivo") {
-                                    com.intu.taxi.ui.components.CashIcon(
-                                        size = 28.dp,
-                                        modifier = Modifier
-                                    )
-                                } else {
-                                    com.intu.taxi.ui.components.YapePlinIcon(
-                                        size = 28.dp,
-                                        modifier = Modifier
-                                    )
-                                }
-                                Text(
-                                    text = "Método de pago",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = Color(0xFF6E6E73)
-                                )
-                            }
-                            
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Text(
-                                    text = if (selectedPaymentMethod == "efectivo") "Efectivo" else "Yape",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = Color(0xFF1C1C1E),
-                                    fontWeight = FontWeight.Medium
-                                )
-                                Icon(
-                                    imageVector = Icons.Default.SwapHoriz,
-                                    contentDescription = "Cambiar",
-                                    modifier = Modifier.size(20.dp),
-                                    tint = Color(0xFF08817E)
-                                )
-                            }
-                        }
-                        
-                        Spacer(modifier = Modifier.height(12.dp))
-                        val enabled = selectedRideOptionName != null && userLocation != null && confirmedDestination != null
-                        println("DEBUG UI: selectedRideOptionName=$selectedRideOptionName, enabled=$enabled")
-                        println("DEBUG UI: userLocation=$userLocation, confirmedDestination=$confirmedDestination")
-                        println("DEBUG UI: routeDistanceMeters=$routeDistanceMeters, routeDurationSeconds=$routeDurationSeconds")
-                        val phaseAnim = remember { androidx.compose.animation.core.Animatable(0f) }
-                        LaunchedEffect(selectedRideOptionName) {
-                            if (selectedRideOptionName == "espera y ahorra" || selectedRideOptionName == "Intu Colectivo") {
-                                while (true) {
-                                    val duration = if (selectedRideOptionName == "espera y ahorra") 2400 else 3200
-                                    phaseAnim.animateTo(
-                                        targetValue = 1f,
-                                        animationSpec = androidx.compose.animation.core.tween(
-                                            durationMillis = duration,
-                                            easing = androidx.compose.animation.core.LinearEasing
-                                        )
-                                    )
-                                    phaseAnim.snapTo(0f)
-                                }
-                            } else {
-                                // Reset animación cuando cambia a otra opción
-                                phaseAnim.snapTo(0f)
-                            }
-                        }
-                        val phase = phaseAnim.value
-                        val brush = when (selectedRideOptionName) {
-                            "Intu Honda" -> Brush.radialGradient(
-                                colors = listOf(Color(0xFF0FB9B1), Color(0xFF08817E)),
-                                center = Offset(0.3f, 0.3f),
-                                radius = with(LocalDensity.current) { 180.dp.toPx() }
-                            )
-                            "Intu Bajaj" -> Brush.radialGradient(
-                                colors = listOf(Color(0xFF0FB9B1), Color(0xFF08817E)),
-                                center = Offset(0.3f, 0.3f),
-                                radius = with(LocalDensity.current) { 180.dp.toPx() }
-                            )
-                            "Intu Colectivo" -> {
-                                // Similar a "espera y ahorra" pero diagonal y un poco más lento
-                                val startY = 60f + phase * 400f
-                                val endY = startY - 240f
-                                Brush.linearGradient(
-                                    colors = listOf(
-                                        Color(0xFF27AE60),
-                                        Color(0xFF2ECC71),
-                                        Color(0xFF27AE60)
-                                    ),
-                                    start = Offset(0f, startY),
-                                    end = Offset(220f, endY)
-                                )
-                            }
-                            "espera y ahorra" -> {
-                                // Animado: banda luminosa que recorre el botón
-                                val startX = 100f + phase * 500f
-                                val endX = startX - 300f
-                                Brush.linearGradient(
-                                    colors = listOf(
-                                        Color(0xFF27AE60),
-                                        Color(0xFF2ECC71),
-                                        Color(0xFF27AE60)
-                                    ),
-                                    start = Offset(startX, 0f),
-                                    end = Offset(endX, 200f)
-                                )
-                            }
-                            else -> null
-                        }
-                        Button(
-                            onClick = {
-                                // Crear solicitud de viaje en Firebase y entrar en estado de búsqueda
-                                val origin = pickupLocation ?: userLocation
-                                val destination = confirmedDestination
-                                val rideType = selectedRideOptionName
-                                val distance = routeDistanceMeters ?: 0.0
-                                val duration = routeDurationSeconds ?: 0.0
-                                
-                                println("DEBUG: Botón confirmar clickeado")
-                                println("DEBUG: origin=$origin, destination=$destination, rideType=$rideType")
-                                println("DEBUG: distance=$distance, duration=$duration")
-                                
-                                if (origin != null && destination != null && rideType != null) {
-                                    // Validar que las coordenadas sean válidas (no 0.0 y dentro de rangos razonables)
-                                    val originLat = origin.latitude()
-                                    val originLng = origin.longitude()
-                                    val destLat = destination.latitude()
-                                    val destLng = destination.longitude()
-                                    
-                                    if (originLat == 0.0 || originLng == 0.0 || 
-                                        originLat < -90.0 || originLat > 90.0 || 
-                                        originLng < -180.0 || originLng > 180.0) {
-                                        Toast.makeText(context, "Error: Ubicación de origen no válida", Toast.LENGTH_LONG).show()
-                                        println("DEBUG: Coordenadas de origen inválidas - lat: $originLat, lng: $originLng")
-                                        return@Button
-                                    }
-                                    
-                                    if (destLat == 0.0 || destLng == 0.0 || 
-                                        destLat < -90.0 || destLat > 90.0 || 
-                                        destLng < -180.0 || destLng > 180.0) {
-                                        Toast.makeText(context, "Error: Ubicación de destino no válida", Toast.LENGTH_LONG).show()
-                                        println("DEBUG: Coordenadas de destino inválidas - lat: $destLat, lng: $destLng")
-                                        return@Button
-                                    }
-                                    
-                                    // Verificar autenticación de Firebase
-                                    val currentUser = FirebaseAuth.getInstance().currentUser
-                                    if (currentUser == null) {
-                                        errorMessage = "Error: Usuario no autenticado. Por favor inicia sesión."
-                                        println("DEBUG: Usuario no autenticado")
-                                    } else {
-                                        scope.launch {
-                                            try {
-                                                // Direcciones legibles para el chofer (nunca coordenadas)
-                                                originAddress = readableAddress(context, httpClient, mapboxToken, origin)
-                                                    ?: "Punto de recojo en el mapa"
-                                                destinationAddress = readableAddress(context, httpClient, mapboxToken, destination)
-                                                    ?: "Destino en el mapa"
-                                                
-                                                // Calcular precio estimado (tarifa base + por km + por tiempo)
-                                                val baseFare = 2.5
-                                                val perKmRate = 1.0
-                                                val perMinuteRate = 0.1
-                                                val distanceKm = distance / 1000.0
-                                                val durationMinutes = duration / 60.0
-                                                estimatedPrice = kotlin.math.round(
-                                                    maxOf(4.0, baseFare + (distanceKm * perKmRate) + (durationMinutes * perMinuteRate)) * 10.0
-                                                ) / 10.0
-                                                
-                                                // Crear solicitud en Firebase
-                                                println("DEBUG: Creando solicitud en Firebase...")
-                                                println("DEBUG: Coordenadas a enviar - originLat: ${origin.latitude()}, originLng: ${origin.longitude()}")
-                                                println("DEBUG: Coordenadas a enviar - destLat: ${destination.latitude()}, destLng: ${destination.longitude()}")
-                                                val result = rideRequestRepository.createRideRequest(
-                                                    originLatitude = origin.latitude(),
-                                                    originLongitude = origin.longitude(),
-                                                    originAddress = originAddress,
-                                                    destinationLatitude = destination.latitude(),
-                                                    destinationLongitude = destination.longitude(),
-                                                    destinationAddress = destinationAddress,
-                                                    distanceMeters = distance,
-                                                    durationSeconds = duration,
-                                                    estimatedPrice = estimatedPrice,
-                                                    rideType = rideType,
-                                                    paymentMethod = selectedPaymentMethod
-                                                )
-                                                
-                                                result.onSuccess { requestId ->
-                                                    println("DEBUG: Solicitud creada exitosamente: $requestId")
-                                                    currentRideRequestId = requestId
-                                                    isSearchingDriver = true
-                                                    isRideOptionsVisible = false
-                                                    errorMessage = null
-                                                }.onFailure { error ->
-                                                    // Mostrar error (podrías agregar un Snackbar aquí)
-                                                    println("Error al crear solicitud: ${error.message}")
-                                                    errorMessage = "Error: ${error.message}"
-                                                }
-                                            } catch (e: Exception) {
-                                                println("Error inesperado: ${e.message}")
-                                            }
-                                        }
-                                    }
-                                }
-                            },
-                            shape = RoundedCornerShape(24.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (enabled) Color.Transparent else Color(0xFFC7C7CC),
-                                contentColor = Color.White,
-                                disabledContainerColor = Color(0xFFC7C7CC),
-                                disabledContentColor = Color.White.copy(alpha = 0.7f)
-                            ),
-                            enabled = enabled,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(50.dp)
-                                .let { base ->
-                                    if (enabled) base.background(
-                                        brush = brush ?: Brush.linearGradient(
-                                            colors = listOf(Color(0xFF1C1C1E), Color(0xFF3A3A3C)),
-                                            start = Offset(0f, 0f),
-                                            end = Offset(300f, 200f)
-                                        ),
-                                        shape = RoundedCornerShape(24.dp)
-                                    ) else base
-                                }
-                        ) {
-                            Text("Confirmar viaje")
-                        }
-                        
-                        // Mostrar mensaje de error si existe
-                        if (errorMessage != null) {
-                            Text(
-                                text = errorMessage!!,
-                                color = Color.Red,
-                                style = MaterialTheme.typography.bodySmall,
-                                modifier = Modifier.padding(top = 8.dp)
-                            )
-                        }
-                    }
-                }
-            }
+            RideOptionsDrawer(
+                fare = com.intu.taxi.models.ServiceFare.estimate(km * 1000.0, minutes * 60.0),
+                deliveryFare = com.intu.taxi.models.ServiceFare.estimate(km * 1000.0, minutes * 60.0, true),
+                distanceKm = km, durationMinutes = minutes,
+                selectedOption = com.intu.taxi.models.MotoOption.fromCode(selectedMotoOptionCode),
+                paymentMethod = selectedPaymentMethod,
+                confirmEnabled = selectedMotoOptionCode != null && userLocation != null && confirmedDestination != null,
+                error = errorMessage,
+                onSelect = { selectedMotoOptionCode = it.code; isDelivery = it.delivery; errorMessage = null },
+                onChangePayment = {
+                    val newMethod = if (selectedPaymentMethod == "efectivo") "yape_plin" else "efectivo"
+                    selectedPaymentMethod = newMethod
+                    scope.launch { paymentPreferences.savePaymentMethod(newMethod) }
+                },
+                onConfirm = ::beginPickupSelection,
+                onVisibleHeightChanged = { rideOptionsPanelHeightPx = it },
+                modifier = Modifier.fillMaxSize()
+            )
         }
-
         // Ajusta la cámara para encuadrar la ruta completa cuando se muestran opciones de viaje o durante búsqueda
-        LaunchedEffect(isRideOptionsVisible, isSearchingDriver, activeRide, routePoints, rideOptionsPanelHeightPx) {
-            if ((isRideOptionsVisible || (isSearchingDriver && activeRide == null)) && routePoints.isNotEmpty()) {
+        LaunchedEffect(showingRideOptions, isSearchingDriver, activeRide, routePoints, rideOptionsPanelHeightPx) {
+            if ((showingRideOptions || (isSearchingDriver && activeRide == null)) && routePoints.isNotEmpty()) {
                 val minLon = routePoints.minOf { it.longitude() }
                 val maxLon = routePoints.maxOf { it.longitude() }
                 val minLat = routePoints.minOf { it.latitude() }
@@ -1949,26 +1306,31 @@ fun HomeScreen(
                 val topPadPx = with(density) { 16.dp.toPx() }.toDouble()
                 val leftPadPx = with(density) { 16.dp.toPx() }.toDouble()
                 val rightPadPx = with(density) { 16.dp.toPx() }.toDouble()
-                // Sumamos el alto del panel medido + el margen inferior solicitado en el Card
-                val bottomMarginPx = with(density) { 40.dp.toPx() }.toDouble()
+                // The measured panel includes its lower margin and navigation bar inset.
+                val bottomMarginPx = with(density) { 12.dp.toPx() }.toDouble()
                 val bottomPadPx = rideOptionsPanelHeightPx.toDouble() + bottomMarginPx
                 // Extra padding para lograr un leve "zoom out"
                 val extraPadPx = with(density) { 60.dp.toPx() }.toDouble()
                 val map = mapView.mapboxMap
                 val cs = map.cameraState
+                // Camera padding reserves the panel's viewport; coordinatesPadding only adds
+                // breathing room around the route and does not move the map's principal point.
+                val viewportPadding = if (showingRideOptions)
+                    EdgeInsets(topPadPx, leftPadPx, bottomPadPx, rightPadPx)
+                else EdgeInsets(0.0, 0.0, 0.0, 0.0)
+                val coordinatesPadding = if (showingRideOptions)
+                    EdgeInsets(extraPadPx, extraPadPx, extraPadPx, extraPadPx)
+                else EdgeInsets(topPadPx + extraPadPx, leftPadPx + extraPadPx,
+                    bottomPadPx + extraPadPx, rightPadPx + extraPadPx)
                 val cam = map.cameraForCoordinates(
                     routePoints,
                     CameraOptions.Builder()
                         .bearing(cs.bearing)
                         .pitch(cs.pitch)
+                        .padding(viewportPadding)
                         .build(),
-                    EdgeInsets(
-                        topPadPx + extraPadPx,
-                        leftPadPx + extraPadPx,
-                        bottomPadPx + extraPadPx,
-                        rightPadPx + extraPadPx
-                    ),
-                    null,
+                    coordinatesPadding,
+                    16.0,
                     null
                 )
                 if (activeRide == null) {
@@ -1978,17 +1340,17 @@ fun HomeScreen(
         }
 
         // Aviso ligero cuando el modo de selección está activo
-        if (isSelectingDestination) {
-            // Pin centrado fijo para indicar el destino
+        if (isSelectingPoint) {
+            // The same full-screen map and center pin choose destination and pickup.
             Box(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    Icons.Outlined.Place,
-                    contentDescription = null,
-                    tint = if (isSelectingPickup) Color(0xFF27AE60) else Color(0xFFFF3B30),
-                    modifier = Modifier.size(42.dp)
+                com.intu.taxi.ui.map.RoutePin(
+                    description = if (showPickupPicker) "Punto de recojo" else "Destino seleccionado",
+                    pickup = showPickupPicker,
+                    modifier = Modifier.size(pinSizeDp).offset(y = -(pinSizeDp / 2))
+                        .testTag(if (showPickupPicker) "home-pickup-pin" else "home-destination-pin")
                 )
             }
             Box(
@@ -2000,106 +1362,20 @@ fun HomeScreen(
                         .padding(bottom = 80.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    if (!isSelectingPickup) {
-                        Button(
-                            onClick = {
-                                destinationBeforePickup = selectedDestination
-                                isSelectingPickup = true
-                                userLocation?.let { current ->
-                                    mapView.mapboxMap.setCamera(CameraOptions.Builder().center(current).zoom(16.0).build())
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color(0xFF1E1F47)),
-                            modifier = Modifier.padding(bottom = 8.dp)
-                        ) {
-                            Text(if (pickupLocation == null) "Elegir punto de recojo" else "Cambiar punto de recojo")
-                        }
-                    } else {
-                        Text(
-                            "Mueve el mapa hasta el punto de recojo",
-                            color = Color.White,
-                            modifier = Modifier.padding(bottom = 8.dp)
-                        )
-                    }
                     // Botón con gradient radial igual al header
                     Button(
                         onClick = {
-                            if (isSelectingPickup) {
-                                pickupLocation = selectedDestination
-                                isSelectingPickup = false
-                                destinationBeforePickup?.let { destination ->
-                                    selectedDestination = destination
-                                    mapView.mapboxMap.setCamera(CameraOptions.Builder().center(destination).zoom(15.0).build())
-                                }
-                                Toast.makeText(context, "Punto de recojo guardado", Toast.LENGTH_SHORT).show()
-                                return@Button
+                            focusManager.clearFocus(force = true)
+                            keyboard?.hide()
+                            val point = mapView.pointUnderCenterPin() ?: selectedPoint
+                            if (showPickupPicker && isDelivery) point?.let {
+                                pendingDeliveryRoute = null
+                                pendingDeliveryOrigin = it
                             }
-                            // Confirmar destino y mostrar ruta desde la ubicación actual
-                            val origin = pickupLocation ?: userLocation
-                            val destination = selectedDestination
-                            if (origin != null && destination != null) {
-                                scope.launch(Dispatchers.IO) {
-                                    try {
-                                        val directionsUrl = "https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${origin.longitude()},${origin.latitude()};${destination.longitude()},${destination.latitude()}?alternatives=false&geometries=geojson&overview=full&access_token=$mapboxToken"
-                                        val req = Request.Builder().url(directionsUrl).get().build()
-                                        var body: String? = null
-                                        var success = false
-                                        httpClient.newCall(req).execute().use { resp ->
-                                            success = resp.isSuccessful
-                                            body = resp.body?.string()
-                                        }
-                                        var lineString: LineString? = null
-                                        if (success && body != null) {
-                                            val json = JSONObject(body)
-                                            val routes = json.optJSONArray("routes")
-                                            val first = routes?.optJSONObject(0)
-                                            val geom = first?.optJSONObject("geometry")
-                                            val coords = geom?.optJSONArray("coordinates")
-                                            if (coords != null && coords.length() > 1) {
-                                                val pts = mutableListOf<Point>()
-                                                for (i in 0 until coords.length()) {
-                                                    val c = coords.getJSONArray(i)
-                                                    val lon = c.optDouble(0)
-                                                    val lat = c.optDouble(1)
-                                                    pts.add(Point.fromLngLat(lon, lat))
-                                                }
-                                                lineString = LineString.fromLngLats(pts)
-                                            }
-                                        }
-                        withContext(Dispatchers.Main) {
-                                            val ls = lineString
-                                            if (ls != null) {
-                                                // Convertimos a coordenadas de pantalla y dibujamos en overlay (Canvas)
-                                                val offsets = ls.coordinates().map { p ->
-                                                    val sc = mapView.mapboxMap.pixelForCoordinate(p)
-                                                    Offset(sc.x.toFloat(), sc.y.toFloat())
-                                                }
-                                                routeOffsets = offsets
-                                                routePoints = ls.coordinates()
-                                                // Guarda destino confirmado y su posición en pantalla
-                                                confirmedDestination = destination
-                                                val destSC = mapView.mapboxMap.pixelForCoordinate(destination)
-                                                confirmedDestOffset = Offset(destSC.x.toFloat(), destSC.y.toFloat())
-                                                // Intentar leer distancia y duración
-                                                try {
-                                            val jsonObj = JSONObject(body!!)
-                                                    val routesArr = jsonObj.optJSONArray("routes")
-                                                    val firstRoute = routesArr?.optJSONObject(0)
-                                                    routeDistanceMeters = firstRoute?.optDouble("distance")
-                                                    routeDurationSeconds = firstRoute?.optDouble("duration")
-                                                } catch (_: Exception) {}
-                                                // Mostrar panel de opciones
-                                                isRideOptionsVisible = true
-                                            }
-                                        }
-                                    } catch (e: Exception) {
-                                        // Ignorar errores de red/parseo por ahora
-                                    }
-                                }
-                            }
-                            // Salir del modo selección
-                            isSelectingDestination = false
+                            else if (showPickupPicker) point?.let { requestRideFromPickup(it) }
+                            else point?.let(::confirmDestination)
                         },
+                        enabled = selectedPoint != null && !isCalculatingDestinationRoute && !isCreatingRideRequest,
                         shape = RoundedCornerShape(24.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color.Transparent,
@@ -2117,7 +1393,12 @@ fun HomeScreen(
                                 shape = RoundedCornerShape(24.dp)
                             )
                     ) {
-                        Text(if (isSelectingPickup) "Confirmar punto de recojo" else "Confirmar destino")
+                        Text(when {
+                            isCreatingRideRequest -> if (isDelivery) "Solicitando envío…" else "Solicitando viaje…"
+                            showPickupPicker -> if (isDelivery) "Continuar con envío" else "Solicitar viaje"
+                            isCalculatingDestinationRoute -> "Calculando ruta…"
+                            else -> "Confirmar destino"
+                        })
                     }
                    
                 }
@@ -2126,6 +1407,14 @@ fun HomeScreen(
 
         // Deja el mapa listo para pedir otro viaje
         fun resetRideState() {
+            isDelivery = false
+            selectedMotoOptionCode = com.intu.taxi.models.MotoOption.ANY.code
+            deliveryDraft = null
+            pendingDeliveryOrigin = null
+            pendingDeliveryRoute = null
+            showPickupPicker = false
+            pendingDestination = null
+            isCalculatingDestinationRoute = false
             isSearchingDriver = false
             currentRideRequestId = null
             activeRide = null
@@ -2168,16 +1457,16 @@ fun HomeScreen(
                     // Encima de la barra de navegación del sistema, sea de gestos o de 3 botones
                     .padding(start = 16.dp, end = 16.dp, bottom = padding.calculateBottomPadding() + 16.dp)
                     .onGloballyPositioned { rideCardHeightPx = it.size.height },
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(containerColor = AppearanceColors.surface),
                 elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
             ) {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(modifier = Modifier.heightIn(max = 560.dp).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
                         text = when (ride.status) {
-                            "accepted" -> "Tu mototaxi está en camino"
-                            "arrived" -> "Tu conductor llegó"
-                            "in_progress" -> "Viaje en curso"
-                            "completed" -> "Viaje finalizado"
+                            "accepted" -> if (ride.isDelivery) "Tu repartidor está en camino" else "Tu mototaxi está en camino"
+                            "arrived" -> if (ride.isDelivery) "Tu repartidor llegó al recojo" else "Tu conductor llegó"
+                            "in_progress" -> if (ride.isDelivery) "Tu paquete está en camino" else "Viaje en curso"
+                            "completed" -> if (ride.isDelivery) "Envío entregado" else "Viaje finalizado"
                             else -> "Buscando conductor"
                         },
                         style = MaterialTheme.typography.titleMedium,
@@ -2185,9 +1474,10 @@ fun HomeScreen(
                     )
                     if (ride.status == "accepted" && ride.driverOnOtherTrip) {
                         Text(
-                            "Tu conductor está terminando un viaje cercano y luego irá por ti.",
+                            if (ride.isDelivery) "Tu repartidor está terminando otro servicio y luego irá por tu paquete."
+                            else "Tu conductor está terminando un viaje cercano y luego irá por ti.",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = Color(0xFFB45309)
+                            color = AppearanceColors.highlight(Color(0xFFB45309))
                         )
                     }
                     ridePin?.let { pin ->
@@ -2195,16 +1485,17 @@ fun HomeScreen(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .background(Color(0xFFE6F4F3), RoundedCornerShape(12.dp))
+                                    .background(AppearanceColors.tint(Color(0xFFE6F4F3)), RoundedCornerShape(12.dp))
                                     .padding(horizontal = 14.dp, vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Text("PIN de seguridad", fontWeight = FontWeight.SemiBold, color = Color(0xFF08817E))
+                                    Text("PIN de seguridad", fontWeight = FontWeight.SemiBold, color = AppearanceColors.highlight(Color(0xFF08817E)))
                                     Text(
-                                        "Díselo al conductor al subir. No lo compartas antes.",
+                                        if (ride.isDelivery) "Díselo al repartidor al entregar el paquete. No lo compartas antes."
+                                        else "Díselo al conductor al subir. No lo compartas antes.",
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = Color(0xFF5F6570)
+                                        color = AppearanceColors.secondary(Color(0xFF5F6570))
                                     )
                                 }
                                 Text(
@@ -2212,11 +1503,12 @@ fun HomeScreen(
                                     style = MaterialTheme.typography.headlineMedium,
                                     fontWeight = FontWeight.Bold,
                                     letterSpacing = 6.sp,
-                                    color = Color(0xFF1E1F47)
+                                    color = AppearanceColors.foreground(Color(0xFF1E1F47))
                                 )
                             }
                         }
                     }
+                    ride.delivery?.let { DeliverySummary(it) }
                     if (ride.driverName.isNotBlank() || ride.vehiclePlate.isNotBlank()) {
                         // Foto del conductor para reconocerlo al llegar; tocarla la agranda
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -2233,9 +1525,9 @@ fun HomeScreen(
                                 }
                                 if (ride.vehiclePlate.isNotBlank()) {
                                     Text(
-                                        "Mototaxi ${listOf(ride.vehicleDescription, ride.vehiclePlate).filter { it.isNotBlank() }.joinToString(" · ")}",
+                                        "${if (ride.isDelivery) "Moto lineal" else "Mototaxi"} ${listOf(ride.vehicleDescription, ride.vehiclePlate).filter { it.isNotBlank() }.joinToString(" · ")}",
                                         style = MaterialTheme.typography.bodyMedium,
-                                        color = Color(0xFF5F6570)
+                                        color = AppearanceColors.secondary(Color(0xFF5F6570))
                                     )
                                 }
                             }
@@ -2250,7 +1542,7 @@ fun HomeScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(Color(0xFFF3EEFB))
+                                .background(AppearanceColors.tint(Color(0xFFF3EEFB)))
                                 .clickable(onClickLabel = "Copiar número de Yape") {
                                     clipboard.setText(AnnotatedString(yapeNumber))
                                     Toast.makeText(context, "Número copiado. Pégalo en Yape o Plin", Toast.LENGTH_SHORT).show()
@@ -2259,12 +1551,12 @@ fun HomeScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text("Paga por Yape o Plin a", style = MaterialTheme.typography.bodySmall, color = Color(0xFF5F6570))
+                                Text("Paga por Yape o Plin a", style = MaterialTheme.typography.bodySmall, color = AppearanceColors.secondary(Color(0xFF5F6570)))
                                 Text(
                                     com.intu.taxi.ui.formatPeruPhone(ride.driverPhone),
                                     style = MaterialTheme.typography.titleLarge,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF1E1F47)
+                                    color = AppearanceColors.foreground(Color(0xFF1E1F47))
                                 )
                                 Text("Toca para copiar el número", style = MaterialTheme.typography.bodySmall, color = Color(0xFF6F2DBD))
                             }
@@ -2280,16 +1572,16 @@ fun HomeScreen(
                     if (ride.status == "accepted" || ride.status == "arrived") {
                         OutlinedButton(
                             onClick = { showCancelRideDialog = true },
-                            enabled = !isCancellingRide,
+                            enabled = !isCancellingRide && ride.delivery?.paymentCollected != true,
                             modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFB42318))
-                        ) { Text(if (isCancellingRide) "Cancelando…" else "Cancelar viaje") }
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = AppearanceColors.highlight(Color(0xFFB42318)))
+                        ) { Text(if (isCancellingRide) "Cancelando…" else if (ride.isDelivery) "Cancelar envío" else "Cancelar viaje") }
                     }
                     if (ride.status == "completed") {
-                        Text("El conductor confirmó que recibió el pago.", color = Color(0xFF08817E))
+                        Text("El conductor confirmó que recibió el pago.", color = AppearanceColors.highlight(Color(0xFF08817E)))
                         // Calificar al conductor (también se puede después en la pestaña Viajes)
                         var givenStars by remember(ride.rideId) { mutableStateOf(0) }
-                        Text("¿Cómo estuvo tu viaje?", fontWeight = FontWeight.SemiBold)
+                        Text(if (ride.isDelivery) "¿Cómo estuvo tu envío?" else "¿Cómo estuvo tu viaje?", fontWeight = FontWeight.SemiBold)
                         com.intu.taxi.ui.components.StarRating(
                             stars = givenStars,
                             size = 36.dp,
@@ -2318,13 +1610,13 @@ fun HomeScreen(
         if (showCancelRideDialog) {
             AlertDialog(
                 onDismissRequest = { showCancelRideDialog = false },
-                title = { Text("¿Cancelar el viaje?") },
-                text = { Text("Tu conductor ya aceptó el viaje y va en camino.") },
+                title = { Text(if (isDelivery) "¿Cancelar el envío?" else "¿Cancelar el viaje?") },
+                text = { Text(if (isDelivery) "Tu repartidor ya aceptó el envío." else "Tu conductor ya aceptó el viaje y va en camino.") },
                 confirmButton = {
                     TextButton(onClick = {
                         showCancelRideDialog = false
                         cancelCurrentRide()
-                    }) { Text("Sí, cancelar", color = Color(0xFFB42318)) }
+                    }) { Text("Sí, cancelar", color = AppearanceColors.highlight(Color(0xFFB42318))) }
                 },
                 dismissButton = {
                     TextButton(onClick = { showCancelRideDialog = false }) { Text("No") }
@@ -2335,6 +1627,7 @@ fun HomeScreen(
         // Indicador creativo de búsqueda de conductor con animaciones de radar
         CreativeDriverSearchIndicator(
             isVisible = isSearchingDriver,
+            delivery = isDelivery,
             isCancelling = isCancellingRide,
             onCancel = { cancelCurrentRide() }
         )
@@ -2364,7 +1657,7 @@ private suspend fun readableAddress(
 
     val fromMapbox = runCatching {
         val url = "https://api.mapbox.com/geocoding/v5/mapbox.places/${point.longitude()},${point.latitude()}.json" +
-            "?access_token=$token&language=es&limit=1&types=address,poi,neighborhood,locality,place"
+            "?access_token=$token&language=es&limit=1&types=address,neighborhood,locality,place"
         http.newCall(Request.Builder().url(url).get().build()).execute().use { res ->
             if (!res.isSuccessful) null
             else JSONObject(res.body?.string().orEmpty())
@@ -2414,37 +1707,6 @@ private fun cleanAddress(raw: String): String = raw.split(",")
     .take(3)
     .joinToString(", ")
 
-private fun buildGeocodingUrl(token: String, query: String, center: Point, bbox: String): String {
-    val encoded = URLEncoder.encode(query, "UTF-8")
-    val lon = center.longitude()
-    val lat = center.latitude()
-    return "https://api.mapbox.com/geocoding/v5/mapbox.places/$encoded.json" +
-        "?access_token=$token" +
-        "&language=es" +
-        "&autocomplete=true" +
-        "&limit=5" +
-        "&types=address,place,poi" +
-        "&proximity=$lon,$lat" +
-        "&bbox=$bbox"
-}
-
-private fun computeBBoxMiles(center: Point, miles: Double): String {
-    val lat = center.latitude()
-    val lon = center.longitude()
-    val dLat = miles / 69.0
-    val dLon = miles / (69.0 * cos(Math.toRadians(lat)))
-    val minLon = lon - dLon
-    val minLat = lat - dLat
-    val maxLon = lon + dLon
-    val maxLat = lat + dLat
-    return "$minLon,$minLat,$maxLon,$maxLat"
-}
-
-private data class GeocodeSuggestion(
-    val title: String,
-    val subtitle: String?,
-    val point: Point
-)
 @Composable
 private fun HeaderSearchBar(
     value: String,
@@ -2465,8 +1727,8 @@ private fun HeaderSearchBar(
         TextField(
             value = value,
             onValueChange = onValueChange,
-            placeholder = { Text(placeholderText, color = Color(0xFF7A7F87)) },
-            leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null, tint = Color(0xFF8E8E93)) },
+            placeholder = { Text(placeholderText, color = AppearanceColors.secondary(Color(0xFF7A7F87))) },
+            leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null, tint = AppearanceColors.secondary(Color(0xFF8E8E93))) },
             trailingIcon = {
                 if (showClearButton && value.isNotEmpty()) {
                     IconButton(
@@ -2476,19 +1738,19 @@ private fun HeaderSearchBar(
                         Icon(
                             Icons.Filled.Clear,
                             contentDescription = "Limpiar",
-                            tint = Color(0xFF8E8E93)
+                            tint = AppearanceColors.secondary(Color(0xFF8E8E93))
                         )
                     }
                 } else if (showMicButton) {
-                    Icon(Icons.Filled.Mic, contentDescription = null, tint = Color(0xFF8E8E93))
+                    Icon(Icons.Filled.Mic, contentDescription = null, tint = AppearanceColors.secondary(Color(0xFF8E8E93)))
                 }
             },
             singleLine = true,
             colors = TextFieldDefaults.colors(
                 focusedIndicatorColor = Color.Transparent,
                 unfocusedIndicatorColor = Color.Transparent,
-                focusedContainerColor = Color.White.copy(alpha = 0.85f),
-                unfocusedContainerColor = Color.White.copy(alpha = 0.85f)
+                focusedContainerColor = AppearanceColors.surface.copy(alpha = 0.85f),
+                unfocusedContainerColor = AppearanceColors.surface.copy(alpha = 0.85f)
             ),
             modifier = Modifier
                 .fillMaxWidth()
@@ -2541,7 +1803,7 @@ private fun RideOptionCard(
             .padding(horizontal = 4.dp, vertical = 6.dp)
             .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(
-            containerColor = Color.White.copy(alpha = if (selected) 0.95f else 0.8f)
+            containerColor = AppearanceColors.surface.copy(alpha = if (selected) 0.95f else 0.8f)
         ),
         elevation = CardDefaults.cardElevation(
             defaultElevation = if (selected) 12.dp else 4.dp
@@ -2622,7 +1884,7 @@ private fun RideOptionCard(
                         Text(
                             text = name.replaceFirstChar { it.titlecase() },
                             style = MaterialTheme.typography.titleMedium,
-                            color = Color(0xFF1C1C1E),
+                            color = AppearanceColors.foreground(Color(0xFF1C1C1E)),
                             fontWeight = FontWeight.Bold
                         )
                         Spacer(modifier = Modifier.height(4.dp))
@@ -2632,14 +1894,14 @@ private fun RideOptionCard(
                             Icon(
                                 Icons.Outlined.Schedule,
                                 contentDescription = null,
-                                tint = Color(0xFF6E6E73),
+                                tint = AppearanceColors.secondary(Color(0xFF6E6E73)),
                                 modifier = Modifier.size(14.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 text = etaStr,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = Color(0xFF6E6E73)
+                                color = AppearanceColors.secondary(Color(0xFF6E6E73))
                             )
                         }
                     }
@@ -2682,22 +1944,34 @@ private fun RideOptionCard(
 }
 
 @Composable
-fun ShortcutRowHeader(onPinClick: () -> Unit, isPinActive: Boolean) {
+fun ShortcutRowHeader(onPinClick: () -> Unit, isPinActive: Boolean,
+    places: List<com.intu.taxi.data.SavedPlace> = emptyList(),
+    onSavedPlaceClick: (com.intu.taxi.data.SavedPlace) -> Unit = {},
+    onConfigurePlace: () -> Unit = {}
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 16.dp)
+            .horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally)
     ) {
         ShortcutCardHeader(
             icon = { Icon(Icons.Outlined.Home, contentDescription = null, tint = Color.White) },
             label = "Casa",
-            isActive = true
+            isActive = places.any { it.id == "casa" },
+            onClick = { places.find { it.id == "casa" }?.let(onSavedPlaceClick) ?: onConfigurePlace() }
         )
         ShortcutCardHeader(
             icon = { Icon(Icons.Outlined.Work, contentDescription = null, tint = Color.White) },
-            label = "Trabajo"
+            label = "Trabajo",
+            isActive = places.any { it.id == "trabajo" },
+            onClick = { places.find { it.id == "trabajo" }?.let(onSavedPlaceClick) ?: onConfigurePlace() }
         )
+        places.filterNot { it.id == "casa" || it.id == "trabajo" }.forEach { place ->
+            ShortcutCardHeader(icon = { Icon(Icons.Outlined.Place, null, tint = Color.White) },
+                label = place.name, onClick = { onSavedPlaceClick(place) })
+        }
         ShortcutCardHeader(
             icon = { Icon(Icons.Outlined.Place, contentDescription = null, tint = Color.White) },
             label = "Marcador",
@@ -2721,7 +1995,7 @@ private fun ShortcutCardHeader(
             .size(width = 76.dp, height = 68.dp)
             .clickable { onClick() },
         shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.18f)),
+        colors = CardDefaults.cardColors(containerColor = AppearanceColors.surface.copy(alpha = 0.18f)),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         border = BorderStroke(1.dp, Color.White.copy(alpha = 0.22f))
     ) {

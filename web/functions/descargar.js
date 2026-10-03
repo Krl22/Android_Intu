@@ -4,6 +4,15 @@
 
 const KEY = 'intu.apk';
 
+function downloadKey(request) {
+  const code = new URL(request.url).searchParams.get('versionCode');
+  if (code === null) return KEY;
+  if (!/^[1-9][0-9]{0,9}$/.test(code) || Number(code) > 2147483647) return null;
+  return `releases/${code}/intu.apk`;
+}
+
+function invalidVersion() { return new Response('Versión inválida.', { status: 400 }); }
+
 function apkHeaders(object) {
   const headers = new Headers();
   object.writeHttpMetadata(headers);
@@ -23,7 +32,9 @@ function notReady() {
 }
 
 export async function onRequestGet({ request, env }) {
-  const object = await env.APK.get(KEY, { range: request.headers, onlyIf: request.headers });
+  const key = downloadKey(request);
+  if (key === null) return invalidVersion();
+  const object = await env.APK.get(key, { range: request.headers, onlyIf: request.headers });
   if (object === null) return notReady();
 
   const headers = apkHeaders(object);
@@ -43,8 +54,10 @@ export async function onRequestGet({ request, env }) {
   return new Response(object.body, { headers });
 }
 
-export async function onRequestHead({ env }) {
-  const object = await env.APK.head(KEY);
+export async function onRequestHead({ request, env }) {
+  const key = downloadKey(request);
+  if (key === null) return invalidVersion();
+  const object = await env.APK.head(key);
   if (object === null) return notReady();
   const headers = apkHeaders(object);
   headers.set('content-length', String(object.size));

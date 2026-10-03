@@ -43,7 +43,8 @@ object SupabaseApi {
         method: String,
         path: String,
         body: JSONObject? = null,
-        prefer: String? = null
+        prefer: String? = null,
+        timeoutMillis: Long? = null
     ): String = withContext(Dispatchers.IO) {
         val builder = Request.Builder()
             .url("${BuildConfig.SUPABASE_URL}/rest/v1/$path")
@@ -61,7 +62,9 @@ object SupabaseApi {
             else -> error("Método HTTP no soportado: $method")
         }
 
-        val call = http.newCall(builder.build())
+        val client = if (timeoutMillis != null) http.newBuilder()
+            .callTimeout(timeoutMillis, java.util.concurrent.TimeUnit.MILLISECONDS).build() else http
+        val call = client.newCall(builder.build())
         val response = try {
             call.execute()
         } catch (e: java.io.IOException) {
@@ -91,6 +94,10 @@ object SupabaseApi {
         message == "driver_not_approved" -> "Tu cuenta de conductor aún no está aprobada."
         message == "invalid_transition" -> "El viaje ya cambió de estado. Intenta de nuevo."
         message == "not_admin" -> "Solo un administrador puede hacer esto."
+        message == "pickup_not_verified" -> "Confirma el punto de recojo antes de publicar."
+        message == "place_not_found" -> "Ese lugar ya no está disponible. Actualiza la lista."
+        message == "place_changed" -> "Otro administrador editó este lugar. Cierra el editor y actualiza la lista."
+        message == "invalid_place" -> "Revisa el nombre y el punto de recojo del lugar."
         message == "last_admin" -> "Debe quedar al menos un administrador. Haz admin a otra cuenta primero."
         message == "account_deleted" -> "Tu cuenta fue eliminada. Inicia sesión de nuevo."
         message == "user_not_found" || message == "driver_not_found" -> "No se encontró esa cuenta."
@@ -100,6 +107,13 @@ object SupabaseApi {
         message == "pin_locked" -> "Demasiados intentos con PIN incorrecto. Cancela el viaje por seguridad."
         message == "ride_not_found" -> "No se encontró el viaje."
         message == "vehicle_type_not_available" -> "Este tipo de vehículo no está disponible."
+        message == "invalid_driver_application" -> "Completa los datos del vehículo, la licencia y el DNI."
+        message == "invalid_delivery_details" -> "Completa los datos del envío y el celular de quien recibe."
+        message == "invalid_payment_stage" -> "Confirma el pago en el momento acordado: recojo o entrega."
+        message == "delivery_payment_required" -> "Confirma primero que recibiste el pago del transporte."
+        message == "delivery_in_custody" -> "Ya confirmaste el pago del envío. Contacta al cliente para resolver cualquier problema."
+        message == "vehicle_change_during_ride" -> "Termina tus viajes antes de cambiar los datos del vehículo."
+        "vehicles_plate_key" in message -> "Esta placa ya está registrada. Revisa el número o reporta el problema a Intu."
         message == "not_authenticated" -> "Inicia sesión para continuar."
         code == "42501" -> "No tienes permiso para realizar esta acción."
         code == "23514" -> "Algunos datos no son válidos. Revísalos e intenta de nuevo."
@@ -146,8 +160,8 @@ object SupabaseApi {
         val body = JSONObject().put("id", user.uid)
         if (firstName.isNotBlank()) body.put("first_name", firstName)
         if (lastName.isNotBlank()) body.put("last_name", lastName)
-        (normalizePhone(phone) ?: user.phoneNumber)?.let { body.put("phone", it) }
-        (email?.takeIf { it.isNotBlank() } ?: user.email)?.let { body.put("email", it) }
+        (user.phoneNumber ?: normalizePhone(phone))?.let { body.put("phone", it) }
+        (user.email ?: email?.takeIf { it.isNotBlank() })?.let { body.put("email", it) }
         (photoUrl ?: user.photoUrl?.toString())?.let { body.put("photo_url", it) }
         if (driverMode != null) body.put("driver_mode", driverMode)
         birthdate?.trim()?.takeIf { Regex("^\\d{4}-\\d{2}-\\d{2}$").matches(it) }?.let { body.put("birthdate", it) }
@@ -166,15 +180,7 @@ object SupabaseApi {
      * espacios o guiones y, si faltan el + y el código de país, asume Perú para 9 dígitos.
      */
     fun normalizePhone(raw: String?): String? {
-        if (raw.isNullOrBlank()) return null
-        val digits = raw.filter(Char::isDigit)
-        val e164 = when {
-            raw.trim().startsWith("+") -> "+$digits"
-            digits.length == 9 -> "+51$digits"
-            digits.length == 11 && digits.startsWith("51") -> "+$digits"
-            else -> return null
-        }
-        return e164.takeIf { Regex("^\\+[1-9][0-9]{6,14}$").matches(it) }
+        return com.intu.taxi.auth.PhoneFormatter.normalizeMobile(raw)
     }
 
     suspend fun syncDriver(
@@ -185,32 +191,19 @@ object SupabaseApi {
         model: String,
         year: Int?,
         plate: String,
-        // Al registrarse como conductor se activa el modo conductor; al migrar datos antiguos, no
-        markDriverMode: Boolean = true
+        // Registrar documentos no concede permiso para conducir.
+        markDriverMode: Boolean = false
     ) {
-        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: error("Inicia sesión para continuar.")
+        FirebaseAuth.getInstance().currentUser ?: error("Inicia sesión para continuar.")
         ensureCurrentProfile(driverMode = if (markDriverMode) true else null)
-        upsert("drivers", JSONObject()
-            .put("id", uid)
-            .put("document_type", "dni")
-            .put("document_number", documentNumber)
-            .put("license_number", licenseNumber))
-
-        val existing = rows("vehicles?driver_id=eq.${encode(uid)}&is_active=eq.true&select=id")
-        val vehicle = JSONObject()
-            .put("driver_id", uid)
-            .put("vehicle_type", vehicleType)
-            .put("brand", brand)
-            .put("model", model)
-            .put("year", year ?: JSONObject.NULL)
-            .put("plate", plate)
-            .put("is_active", true)
-        if (existing.length() > 0) {
-            val id = existing.getJSONObject(0).getString("id")
-            request("PATCH", "vehicles?id=eq.${encode(id)}", vehicle, "return=minimal")
-        } else {
-            request("POST", "vehicles", vehicle, "return=minimal")
-        }
+        rpc("submit_driver_application", JSONObject()
+            .put("p_document_number", documentNumber)
+            .put("p_license_number", licenseNumber)
+            .put("p_vehicle_type", com.intu.taxi.auth.DriverVehicleType.requireCode(vehicleType))
+            .put("p_brand", brand)
+            .put("p_model", model)
+            .put("p_year", year ?: JSONObject.NULL)
+            .put("p_plate", plate))
     }
 
     /** Datos de conductor (documentos, estado y vehículo activo) del usuario con sesión, o null. */

@@ -1,5 +1,6 @@
 package com.intu.taxi.ui.screens
 
+import com.intu.taxi.ui.theme.AppearanceColors
 import android.Manifest
 import android.content.pm.PackageManager
 import android.widget.Toast
@@ -31,6 +32,10 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -110,10 +115,11 @@ import com.mapbox.geojson.Point
 import com.mapbox.maps.CameraOptions
 import com.mapbox.maps.Style
 import com.mapbox.maps.ImageHolder
-import com.mapbox.maps.plugin.locationcomponent.OnIndicatorPositionChangedListener
+import androidx.compose.runtime.collectAsState
+import com.intu.taxi.location.AdminLocationSimulation
+import com.intu.taxi.ui.map.MapLocationBinding
 import com.mapbox.maps.plugin.LocationPuck2D
 import com.mapbox.maps.plugin.locationcomponent.location
-import com.mapbox.maps.plugin.scalebar.scalebar
 import com.mapbox.maps.plugin.annotation.generated.PolylineAnnotationOptions
 import com.mapbox.maps.plugin.annotation.generated.createPolylineAnnotationManager
 import com.mapbox.maps.plugin.annotation.AnnotationPlugin
@@ -163,6 +169,7 @@ fun DriverHomeScreen(
     val driverPrefs = remember { context.getSharedPreferences("intu_driver", android.content.Context.MODE_PRIVATE) }
     var isSearching by rememberSaveable { mutableStateOf(driverPrefs.getBoolean("online", false)) }
     LaunchedEffect(isSearching) { driverPrefs.edit().putBoolean("online", isSearching).apply() }
+    val testLocation by AdminLocationSimulation.preset.collectAsState()
     var currentLocation by remember { mutableStateOf<GeoPoint?>(null) }
     var incomingRideRequests by remember { mutableStateOf<List<DriverRideRequest>>(emptyList()) }
     // Solicitudes que el conductor rechazó: no se le vuelven a mostrar
@@ -182,6 +189,10 @@ fun DriverHomeScreen(
     var pinInput by remember { mutableStateOf("") }
     var pinError by remember { mutableStateOf<String?>(null) }
     var isVerifyingPin by remember { mutableStateOf(false) }
+    var showDeliveryPaymentConfirmation by remember { mutableStateOf(false) }
+    var deliveryActionBusy by remember { mutableStateOf(false) }
+    var deliveryActionError by remember { mutableStateOf<String?>(null) }
+    var deliveryConfirmationStatus by remember { mutableStateOf("") }
     // Punto objetivo del viaje: recojo del pasajero o, ya en viaje, el destino
     var clientLocationMarker by remember { mutableStateOf<GeoPoint?>(null) }
     var clientMarkerAnnotation by remember { mutableStateOf<com.mapbox.maps.plugin.annotation.generated.PointAnnotation?>(null) }
@@ -283,6 +294,7 @@ fun DriverHomeScreen(
 
     // Termina el viaje actual en pantalla: pasa al siguiente en espera o queda libre (y en línea)
     fun moveToNextRideOrClear() {
+        showDeliveryPaymentConfirmation = false
         clearRouteAndPassengerMarker()
         routeDistance = 0.0
         routeDuration = 0.0
@@ -364,7 +376,9 @@ fun DriverHomeScreen(
             if (ride != null && ride.status in setOf("cancelled", "searching")) {
                 queuedRideRequest = null
                 queuedRideId = null
-                Toast.makeText(context, "El pasajero del siguiente viaje canceló", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, if (ride.isDelivery) "El siguiente envío fue cancelado" else "El pasajero del siguiente viaje canceló", Toast.LENGTH_LONG).show()
+            } else if (ride != null) {
+                queuedRideRequest = ride.toDriverRequest()
             }
         }
     }
@@ -378,10 +392,11 @@ fun DriverHomeScreen(
             if (activeRide.status == "cancelled") {
                 // El pasajero canceló: pasa al siguiente viaje o queda libre
                 moveToNextRideOrClear()
-                Toast.makeText(context, "El pasajero canceló el viaje", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, if (activeRide.isDelivery) "Quien envía canceló el pedido" else "El pasajero canceló el viaje", Toast.LENGTH_LONG).show()
                 return@collect
             }
             activeRideStatus = activeRide.status
+            activeRideRequest = activeRide.toDriverRequest()
             // Punto objetivo: recojo mientras va por el pasajero, destino durante el viaje
             activeRide.clientLocation?.let { target ->
                 val previous = clientLocationMarker
@@ -419,9 +434,12 @@ fun DriverHomeScreen(
         mapViewRef = mapView
         // Para saber si la app está visible (con la app minimizada la cámara se mueve sin animación)
         val lifecycleOwner = LocalLifecycleOwner.current
-        AndroidView(factory = { mapView }, modifier = Modifier.fillMaxSize()) { view ->
-            view.mapboxMap.loadStyleUri(Style.MAPBOX_STREETS) {
-                if (!hasLocationPermission) {
+        AndroidView(factory = { mapView }, modifier = Modifier.fillMaxSize())
+        val mapStyle = com.intu.taxi.ui.theme.intuMapStyle()
+        LaunchedEffect(mapView, mapStyle) {
+            mapView.mapboxMap.loadStyleUri(mapStyle) {
+                val view = mapView
+                if (!isStyleLoaded && !hasLocationPermission) {
                     locationPermissionLauncher.launch(
                         arrayOf(
                             Manifest.permission.ACCESS_FINE_LOCATION,
@@ -431,80 +449,40 @@ fun DriverHomeScreen(
                 }
                 // Habilitar puck si hay permiso y personalizar icono de geolocalización
                 view.location.updateSettings {
-                    enabled = hasLocationPermission
                     locationPuck = LocationPuck2D(
                         bearingImage = ImageHolder.from(R.drawable.ic_moto)
                     )
                 }
-                // Ocultar regla de escala para un look limpio
-                view.scalebar.enabled = false
                 // Ruta y marcador del pasajero (la ruta primero, para que el marcador quede encima)
                 if (polylineAnnotationManager == null) polylineAnnotationManager = view.annotations.createPolylineAnnotationManager()
                 if (pointAnnotationManager == null) pointAnnotationManager = view.annotations.createPointAnnotationManager()
                 isStyleLoaded = true
 
-                if (hasLocationPermission) {
-                    // Listener para centrar la cámara inicialmente (solo una vez)
-                    val initialPositionListener = object : OnIndicatorPositionChangedListener {
-                        override fun onIndicatorPositionChanged(point: Point) {
-                            view.mapboxMap.setCamera(
-                                CameraOptions.Builder()
-                                    .center(point)
-                                    .zoom(14.0)
-                                    .build()
-                            )
-                            // Guardar ubicación inicial
-                            currentLocation = GeoPoint(point.latitude(), point.longitude())
-                            
-                            // Viaje retomado sin objetivo todavía: el recojo del pasajero
-                            if (activeRideRequest != null && clientLocationMarker == null) {
-                                setTripTarget(GeoPoint(activeRideRequest!!.originLatitude, activeRideRequest!!.originLongitude))
-                            }
-                            
-                            // Solo una vez para centrar cámara
-                            view.location.removeOnIndicatorPositionChangedListener(this)
-                        }
+            }
+        }
+        MapLocationBinding(mapView, isStyleLoaded, hasLocationPermission, testLocation) { point, first ->
+            val location = GeoPoint(point.latitude(), point.longitude())
+            currentLocation = location
+            if (first) {
+                lastLocationSentMs[0] = 0L
+                mapView.mapboxMap.setCamera(CameraOptions.Builder().center(point).zoom(14.0).build())
+                if (activeRideRequest != null && clientLocationMarker == null) {
+                    setTripTarget(GeoPoint(activeRideRequest!!.originLatitude, activeRideRequest!!.originLongitude))
+                }
+            }
+            val rideId = activeRideId
+            val interval = if (rideId != null) 2_000L else 10_000L
+            val now = System.currentTimeMillis()
+            if ((hasLocationPermission || testLocation != null) &&
+                !com.intu.taxi.driver.DriverOnlineService.isRunning &&
+                (rideId != null || isSearching) && now - lastLocationSentMs[0] >= interval) {
+                lastLocationSentMs[0] = now
+                scope.launch {
+                    runCatching {
+                        val effective = AdminLocationSimulation.effectiveLocation(location) ?: return@runCatching
+                        if (rideId != null) activeRideRepository.updateDriverLocation(rideId, effective)
+                        else driverAvailabilityRepository.updateDriverLocation(effective)
                     }
-                    
-                    // Listener continuo para actualizar ubicación cuando está buscando o en viaje activo
-                    val continuousPositionListener = object : OnIndicatorPositionChangedListener {
-                        override fun onIndicatorPositionChanged(point: Point) {
-                            // Actualizar ubicación actual
-                            val location = GeoPoint(point.latitude(), point.longitude())
-                            currentLocation = location
-
-                            // El GPS avisa varias veces por segundo; a Supabase se envía cada 2 s en viaje
-                            // (el pasajero lo sigue en el mapa) y cada 10 s en línea sin viaje.
-                            // Si el servicio en segundo plano está activo, él envía la ubicación
-                            val rideId = activeRideId
-                            val interval = if (rideId != null) 2_000L else 10_000L
-                            val now = System.currentTimeMillis()
-                            if (!com.intu.taxi.driver.DriverOnlineService.isRunning &&
-                                (rideId != null || isSearching) && now - lastLocationSentMs[0] >= interval) {
-                                lastLocationSentMs[0] = now
-                                scope.launch {
-                                    runCatching {
-                                        if (rideId != null) {
-                                            activeRideRepository.updateDriverLocation(rideId, location)
-                                        } else {
-                                            driverAvailabilityRepository.updateDriverLocation(location)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    
-                    view.location.addOnIndicatorPositionChangedListener(initialPositionListener)
-                    view.location.addOnIndicatorPositionChangedListener(continuousPositionListener)
-                } else {
-                    // Fallback: centrar en una ubicación por defecto
-                    view.mapboxMap.setCamera(
-                        CameraOptions.Builder()
-                            .center(Point.fromLngLat(-73.9857, 40.7484))
-                            .zoom(12.0)
-                            .build()
-                    )
                 }
             }
         }
@@ -514,7 +492,7 @@ fun DriverHomeScreen(
         LaunchedEffect(Unit) {
             com.intu.taxi.driver.DriverSession.location.collect { location ->
                 if (location != null && !lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
-                    currentLocation = location
+                    currentLocation = AdminLocationSimulation.effectiveLocation(location)
                 }
             }
         }
@@ -591,8 +569,8 @@ fun DriverHomeScreen(
                             routeAnnotation = lines.create(
                                 PolylineAnnotationOptions()
                                     .withPoints(routePoints)
-                                    .withLineColor("#08817E")
-                                    .withLineWidth(6.0)
+                                    .withLineColor(com.intu.taxi.ui.map.TripRouteStyle.lineColorHex)
+                                    .withLineWidth(com.intu.taxi.ui.map.TripRouteStyle.lineWidth)
                             )
                         } else {
                             line.points = routePoints
@@ -810,6 +788,10 @@ fun DriverHomeScreen(
                             pinInput = ""
                             pinError = null
                             showPinDialog = true
+                        } else if (request.isDelivery && activeRideStatus == "in_progress") {
+                            deliveryActionError = null
+                            deliveryConfirmationStatus = activeRideStatus
+                            showDeliveryPaymentConfirmation = true
                         } else scope.launch {
                             val rideId = activeRideId ?: return@launch
                             val nextStatus = when (activeRideStatus) {
@@ -869,7 +851,7 @@ fun DriverHomeScreen(
                         modifier = Modifier
                             .padding(horizontal = 16.dp)
                             .fillMaxWidth()
-                            .background(Color.White, RoundedCornerShape(14.dp))
+                            .background(AppearanceColors.surface, RoundedCornerShape(14.dp))
                             .padding(horizontal = 12.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -879,12 +861,12 @@ fun DriverHomeScreen(
                             Text(
                                 "Siguiente: ${next.userName.ifBlank { "Pasajero" }}",
                                 fontWeight = FontWeight.SemiBold,
-                                color = Color(0xFF1E1F47)
+                                color = AppearanceColors.foreground(Color(0xFF1E1F47))
                             )
                             Text(
                                 next.originAddress,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = Color.Gray,
+                                color = AppearanceColors.secondary(Color.Gray),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -902,7 +884,7 @@ fun DriverHomeScreen(
                                         Toast.makeText(context, it.message ?: "No se pudo cancelar", Toast.LENGTH_LONG).show()
                                     }
                             }
-                        }) { Text("Cancelar", color = Color(0xFFB42318)) }
+                        }) { Text("Cancelar", color = AppearanceColors.highlight(Color(0xFFB42318))) }
                     }
                 } else if (canReceiveRequests && incomingRideRequests.isNotEmpty()) {
                     Text(
@@ -952,6 +934,40 @@ fun DriverHomeScreen(
             )
         }
 
+        val deliveryRequest = activeRideRequest
+        if (showDeliveryPaymentConfirmation && deliveryRequest?.isDelivery == true) {
+            DeliveryPaymentDialog(
+                request = deliveryRequest, pickup = deliveryConfirmationStatus == "arrived",
+                busy = deliveryActionBusy, error = deliveryActionError,
+                onDismiss = { showDeliveryPaymentConfirmation = false },
+                onConfirm = {
+                    val rideId = activeRideId
+                    if (!deliveryActionBusy && rideId != null) scope.launch {
+                        deliveryActionBusy = true
+                        deliveryActionError = null
+                        try {
+                            check(activeRideStatus == deliveryConfirmationStatus) { "El envío cambió de estado. Cierra este diálogo y actualiza." }
+                            if (deliveryRequest.delivery?.paymentCollected != true) {
+                                activeRideRepository.confirmDeliveryPayment(rideId).getOrThrow()
+                            }
+                            val nextStatus = if (deliveryConfirmationStatus == "arrived") "in_progress" else "completed"
+                            val updated = activeRideRepository.advanceRide(rideId, nextStatus).getOrThrow()
+                            activeRideStatus = updated.status
+                            showDeliveryPaymentConfirmation = false
+                            if (nextStatus == "completed") {
+                                rideToRate = rideId to deliveryRequest
+                                moveToNextRideOrClear()
+                            } else {
+                                setTripTarget(com.google.firebase.firestore.GeoPoint(deliveryRequest.destinationLatitude, deliveryRequest.destinationLongitude))
+                            }
+                        } catch (e: Exception) {
+                            deliveryActionError = e.message ?: "No se pudo confirmar. Intenta de nuevo."
+                        } finally { deliveryActionBusy = false }
+                    }
+                }
+            )
+        }
+
         // PIN de seguridad: el viaje solo inicia si el pasajero le dicta al conductor el PIN correcto
         if (showPinDialog) {
             AlertDialog(
@@ -959,7 +975,9 @@ fun DriverHomeScreen(
                 title = { Text("PIN de seguridad") },
                 text = {
                     Column {
-                        Text("Pídele al pasajero su PIN de 4 dígitos. Lo ve en su app.")
+                        Text(if (activeRideRequest?.isDelivery == true)
+                            "Pide el PIN de 4 dígitos a quien envía el paquete antes de recibirlo. Lo ve en su app."
+                            else "Pídele al pasajero su PIN de 4 dígitos. Lo ve en su app.")
                         Spacer(modifier = Modifier.height(16.dp))
                         OutlinedTextField(
                             value = pinInput,
@@ -978,20 +996,28 @@ fun DriverHomeScreen(
                         )
                         pinError?.let {
                             Spacer(modifier = Modifier.height(8.dp))
-                            Text(it, color = Color(0xFFB42318), style = MaterialTheme.typography.bodySmall)
+                            Text(it, color = AppearanceColors.highlight(Color(0xFFB42318)), style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 },
                 confirmButton = {
                     TextButton(
-                        enabled = pinInput.length == 4 && !isVerifyingPin,
+                        enabled = pinInput.length == 4 && !isVerifyingPin &&
+                            (activeRideRequest?.isDelivery != true || activeRideRequest?.delivery != null),
                         onClick = {
                             val rideId = activeRideId ?: return@TextButton
                             isVerifyingPin = true
                             scope.launch {
                                 activeRideRepository.verifyStartPin(rideId, pinInput)
                                     .onSuccess { (verified, attemptsLeft) ->
-                                        if (verified) {
+                                        if (verified && activeRideRequest?.isDelivery == true &&
+                                            activeRideRequest?.delivery?.payer == com.intu.taxi.models.DeliveryPayer.SENDER &&
+                                            activeRideRequest?.delivery?.paymentCollected != true) {
+                                            showPinDialog = false
+                                            deliveryActionError = null
+                                            deliveryConfirmationStatus = activeRideStatus
+                                            showDeliveryPaymentConfirmation = true
+                                        } else if (verified) {
                                             activeRideRepository.advanceRide(rideId, "in_progress")
                                                 .onSuccess {
                                                     activeRideStatus = "in_progress"
@@ -1012,7 +1038,7 @@ fun DriverHomeScreen(
                                 isVerifyingPin = false
                             }
                         }
-                    ) { Text(if (isVerifyingPin) "Verificando…" else "Iniciar viaje") }
+                    ) { Text(if (isVerifyingPin) "Verificando…" else if (activeRideRequest?.isDelivery == true) "Recoger paquete" else "Iniciar viaje") }
                 },
                 dismissButton = {
                     TextButton(enabled = !isVerifyingPin, onClick = { showPinDialog = false }) { Text("Cancelar") }
@@ -1149,7 +1175,10 @@ private fun com.intu.taxi.models.ActiveRide.toDriverRequest() = DriverRideReques
     destinationAddress = destinationAddress,
     estimatedPrice = fare,
     paymentMethod = paymentMethod,
-    status = status
+    status = status,
+    rideType = vehicleType,
+    serviceKind = serviceKind,
+    delivery = delivery
 )
 
 // Función para crear icono de pasajero con diseño moderno similar a HomeScreen
@@ -1224,8 +1253,8 @@ fun EnhancedActiveRideCard(
 ) {
     var isMinimized by remember { mutableStateOf(true) } // Inicialmente minimizado
     val primaryAction = when (status) {
-        "arrived" -> "Iniciar viaje"
-        "in_progress" -> "Confirmar pago y finalizar"
+        "arrived" -> if (request.isDelivery) "Recoger paquete" else "Iniciar viaje"
+        "in_progress" -> if (request.isDelivery) "Confirmar entrega" else "Confirmar pago y finalizar"
         else -> "Llegué"
     }
     
@@ -1234,13 +1263,15 @@ fun EnhancedActiveRideCard(
             .fillMaxWidth()
             .padding(16.dp),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = AppearanceColors.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(if (isMinimized) 12.dp else 20.dp)
+                .heightIn(max = 560.dp)
+                .verticalScroll(rememberScrollState())
         ) {
             // Header con estado del viaje y botón de minimizar
             Row(
@@ -1252,7 +1283,7 @@ fun EnhancedActiveRideCard(
                     url = request.userPhotoUrl,
                     size = if (isMinimized) 40.dp else 56.dp,
                     zoomable = true,
-                    contentDescription = "Foto del pasajero"
+                    contentDescription = if (request.isDelivery) "Foto de quien envía" else "Foto del pasajero"
                 )
 
                 Spacer(modifier = Modifier.width(if (isMinimized) 8.dp else 12.dp))
@@ -1261,27 +1292,27 @@ fun EnhancedActiveRideCard(
                     Text(
                         text = when (status) {
                             "arrived" -> "En el punto de recojo"
-                            "in_progress" -> "Viaje en curso"
-                            else -> "Viaje aceptado"
+                            "in_progress" -> if (request.isDelivery) "Envío en curso" else "Viaje en curso"
+                            else -> if (request.isDelivery) "Envío aceptado" else "Viaje aceptado"
                         },
                         style = if (isMinimized) MaterialTheme.typography.bodySmall else MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF1E1F47)
+                        color = AppearanceColors.foreground(Color(0xFF1E1F47))
                     )
                     Text(
-                        text = request.userName.ifBlank { "Pasajero" },
+                        text = request.userName.ifBlank { if (request.isDelivery) "Quien envía" else "Pasajero" },
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFF5F6570)
+                        color = AppearanceColors.secondary(Color(0xFF5F6570))
                     )
                     if (!isMinimized) {
                         Text(
                             text = when (status) {
-                                "arrived" -> "Recoge al pasajero e inicia el viaje"
-                                "in_progress" -> "Al terminar, confirma el pago recibido"
+                                "arrived" -> if (request.isDelivery) "Verifica el PIN para recibir el paquete" else "Recoge al pasajero e inicia el viaje"
+                                "in_progress" -> if (request.isDelivery) "Entrega el paquete a quien lo recibe" else "Al terminar, confirma el pago recibido"
                                 else -> "Dirígete al punto de recogida"
                             },
                             style = MaterialTheme.typography.bodySmall,
-                            color = Color.Gray
+                            color = AppearanceColors.secondary(Color.Gray)
                         )
                     }
                 }
@@ -1290,7 +1321,7 @@ fun EnhancedActiveRideCard(
                 Icon(
                     imageVector = if (isMinimized) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
                     contentDescription = if (isMinimized) "Expandir" else "Minimizar",
-                    tint = Color(0xFF08817E),
+                    tint = AppearanceColors.highlight(Color(0xFF08817E)),
                     modifier = Modifier
                         .size(if (isMinimized) 20.dp else 24.dp)
                         .clickable { isMinimized = !isMinimized }
@@ -1309,13 +1340,13 @@ fun EnhancedActiveRideCard(
                     ) {
                         LinearProgressIndicator(
                             modifier = Modifier.weight(1f),
-                            color = Color(0xFF08817E)
+                            color = AppearanceColors.highlight(Color(0xFF08817E))
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = "Calculando ruta...",
                             style = MaterialTheme.typography.bodySmall,
-                            color = Color.Gray
+                            color = AppearanceColors.secondary(Color.Gray)
                         )
                     }
                 } else if (distance > 0 && duration > 0) {
@@ -1330,7 +1361,7 @@ fun EnhancedActiveRideCard(
                             Icon(
                                 imageVector = Icons.Default.Navigation,
                                 contentDescription = null,
-                                tint = Color(0xFF08817E),
+                                tint = AppearanceColors.highlight(Color(0xFF08817E)),
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(modifier = Modifier.height(4.dp))
@@ -1338,12 +1369,12 @@ fun EnhancedActiveRideCard(
                                 text = "${String.format("%.1f", distance)} km",
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Medium,
-                                color = Color(0xFF1E1F47)
+                                color = AppearanceColors.foreground(Color(0xFF1E1F47))
                             )
                             Text(
                                 text = "Distancia",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = Color.Gray
+                                color = AppearanceColors.secondary(Color.Gray)
                             )
                         }
                         
@@ -1354,7 +1385,7 @@ fun EnhancedActiveRideCard(
                             Icon(
                                 imageVector = Icons.Default.Schedule,
                                 contentDescription = null,
-                                tint = Color(0xFF08817E),
+                                tint = AppearanceColors.highlight(Color(0xFF08817E)),
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(modifier = Modifier.height(4.dp))
@@ -1362,12 +1393,12 @@ fun EnhancedActiveRideCard(
                                 text = "${String.format("%.0f", duration)} min",
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Medium,
-                                color = Color(0xFF1E1F47)
+                                color = AppearanceColors.foreground(Color(0xFF1E1F47))
                             )
                             Text(
                                 text = "Tiempo",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = Color.Gray
+                                color = AppearanceColors.secondary(Color.Gray)
                             )
                         }
                     }
@@ -1390,14 +1421,14 @@ fun EnhancedActiveRideCard(
                         Icon(
                             imageVector = Icons.Default.LocationOn,
                             contentDescription = null,
-                            tint = Color(0xFF08817E),
+                            tint = AppearanceColors.highlight(Color(0xFF08817E)),
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(12.dp))
                         Text(
                             text = if (status == "in_progress") request.destinationAddress else request.originAddress,
                             style = MaterialTheme.typography.bodyMedium,
-                            color = Color(0xFF1E1F47),
+                            color = AppearanceColors.foreground(Color(0xFF1E1F47)),
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f)
@@ -1407,11 +1438,20 @@ fun EnhancedActiveRideCard(
                 
                 Spacer(modifier = Modifier.height(20.dp))
 
+                if (request.isDelivery) {
+                    request.delivery?.let { DeliverySummary(it, allowCall = true) }
+                    if (request.userPhone.isNotBlank()) {
+                        val context = LocalContext.current
+                        OutlinedButton(onClick = { context.startActivity(android.content.Intent(android.content.Intent.ACTION_DIAL,
+                            android.net.Uri.parse("tel:${request.userPhone}"))) }) { Text("Llamar a quien envía") }
+                    }
+                }
+
                 Text(
-                    text = "Cobrar ${com.intu.taxi.ui.formatSoles(request.estimatedPrice)} · ${if (request.paymentMethod == "yape_plin") "Yape" else "Efectivo"}",
+                    text = "${if (request.delivery?.paymentCollected == true) "Transporte pagado" else "Cobrar"} ${com.intu.taxi.ui.formatSoles(request.estimatedPrice)} · ${if (request.paymentMethod == "yape_plin") "Yape" else "Efectivo"}",
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF08817E)
+                    color = AppearanceColors.highlight(Color(0xFF08817E))
                 )
                 Spacer(modifier = Modifier.height(12.dp))
             }
@@ -1481,6 +1521,7 @@ fun EnhancedActiveRideCard(
                     
                     Button(
                         onClick = onCancel,
+                        enabled = !request.isDelivery || (status != "in_progress" && request.delivery?.paymentCollected != true),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color(0xFFFF5252).copy(alpha = 0.1f),
                             contentColor = Color(0xFFFF5252)

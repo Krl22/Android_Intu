@@ -13,6 +13,8 @@ const { initializeApp } = require('firebase-admin/app');
 const { getAuth } = require('firebase-admin/auth');
 const { getMessaging } = require('firebase-admin/messaging');
 const { getStorage } = require('firebase-admin/storage');
+const { createAccountAccessHandler } = require('./account-access');
+const { adminActivityMessage } = require('./admin-activity');
 
 initializeApp();
 
@@ -53,6 +55,13 @@ async function supabaseRpc(name, body, bearer = SUPABASE_PUBLISHABLE_KEY) {
   return text;
 }
 
+// Datos de vinculación obtenidos de Firebase Auth, nunca inferidos del perfil de contacto.
+exports.adminGetAccountAccess = onCall(createAccountAccessHandler({
+  isAdmin: async (bearer) => JSON.parse(await supabaseRpc('is_admin', {}, bearer)) === true,
+  getUsers: (identifiers) => getAuth().getUsers(identifiers),
+  HttpsError,
+}));
+
 // ---------------------------------------------------------------------
 // Avisos push de los viajes
 // ---------------------------------------------------------------------
@@ -89,7 +98,11 @@ exports.ridePush = onRequest({ secrets: [pushWebhookSecret], cors: false }, asyn
     return;
   }
 
-  const result = await getMessaging().sendEachForMulticast({
+  let payload;
+  if (req.body.kind === 'admin_activity') {
+    try { payload = adminActivityMessage(req.body, list); }
+    catch (_) { res.status(400).send('bad_request'); return; }
+  } else payload = {
     tokens: list,
     notification: { title: String(title), body: String(body || '') },
     data: { rideId: String(rideId || ''), status: String(status || '') },
@@ -104,7 +117,8 @@ exports.ridePush = onRequest({ secrets: [pushWebhookSecret], cors: false }, asyn
         tag: String(rideId || 'ride'),
       },
     },
-  });
+  };
+  const result = await getMessaging().sendEachForMulticast(payload);
 
   const dead = list.filter((_, i) => {
     const r = result.responses[i];

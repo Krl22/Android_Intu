@@ -30,6 +30,7 @@ import com.intu.taxi.models.ActiveRide
 import com.intu.taxi.repositories.ActiveRideRepository
 import com.intu.taxi.repositories.DriverAvailabilityRepository
 import com.intu.taxi.ui.formatSoles
+import com.intu.taxi.location.AdminLocationSimulation
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -99,7 +100,20 @@ class DriverOnlineService : Service() {
     private var locationManager: LocationManager? = null
 
     @Volatile private var openRides: List<ActiveRide> = emptyList()
-    private var lastLocationSentMs = 0L
+    private var lastRealLocation: GeoPoint? = null
+    private val locationPublisher = DriverLocationPublisher(
+        location = {
+            if (FirebaseAuth.getInstance().currentUser == null) null
+            else AdminLocationSimulation.effectiveLocation(lastRealLocation)
+        },
+        activeRide = { DriverSession.activeRideId ?: openRides.firstOrNull()?.rideId },
+        online = { prefs.getBoolean("online", false) },
+        send = { point, rideId ->
+            if (rideId != null) rideRepository.updateDriverLocation(rideId, point)
+            else availabilityRepository.updateDriverLocation(point)
+        },
+        clock = android.os.SystemClock::elapsedRealtime
+    )
     private val notifiedRequestIds = mutableSetOf<String>()
 
     private val locationListener = object : LocationListener {
@@ -115,6 +129,7 @@ class DriverOnlineService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        AdminLocationSimulation.initialize()
         createChannels()
     }
 
@@ -131,6 +146,23 @@ class DriverOnlineService : Service() {
         if (!isRunning) {
             isRunning = true
             startLocationUpdates()
+            scope.launch {
+                AdminLocationSimulation.preset.collect {
+                    publishLocation(force = true)
+                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                        ContextCompat.checkSelfPermission(this@DriverOnlineService, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+                        runCatching { NotificationManagerCompat.from(this@DriverOnlineService)
+                            .notify(ONLINE_NOTIFICATION_ID, onlineNotification()) }
+                    }
+                }
+            }
+            scope.launch {
+                // A fixed test location has no GPS movement callbacks; keep the normal heartbeat.
+                while (isActive) {
+                    if (AdminLocationSimulation.currentPreset() != null) publishLocation()
+                    delay(2_000)
+                }
+            }
             scope.launch { loop() }
         }
         return START_STICKY
@@ -185,28 +217,22 @@ class DriverOnlineService : Service() {
 
     /** Cada 2 s en viaje (el pasajero lo sigue en el mapa) y cada 10 s en línea sin viaje. */
     private fun onLocation(location: Location) {
-        DriverSession.location.value = GeoPoint(location.latitude, location.longitude)
-        val rideId = DriverSession.activeRideId ?: openRides.firstOrNull()?.rideId
-        val interval = if (rideId != null) 2_000L else 10_000L
-        val now = System.currentTimeMillis()
-        if (now - lastLocationSentMs < interval) return
-        lastLocationSentMs = now
-        val point = GeoPoint(location.latitude, location.longitude)
-        scope.launch(Dispatchers.IO) {
-            runCatching {
-                if (rideId != null) {
-                    rideRepository.updateDriverLocation(rideId, point)
-                } else if (prefs.getBoolean("online", false)) {
-                    availabilityRepository.updateDriverLocation(point)
-                }
-            }
+        lastRealLocation = GeoPoint(location.latitude, location.longitude)
+        publishLocation()
+    }
+
+    private fun publishLocation(force: Boolean = false) {
+        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
+        DriverSession.location.value = AdminLocationSimulation.effectiveLocation(lastRealLocation)
+        scope.launch {
+            if (FirebaseAuth.getInstance().currentUser?.uid == uid) runCatching { locationPublisher.publish(force) }
         }
     }
 
     private suspend fun notifyNewRequests() {
         val rows = runCatching {
             SupabaseApi.rows(
-                "rides?status=eq.searching&select=id,estimated_fare,origin_address,destination_address,rider_name,payment_method" +
+                "rides?status=eq.searching&select=id,estimated_fare,origin_address,destination_address,rider_name,payment_method,service_kind" +
                     "&order=requested_at.desc&limit=10"
             )
         }.getOrNull() ?: return
@@ -227,10 +253,11 @@ class DriverOnlineService : Service() {
         val origin = row.str("origin_address", "Punto de recojo")
         val destination = row.str("destination_address", "Destino")
         val payment = if (row.str("payment_method") == "yape_plin") "Yape" else "Efectivo"
-        val rider = row.str("rider_name", "Pasajero")
+        val delivery = row.str("service_kind") == "delivery"
+        val rider = row.str("rider_name", if (delivery) "Quien envía" else "Pasajero")
         val notification = NotificationCompat.Builder(this, REQUESTS_CHANNEL)
             .setSmallIcon(R.drawable.ic_stat_intu)
-            .setContentTitle("Nueva solicitud · $fare")
+            .setContentTitle("${if (delivery) "Nuevo envío" else "Nueva solicitud"} · $fare")
             .setContentText("$origin → $destination")
             .setStyle(
                 NotificationCompat.BigTextStyle()
@@ -248,7 +275,8 @@ class DriverOnlineService : Service() {
     private fun onlineNotification() = NotificationCompat.Builder(this, ONLINE_CHANNEL)
         .setSmallIcon(R.drawable.ic_stat_intu)
         .setContentTitle("Estás en línea")
-        .setContentText("Intu te avisará cuando haya solicitudes de viaje")
+        .setContentText(AdminLocationSimulation.currentPreset()?.let { "Ubicación de prueba: ${it.label}" }
+            ?: "Intu te avisará cuando haya solicitudes de viaje")
         .setOngoing(true)
         .setPriority(NotificationCompat.PRIORITY_LOW)
         .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
