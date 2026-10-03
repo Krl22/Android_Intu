@@ -102,7 +102,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Navigation
  
@@ -646,12 +645,19 @@ fun HomeScreen(
             (permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true)
     }
 
+    val showTripMap = isSelectingPoint || isRideOptionsVisible || isSearchingDriver || activeRide != null ||
+        isCalculatingDestinationRoute || isCreatingRideRequest || currentRideRequestId != null
+
     Box(modifier = Modifier.fillMaxSize()) {
         val mapView = rememberMapViewWithLifecycle(accessToken = mapboxToken)
         mapViewRef = mapView
         // Para saber si la app está visible (con la app minimizada la cámara se mueve sin animación)
         val lifecycleOwner = LocalLifecycleOwner.current
-        AndroidView(factory = { mapView }, modifier = Modifier.fillMaxSize().testTag("home-map"))
+        // Keep GPS and route state ready, but present an opaque landing instead of a map at rest.
+        AndroidView(factory = { mapView }, update = { view ->
+            view.visibility = if (showTripMap) android.view.View.VISIBLE else android.view.View.INVISIBLE
+        }, modifier = Modifier.fillMaxSize()
+            .testTag(if (showTripMap) "home-map" else "home-location-engine"))
 
         val mapStyle = com.intu.taxi.ui.theme.intuMapStyle()
         var isStyleLoaded by remember { mutableStateOf(false) }
@@ -1033,108 +1039,50 @@ fun HomeScreen(
             addressSearchRepository.search(it, userLocation?.latitude(), userLocation?.longitude())
         }
 
-        if (!isSelectingPoint && !isRideOptionsVisible && !isSearchingDriver && activeRide == null) {
-            // Estado inicial: mostrar header completo con gradiente, títulos y atajos
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .fillMaxHeight(0.5f)
-                    .drawBehind {
-                        val teal = Color(0xFF08817E)
-                        val indigo = Color(0xFF1E1F47)
-                        val shiftY = size.height * headerShiftFraction
-                        withTransform({ translate(left = 0f, top = -shiftY) }) {
-                            drawRect(
-                                brush = Brush.radialGradient(
-                                    colors = listOf(teal, indigo),
-                                    center = Offset(0.1f, 0.1f),
-                                    radius = size.height * 0.9f
-                                ),
-                                size = Size(width = size.width, height = size.height)
-                            )
-                            withTransform({
-                                scale(scaleX = 1.6f, scaleY = 1.0f, pivot = Offset.Zero)
-                            }) {
-                                drawRect(
-                                    brush = Brush.radialGradient(
-                                        colorStops = arrayOf(
-                                            0.00f to Color.White.copy(alpha = 1.0f),
-                                            0.70f to Color.White.copy(alpha = 1.0f),
-                                            0.75f to Color.White.copy(alpha = 0.95f),
-                                            0.80f to Color.White.copy(alpha = 0.85f),
-                                            0.85f to Color.White.copy(alpha = 0.70f),
-                                            0.90f to Color.White.copy(alpha = 0.45f),
-                                            0.95f to Color.White.copy(alpha = 0.25f),
-                                            1.00f to Color.Transparent
-                                        ),
-                                        center = Offset(0f, 0f),
-                                        radius = max(size.width, size.height)
-                                    ),
-                                    size = Size(width = size.width, height = size.height),
-                                    blendMode = BlendMode.DstIn
-                                )
-                            }
-                        }
+        if (!showTripMap) {
+            CommercialHome(
+                padding = padding,
+                greetingName = greetingName,
+                searchActive = isSearchFocused || isKeyboardVisible || searchQuery.isNotBlank(),
+                onTravel = {
+                    selectedMotoOptionCode = com.intu.taxi.models.MotoOption.ANY.code
+                    isDelivery = false
+                    isSelectingDestination = true
                 },
-                contentAlignment = Alignment.TopCenter
-            ) {
-                AnimatedVisibility(
-                    visible = headerVisible,
-                    enter = fadeIn() + slideInVertically(initialOffsetY = { -it })
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 45.dp, start = 16.dp, end = 16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                    // Mostrar títulos solo cuando el teclado NO está visible
-                    if (!isKeyboardVisible) {
-                        Text(
-                            text = "intu",
-                            color = Color.White,
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 32.sp
-                        )
-                        Spacer(modifier = Modifier.height(30.dp))
-                        Text(
-                            text = if (greetingName.isNotBlank()) "¡Hola, $greetingName!" else "¡Hola!",
-                            color = Color.White,
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontSize = 24.sp
-                        )
-                        Spacer(modifier = Modifier.height(40.dp))
-                    } else {
-                        Spacer(modifier = Modifier.height(12.dp))
+                onDelivery = {
+                    selectedMotoOptionCode = com.intu.taxi.models.MotoOption.DELIVERY.code
+                    isDelivery = true
+                    isSelectingDestination = true
+                },
+                searchContent = {
+                    HeaderSearchBar(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        onFocusChange = { focused -> isSearchFocused = focused },
+                        placeholderText = "¿A dónde vamos?",
+                        modifier = Modifier.padding(horizontal = 24.dp),
+                        showClearButton = true,
+                        onClearClick = { searchQuery = "" }
+                    )
+                    if (isSearchFocused && searchQuery.trim().length >= 2) {
+                        PlaceSearchPanel(mergePlaceSearchResults(suggestions, addressSearch.results), catalog.places.isNotEmpty(), catalogLoading, catalogError,
+                            onSelect = { place ->
+                                val point = Point.fromLngLat(place.longitude, place.latitude)
+                                mapView.mapboxMap.setCamera(CameraOptions.Builder().center(point).zoom(16.0).build())
+                                selectedDestination = point
+                                searchQuery = place.name
+                                suggestions = emptyList()
+                                isSelectingDestination = true
+                            }, onRefresh = { catalogRefresh++ },
+                            onPickMap = { searchQuery = ""; isSelectingDestination = true },
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                            addressLoading = addressSearch.loading, addressError = addressSearch.error)
                     }
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        HeaderSearchBar(
-                            value = searchQuery,
-                            onValueChange = { searchQuery = it },
-                            onFocusChange = { focused -> isSearchFocused = focused },
-                            placeholderText = "¿A dónde vamos?",
-                            modifier = Modifier.padding(horizontal = 8.dp)
-                        )
-                        if (isSearchFocused && searchQuery.trim().length >= 2) {
-                            PlaceSearchPanel(mergePlaceSearchResults(suggestions, addressSearch.results), catalog.places.isNotEmpty(), catalogLoading, catalogError,
-                                onSelect = { place ->
-                                    val point = Point.fromLngLat(place.longitude, place.latitude)
-                                    mapView.mapboxMap.setCamera(CameraOptions.Builder().center(point).zoom(16.0).build())
-                                    selectedDestination = point
-                                    searchQuery = place.name
-                                    suggestions = emptyList()
-                                    isSelectingDestination = true
-                                }, onRefresh = { catalogRefresh++ },
-                                onPickMap = { searchQuery = ""; isSelectingDestination = true },
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-                                addressLoading = addressSearch.loading, addressError = addressSearch.error)
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(30.dp))
+                },
+                shortcuts = {
                     ShortcutRowHeader(
-                        onPinClick = { isSelectingDestination = !isSelectingDestination },
-                        isPinActive = isSelectingDestination,
+                        onPinClick = { isSelectingDestination = true },
+                        isPinActive = false,
                         places = savedPlaces,
                         onSavedPlaceClick = { place ->
                             val destination = Point.fromLngLat(place.longitude, place.latitude)
@@ -1145,8 +1093,7 @@ fun HomeScreen(
                         onConfigurePlace = { showSavedPlaces = true }
                     )
                 }
-                }
-            }
+            )
         } else if (isSelectingPoint && !isSearchingDriver && activeRide == null) {
             // Modo pin: usar la misma animación global (25% de página)
             Box(
@@ -1242,8 +1189,7 @@ fun HomeScreen(
                                     pinSearchQuery = ""
                                     pinSuggestions = emptyList()
                                     hasUserInteractedWithPinSearch = false
-                                },
-                                showMicButton = false
+                                }
                             )
                             if (hasUserInteractedWithPinSearch && pinSearchQuery.trim().length >= 2) {
                                 PlaceSearchPanel(mergePlaceSearchResults(pinSuggestions, pinAddressSearch.results), catalog.places.isNotEmpty(), catalogLoading, catalogError,
@@ -1715,8 +1661,7 @@ private fun HeaderSearchBar(
     modifier: Modifier = Modifier,
     placeholderText: String = "¿A dónde quieres ir?",
     showClearButton: Boolean = false,
-    onClearClick: () -> Unit = {},
-    showMicButton: Boolean = true
+    onClearClick: () -> Unit = {}
 ) {
     Box(
         modifier = modifier
@@ -1741,8 +1686,6 @@ private fun HeaderSearchBar(
                             tint = AppearanceColors.secondary(Color(0xFF8E8E93))
                         )
                     }
-                } else if (showMicButton) {
-                    Icon(Icons.Filled.Mic, contentDescription = null, tint = AppearanceColors.secondary(Color(0xFF8E8E93)))
                 }
             },
             singleLine = true,
