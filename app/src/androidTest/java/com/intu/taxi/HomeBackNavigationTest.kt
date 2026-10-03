@@ -57,11 +57,11 @@ class HomeBackNavigationTest {
             }, rideRequestSender = { error("Esta prueba nunca debe enviar viajes") })
         } }
         compose.waitUntil(60_000) { gps.consumers.isNotEmpty() }
-        compose.onNodeWithText("Marcador").performClick()
+        compose.onNodeWithTag("home-pick-destination").performClick()
         compose.onNodeWithText("Confirmar destino").performClick()
         compose.waitUntil(5000) { entered.get() }
         pressBack()
-        compose.onNodeWithText("Marcador").assertIsDisplayed()
+        compose.onNodeWithTag("home-pick-destination").assertIsDisplayed()
         compose.runOnIdle { releaseRoute.complete(Unit) }
         compose.waitForIdle()
         compose.onNodeWithText("Elige tu moto").assertDoesNotExist()
@@ -93,7 +93,7 @@ class HomeBackNavigationTest {
             mapRef.set(view as MapView)
         }
         val map = mapRef.get()
-        compose.onNodeWithText("Marcador").performClick()
+        compose.onNodeWithTag("home-pick-destination").performClick()
         compose.runOnIdle { map.mapboxMap.setCamera(CameraOptions.Builder().center(destination).zoom(15.0).build()) }
         if (stage != "destination") {
             compose.onNodeWithText("Confirmar destino").assertIsEnabled().performClick()
@@ -115,7 +115,7 @@ class HomeBackNavigationTest {
         compose.onNodeWithText("Confirmar destino").assertDoesNotExist()
         compose.onNodeWithText("Elegir punto de recojo").assertDoesNotExist()
         compose.onNodeWithText("Solicitar viaje").assertDoesNotExist()
-        compose.onNodeWithText("Marcador").assertIsDisplayed()
+        compose.onNodeWithTag("home-pick-destination").assertIsDisplayed()
         val camera = compose.runOnIdle { map.mapboxMap.cameraState }
         assertTrue("El inicio debe centrarse en el GPS más reciente", TripMap.metersBetween(latest, camera.center) < 1.0)
         assertEquals(0.0, camera.padding.bottom, 0.01)
@@ -123,7 +123,7 @@ class HomeBackNavigationTest {
         assertEquals(0, requests.get())
 
         // El siguiente destino parte de la ubicación actual, sin el recojo/ruta anteriores.
-        compose.onNodeWithText("Marcador").performClick()
+        compose.onNodeWithTag("home-pick-destination").performClick()
         compose.onNodeWithText("Confirmar destino").performClick()
         waitForText("Elige tu moto")
         assertTrue(TripMap.metersBetween(latest, routeOrigin.get()) < 1.0)

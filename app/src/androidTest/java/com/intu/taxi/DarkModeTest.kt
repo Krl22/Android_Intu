@@ -103,9 +103,9 @@ class DarkModeTest {
                 routeLoader = { origin, destination -> TripRoute(listOf(origin, destination), 1800.0, 360.0).also { plannedRoute.set(it) } },
                 rideRequestSender = { error("QA must never request a trip") })
         } }
-        waitForText("Marcador")
+        waitForText("Elegir en mapa")
         compose.waitUntil(60_000) { ready.get() }
-        compose.onNodeWithText("Marcador").performClick()
+        compose.onNodeWithTag("home-pick-destination").performClick()
         waitForText("Confirmar destino")
         val map = mapView()
         // Use distinct pickup/destination coordinates so preserving a zero-length draft cannot pass.

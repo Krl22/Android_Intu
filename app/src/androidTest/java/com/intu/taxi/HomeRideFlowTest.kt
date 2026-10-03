@@ -43,9 +43,9 @@ class HomeRideFlowTest {
                     Result.failure(IllegalStateException("Solicitud simulada para QA"))
                 })
         } }
-        waitForText("Marcador")
+        waitForText("Elegir en mapa")
         compose.waitUntil(60_000) { gps.ready.get() }
-        compose.onNodeWithText("Marcador").performClick()
+        compose.onNodeWithTag("home-pick-destination").performClick()
         waitForText("Confirmar destino")
         compose.onNodeWithText("Elegir punto de recojo").assertDoesNotExist()
         compose.onNodeWithText("Confirmar punto").assertDoesNotExist()

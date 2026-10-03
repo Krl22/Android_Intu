@@ -1044,6 +1044,7 @@ fun HomeScreen(
                 padding = padding,
                 greetingName = greetingName,
                 searchActive = isSearchFocused || isKeyboardVisible || searchQuery.isNotBlank(),
+                onPickMap = { focusManager.clearFocus(); keyboard?.hide(); isSelectingDestination = true },
                 onTravel = {
                     selectedMotoOptionCode = com.intu.taxi.models.MotoOption.ANY.code
                     isDelivery = false
@@ -1060,7 +1061,9 @@ fun HomeScreen(
                         onValueChange = { searchQuery = it },
                         onFocusChange = { focused -> isSearchFocused = focused },
                         placeholderText = "¿A dónde vamos?",
-                        modifier = Modifier.padding(horizontal = 24.dp),
+                        modifier = Modifier.testTag("home-destination-search"),
+                        shape = RoundedCornerShape(20.dp),
+                        elevation = 0.dp,
                         showClearButton = true,
                         onClearClick = { searchQuery = "" }
                     )
@@ -1075,14 +1078,12 @@ fun HomeScreen(
                                 isSelectingDestination = true
                             }, onRefresh = { catalogRefresh++ },
                             onPickMap = { searchQuery = ""; isSelectingDestination = true },
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                            modifier = Modifier.padding(vertical = 6.dp),
                             addressLoading = addressSearch.loading, addressError = addressSearch.error)
                     }
                 },
-                shortcuts = {
-                    ShortcutRowHeader(
-                        onPinClick = { isSelectingDestination = true },
-                        isPinActive = false,
+                destinations = {
+                    HomeDestinations(
                         places = savedPlaces,
                         onSavedPlaceClick = { place ->
                             val destination = Point.fromLngLat(place.longitude, place.latitude)
@@ -1661,13 +1662,15 @@ private fun HeaderSearchBar(
     modifier: Modifier = Modifier,
     placeholderText: String = "¿A dónde quieres ir?",
     showClearButton: Boolean = false,
-    onClearClick: () -> Unit = {}
+    onClearClick: () -> Unit = {},
+    shape: RoundedCornerShape = RoundedCornerShape(50),
+    elevation: Dp = 6.dp
 ) {
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .shadow(6.dp, RoundedCornerShape(50))
-            .clip(RoundedCornerShape(50))
+            .shadow(elevation, shape)
+            .clip(shape)
     ) {
         TextField(
             value = value,
@@ -1886,90 +1889,6 @@ private fun RideOptionCard(
     }
 }
 
-@Composable
-fun ShortcutRowHeader(onPinClick: () -> Unit, isPinActive: Boolean,
-    places: List<com.intu.taxi.data.SavedPlace> = emptyList(),
-    onSavedPlaceClick: (com.intu.taxi.data.SavedPlace) -> Unit = {},
-    onConfigurePlace: () -> Unit = {}
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally)
-    ) {
-        ShortcutCardHeader(
-            icon = { Icon(Icons.Outlined.Home, contentDescription = null, tint = Color.White) },
-            label = "Casa",
-            isActive = places.any { it.id == "casa" },
-            onClick = { places.find { it.id == "casa" }?.let(onSavedPlaceClick) ?: onConfigurePlace() }
-        )
-        ShortcutCardHeader(
-            icon = { Icon(Icons.Outlined.Work, contentDescription = null, tint = Color.White) },
-            label = "Trabajo",
-            isActive = places.any { it.id == "trabajo" },
-            onClick = { places.find { it.id == "trabajo" }?.let(onSavedPlaceClick) ?: onConfigurePlace() }
-        )
-        places.filterNot { it.id == "casa" || it.id == "trabajo" }.forEach { place ->
-            ShortcutCardHeader(icon = { Icon(Icons.Outlined.Place, null, tint = Color.White) },
-                label = place.name, onClick = { onSavedPlaceClick(place) })
-        }
-        ShortcutCardHeader(
-            icon = { Icon(Icons.Outlined.Place, contentDescription = null, tint = Color.White) },
-            label = "Marcador",
-            isActive = isPinActive,
-            onClick = onPinClick
-        )
-       
-    }
-}
-
-@Composable
-private fun ShortcutCardHeader(
-    modifier: Modifier = Modifier,
-    icon: @Composable () -> Unit,
-    label: String,
-    isActive: Boolean = false,
-    onClick: () -> Unit = {}
-) {
-    Card(
-        modifier = modifier
-            .size(width = 76.dp, height = 68.dp)
-            .clickable { onClick() },
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = AppearanceColors.surface.copy(alpha = 0.18f)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.22f))
-    ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(vertical = 10.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                icon()
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = Color.White
-                )
-            }
-            if (isActive) {
-                Box(
-                    modifier = Modifier
-                        .size(10.dp)
-                        .offset(x = 6.dp, y = 6.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFF5F8AFE))
-                )
-            }
-        }
-    }
-}
 fun createDriverIcon(context: android.content.Context): Bitmap {
     val drawable = ContextCompat.getDrawable(context, R.drawable.ic_driver_car)
     if (drawable == null) {

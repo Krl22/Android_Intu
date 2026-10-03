@@ -6,6 +6,10 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.espresso.Espresso.pressBack
 import com.intu.taxi.ui.map.TripRoute
 import com.intu.taxi.ui.screens.HomeScreen
+import com.intu.taxi.ui.screens.CommercialHome
+import com.intu.taxi.ui.screens.HomeDestinations
+import com.intu.taxi.data.SavedPlace
+import androidx.compose.material3.Text
 import com.intu.taxi.ui.theme.IntuTheme
 import com.mapbox.geojson.Point
 import com.mapbox.maps.plugin.locationcomponent.LocationConsumer
@@ -13,6 +17,9 @@ import com.mapbox.maps.plugin.locationcomponent.LocationProvider
 import org.junit.Rule
 import org.junit.Test
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 
 /** Local GPS/routes only; never sends a booking or changes the signed-in account. */
 class CommercialHomeTest {
@@ -42,7 +49,7 @@ class CommercialHomeTest {
         compose.onNodeWithText("¿A dónde vamos?").assertIsDisplayed()
         compose.onNodeWithTag("home-map").assertDoesNotExist()
         captureNativeScreenshot(compose, "commercial-home-dark.png")
-        compose.onNodeWithText("Marcador").performClick()
+        compose.onNodeWithTag("home-pick-destination").performClick()
         compose.onNodeWithTag("home-map").assertIsDisplayed()
         compose.onNodeWithTag("commercial-home").assertDoesNotExist()
         pressBack()
@@ -77,5 +84,25 @@ class CommercialHomeTest {
         compose.onNodeWithTag("commercial-home").assertIsDisplayed()
         compose.onNodeWithText("Tu día se mueve\ncon Intu.").performScrollTo().assertIsDisplayed()
         captureNativeScreenshot(compose, "commercial-home-light.png")
+    }
+
+    @Test fun relocatedPlacesKeepSavedDestinationsAndManageAction() {
+        val home = SavedPlace("casa", "Casa", "Mi casa", -11.25, -74.63)
+        val work = SavedPlace("trabajo", "Trabajo", "Mi trabajo", -11.24, -74.62)
+        val selected = AtomicReference<SavedPlace>()
+        val managing = AtomicBoolean()
+        compose.setContent { IntuTheme(darkTheme = true) {
+            CommercialHome(PaddingValues(), "Carlos", searchActive = false,
+                searchContent = { Text("¿A dónde vamos?") },
+                destinations = { HomeDestinations(listOf(home, work), selected::set) { managing.set(true) } },
+                onPickMap = {}, onTravel = {}, onDelivery = {})
+        } }
+        compose.onNodeWithTag("home-place-casa").performScrollTo().performClick()
+        assertEquals(home, selected.get())
+        compose.onNodeWithTag("home-place-trabajo").performScrollTo().performClick()
+        assertEquals(work, selected.get())
+        compose.onNodeWithTag("home-manage-places").performScrollTo().performClick()
+        assertTrue(managing.get())
+        captureNativeScreenshot(compose, "commercial-home-places.png")
     }
 }

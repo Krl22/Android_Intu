@@ -42,10 +42,10 @@ class CourierFlowTest {
             },
             rideRequestSender = { requested.set(it); release.await(); Result.failure(IllegalStateException("Envío simulado para QA")) }
         ) } }
-        waitFor("Marcador")
-        compose.onNodeWithText("Viajar").assertDoesNotExist()
+        waitFor("Elegir en mapa")
+        compose.onNodeWithTag("commercial-home").assertIsDisplayed()
         compose.onNodeWithText("Enviar paquete").assertDoesNotExist()
-        compose.onNodeWithText("Marcador").performClick()
+        compose.onNodeWithTag("home-pick-destination").performClick()
         waitFor("Confirmar destino")
         compose.onNodeWithText("Confirmar destino").performClick()
         waitFor("Elige tu moto")

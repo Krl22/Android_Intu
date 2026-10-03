@@ -5,7 +5,11 @@ Rama: `codex/inicio-comercial`. Base anterior guardada en `dc31ded` (Intu 1.28).
 ## Concepto implementado: Intu te conecta
 
 El inicio presenta la marca con el título `intu`, el saludo de la cuenta y la
-búsqueda `¿A dónde vamos?`. Conserva Casa, Trabajo, lugares guardados y Marcador.
+búsqueda `¿A dónde vamos?`. El saludo, la presentación y la búsqueda forman un
+solo bloque sobre un fondo de marca que se desvanece hacia el resto de la página.
+Casa, Trabajo y los favoritos se muestran como filas en **Tus lugares**, debajo
+de los servicios, con un acceso a Gestionar. **Elegir en mapa** es un enlace junto
+a la búsqueda. Se retiran los tres botones cuadrados de la cabecera anterior.
 La búsqueda no muestra micrófono; permite limpiar el texto.
 
 La portada incluye una presentación de Intu, accesos a Viajar y Enviar y una
@@ -45,9 +49,24 @@ envío/viaje y búsqueda en modo claro. Usa ubicación y rutas de prueba, sin en
 solicitudes de viaje. `HomeBackNavigationTest` comprueba que Atrás conserva la
 ubicación más reciente y no reabre rutas descartadas.
 
-Compilación debug y APK de pruebas completados. Las tres pruebas de
+Validación de la versión inicial: compilación debug y APK de pruebas completados. Las tres pruebas de
 `CommercialHomeTest` pasaron en el emulador `Phone_1` el 3 de octubre de 2026.
 Se inspeccionaron capturas de la portada en ambos modos de apariencia.
 También pasaron las siete pruebas de `HomeBackNavigationTest` (10 pruebas de
 interfaz en total). El APK debug fue actualizado en el celular conectado con
 `adb install -r`, conservando los datos; las pruebas se ejecutaron en el emulador.
+
+## Revisión: portada integrada
+
+Se unificó la cabecera y la presentación con un degradado de la paleta del tema,
+sin el bloque índigo ni la tarjeta de presentación separada. La búsqueda usa los
+mismos márgenes de contenido, esquinas de 20 dp y ninguna sombra. El mapa se
+elige desde un enlace junto a la búsqueda. Los destinos guardados se muestran en
+filas debajo de Viajar y Enviar, conservando la selección directa de destino y
+la gestión de direcciones.
+
+La revisión compiló y pasó seis pruebas en `Phone_1`: las cuatro de
+`CommercialHomeTest`, el regreso desde preparación con GPS actualizado y el
+flujo completo de envío con solicitud simulada. Se verificó la nueva portada
+oscura en una captura nativa. Las pruebas anteriores que usaban el botón
+Marcador ahora usan el acceso `home-pick-destination`.
