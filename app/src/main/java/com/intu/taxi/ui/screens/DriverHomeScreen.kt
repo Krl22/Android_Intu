@@ -189,6 +189,7 @@ fun DriverHomeScreen(
     var pinInput by remember { mutableStateOf("") }
     var pinError by remember { mutableStateOf<String?>(null) }
     var isVerifyingPin by remember { mutableStateOf(false) }
+    var isCheckingStartPin by remember { mutableStateOf(false) }
     var showDeliveryPaymentConfirmation by remember { mutableStateOf(false) }
     var deliveryActionBusy by remember { mutableStateOf(false) }
     var deliveryActionError by remember { mutableStateOf<String?>(null) }
@@ -783,11 +784,38 @@ fun DriverHomeScreen(
                     duration = routeDuration,
                     isCalculatingRoute = isCalculatingRoute,
                     onArrived = {
-                        // Para iniciar el viaje primero se pide el PIN de seguridad del pasajero
                         if (activeRideStatus == "arrived") {
-                            pinInput = ""
-                            pinError = null
-                            showPinDialog = true
+                            val rideId = activeRideId
+                            if (!isCheckingStartPin && rideId != null) scope.launch {
+                                isCheckingStartPin = true
+                                try {
+                                    val requiresPin = activeRideRepository.requiresStartPin(rideId)
+                                    check(activeRideId == rideId && activeRideStatus == "arrived") {
+                                        "El servicio cambió de estado. Actualiza e intenta de nuevo."
+                                    }
+                                    if (requiresPin) {
+                                        pinInput = ""
+                                        pinError = null
+                                        showPinDialog = true
+                                    } else if (request.isDelivery &&
+                                        request.delivery?.payer == com.intu.taxi.models.DeliveryPayer.SENDER &&
+                                        request.delivery?.paymentCollected != true) {
+                                        deliveryActionError = null
+                                        deliveryConfirmationStatus = activeRideStatus
+                                        showDeliveryPaymentConfirmation = true
+                                    } else {
+                                        val updated = activeRideRepository.advanceRide(rideId, "in_progress").getOrThrow()
+                                        activeRideStatus = updated.status
+                                        if (request.isDelivery) {
+                                            setTripTarget(GeoPoint(request.destinationLatitude, request.destinationLongitude))
+                                        }
+                                        Toast.makeText(context, if (request.isDelivery) "Envío iniciado" else "Viaje iniciado",
+                                            Toast.LENGTH_SHORT).show()
+                                    }
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, e.message ?: "No se pudo iniciar el servicio", Toast.LENGTH_LONG).show()
+                                } finally { isCheckingStartPin = false }
+                            }
                         } else if (request.isDelivery && activeRideStatus == "in_progress") {
                             deliveryActionError = null
                             deliveryConfirmationStatus = activeRideStatus

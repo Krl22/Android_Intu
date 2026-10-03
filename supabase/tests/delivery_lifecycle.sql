@@ -1,4 +1,6 @@
 begin;
+-- This suite validates the opt-in PIN flow, without changing the live preference.
+update private.ride_security_settings set pin_enabled = true where singleton;
 do $$ begin
   if exists(select 1 from public.profiles where id like 'intu-qa-delivery-20261002-%') then raise exception 'Fixture collision'; end if;
   if has_function_privilege('anon', 'public.confirm_delivery_payment(uuid)', 'execute') then raise exception 'Anonymous payment RPC'; end if;

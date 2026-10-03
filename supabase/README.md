@@ -46,6 +46,8 @@ App Android ── login ──► Firebase Auth (teléfono, Google, MFA)
 | `nearby_ride_requests(lat, lng, radius_m?)` | conductor | Solicitudes abiertas cerca |
 | `accept_ride(ride_id)` | conductor | Aceptar (si dos aceptan a la vez, solo uno gana) |
 | `advance_ride(ride_id, status)` | conductor | `arrived` → `in_progress` → `completed` |
+| `ride_pin_requirement(ride_id)` | participantes | Consultar si su solicitud requiere PIN antes de iniciar |
+| `admin_get_ride_security_settings()` / `admin_set_ride_security_settings(pin_enabled)` | admin | Activar o desactivar el PIN para nuevas solicitudes de viajes y envíos |
 | `cancel_ride(ride_id, reason?)` | ambos | Pasajero: cancela. Conductor: la solicitud vuelve a `searching` |
 | `rate_ride(ride_id, rating)` | ambos | Calificar 1–5 al otro, una vez |
 | `register_device_token(token, platform?)` | ambos | Guardar el token de FCM (se borra al cerrar sesión) |

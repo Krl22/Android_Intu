@@ -165,6 +165,10 @@ class ActiveRideRepository {
         SupabaseApi.rpc("ride_start_pin", JSONObject().put("p_ride_id", rideId)).str("pin").ifBlank { null }
     }.getOrNull()
 
+    /** The server decides per service; connection errors must never bypass a required PIN. */
+    suspend fun requiresStartPin(rideId: String): Boolean =
+        SupabaseApi.rpc("ride_pin_requirement", JSONObject().put("p_ride_id", rideId)).getBoolean("required")
+
     /** El conductor verifica el PIN que le dicta el pasajero. Devuelve si es correcto y los intentos que quedan. */
     suspend fun verifyStartPin(rideId: String, pin: String): Result<Pair<Boolean, Int>> = runCatching {
         val result = SupabaseApi.rpc("verify_ride_pin", JSONObject().put("p_ride_id", rideId).put("p_pin", pin))

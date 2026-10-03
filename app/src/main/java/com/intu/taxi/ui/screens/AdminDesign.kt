@@ -109,7 +109,7 @@ internal fun AdminPanelLayout(padding: PaddingValues, tab: Int, isAdmin: Boolean
                 }
                 val sections = listOf("Conductores" to Icons.Outlined.TwoWheeler, "Usuarios" to Icons.Outlined.People,
                     "Reportes" to Icons.Outlined.BugReport, "Lugares" to Icons.Outlined.Place,
-                    "Notificaciones" to Icons.Outlined.Notifications)
+                    "Notificaciones" to Icons.Outlined.Notifications, "Seguridad" to Icons.Outlined.Shield)
                 Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     sections.forEachIndexed { index, (label, icon) ->

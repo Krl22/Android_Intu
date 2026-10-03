@@ -140,7 +140,8 @@ fun AdminScreen(
                 1 -> UsersTab(reloadKey, onOwnAccountDeleted)
                 2 -> BugReportsTab(reloadKey)
                 3 -> AdminPlacesTab(reloadKey)
-                else -> AdminNotificationSettings(reloadKey)
+                4 -> AdminNotificationSettings(reloadKey)
+                else -> AdminRideSecuritySettings(reloadKey)
             }
         }
     }
