@@ -134,8 +134,7 @@ fun AdminScreen(
 
         AdminPanelLayout(padding, tab, isAdmin, testLocation?.label, onBack,
             onRefresh = { reloadKey++ }, onLocation = { locationError = null; showTestLocation = true },
-            onTab = { tab = it },
-            onDarkModeChange = if (isAdmin) com.intu.taxi.ui.theme.LocalAppearanceController.current.setDarkMode else null) {
+            onTab = { tab = it }) {
             when (tab) {
                 0 -> DriversTab(reloadKey)
                 1 -> UsersTab(reloadKey, onOwnAccountDeleted)

@@ -2,7 +2,6 @@ package com.intu.taxi
 
 import android.os.SystemClock
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -20,7 +19,6 @@ import com.intu.taxi.ui.map.pointUnderCenterPin
 import com.intu.taxi.ui.screens.*
 import com.intu.taxi.ui.theme.*
 import com.intu.taxi.repositories.RideHistoryItem
-import com.intu.taxi.repositories.AdminDriver
 import com.intu.taxi.updates.AppUpdateState
 import com.intu.taxi.updates.PublishedAppRelease
 import com.mapbox.geojson.Point
@@ -57,34 +55,29 @@ class DarkModeTest {
         } finally { context.getSharedPreferences(name, 0).edit().clear().commit() }
     }
 
-    @Test fun adminToggleChangesPaletteAndIsNotExposedToNonAdmins() {
+    @Test fun accountToggleIsAvailableToPassengersAndDriversAndChangesPalette() {
         var dark by mutableStateOf(false)
-        var admin by mutableStateOf(true)
-        var tab by mutableIntStateOf(0)
+        var driver by mutableStateOf(false)
         var paletteIsDark = false
-        val driver = AdminDriver("qa-driver", "María Fernanda Villanueva", "999 888 777", "maria@example.test", "",
-            "12345678", "B-IIc 123456", "pending", 4.8, 12, null, "Honda", "ABC-123", "mototaxi")
-        compose.setContent { IntuTheme(darkTheme = dark) {
-            AdminPanelTheme {
-                val palette = MaterialTheme.colorScheme.background.luminance() < .2f
-                SideEffect { paletteIsDark = palette }
-                AdminPanelLayout(PaddingValues(top = 24.dp, bottom = 24.dp), tab, admin, null, {}, {}, {}, { tab = it },
-                    onDarkModeChange = { dark = it }) {
-                    LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        item { AdminSectionHeading("Conductores", "Revisa postulaciones y gestiona viajes o envíos.", 1) }
-                        item { AdminDriverCard(driver, false, {}, {}, {}, {}) }
-                    }
+        compose.setContent {
+            CompositionLocalProvider(LocalAppearanceController provides AppearanceController(dark, true) { dark = it }) {
+                IntuTheme(darkTheme = dark) {
+                    val palette = MaterialTheme.colorScheme.background.luminance() < .2f
+                    SideEffect { paletteIsDark = palette }
+                    AccountScreenEnhanced(PaddingValues(top = 24.dp, bottom = 24.dp), driver, {})
                 }
             }
-        } }
-        compose.onNodeWithTag("admin-dark-mode").assertIsOff().performClick()
-        compose.onNodeWithTag("admin-dark-mode").assertIsOn()
+        }
+        // No admin callback is provided: this is the ordinary account screen.
+        compose.waitUntil(15_000) { compose.onAllNodesWithTag("account-dark-mode").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("account-dark-mode").performScrollTo().assertIsOff().performClick()
+        compose.onNodeWithTag("account-dark-mode").assertIsOn()
         compose.runOnIdle { assertTrue(paletteIsDark) }
-        captureNativeScreenshot(compose, "dark-admin.png")
-        compose.onNodeWithTag("admin-dark-mode").performClick()
+        captureNativeScreenshot(compose, "dark-account.png")
+        compose.runOnIdle { driver = true }
+        compose.onNodeWithTag("account-dark-mode").performScrollTo().assertIsOn().performClick()
+        compose.onNodeWithTag("account-dark-mode").assertIsOff()
         compose.runOnIdle { assertFalse(paletteIsDark) }
-        compose.runOnIdle { admin = false }
-        compose.onNodeWithTag("admin-dark-mode").assertDoesNotExist()
     }
 
     @Test fun liveMapStyleChangeKeepsDestinationRouteVehicleAndCamera() {

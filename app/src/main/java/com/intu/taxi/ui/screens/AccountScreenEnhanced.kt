@@ -1,6 +1,7 @@
 package com.intu.taxi.ui.screens
 
 import com.intu.taxi.ui.theme.AppearanceColors
+import com.intu.taxi.ui.theme.LocalAppearanceController
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -10,6 +11,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -31,6 +33,8 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -285,6 +289,9 @@ fun AccountScreenEnhanced(
                         .fillMaxWidth()
                         .padding(top = 16.dp)
                 ) {
+                    AccountAppearanceSection()
+                    Spacer(modifier = Modifier.height(16.dp))
+
                     val showDriverStats = isDriver && driverAccess.canDrive
                     if (showDriverStats) {
                         DriverStatsSection()
@@ -405,6 +412,41 @@ fun AccountScreenEnhanced(
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun AccountAppearanceSection() {
+    val appearance = LocalAppearanceController.current
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        colors = CardDefaults.cardColors(containerColor = AppearanceColors.surface.copy(alpha = 0.9f)),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Text(
+            "Apariencia",
+            modifier = Modifier.padding(start = 16.dp, top = 16.dp),
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth()
+                .testTag("account-dark-mode")
+                .toggleable(value = appearance.darkMode, role = Role.Switch,
+                    onValueChange = appearance.setDarkMode)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Icon(Icons.Outlined.DarkMode, contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary)
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Modo oscuro", style = MaterialTheme.typography.bodyLarge)
+                Text("Usar colores oscuros en Intu", style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Switch(checked = appearance.darkMode, onCheckedChange = null)
         }
     }
 }

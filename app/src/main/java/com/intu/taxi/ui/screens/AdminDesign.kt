@@ -55,7 +55,6 @@ internal fun AdminPanelTheme(content: @Composable () -> Unit) {
 @Composable
 internal fun AdminPanelLayout(padding: PaddingValues, tab: Int, isAdmin: Boolean, locationLabel: String?,
     onBack: () -> Unit, onRefresh: () -> Unit, onLocation: () -> Unit, onTab: (Int) -> Unit,
-    onDarkModeChange: ((Boolean) -> Unit)? = null,
     content: @Composable () -> Unit) {
     val darkMode = com.intu.taxi.ui.theme.LocalIntuDarkMode.current
     val appearance = com.intu.taxi.ui.theme.LocalAppearanceController.current
@@ -106,18 +105,6 @@ internal fun AdminPanelLayout(padding: PaddingValues, tab: Int, isAdmin: Boolean
                             }
                             Icon(Icons.Outlined.ChevronRight, null, tint = AppearanceColors.secondary(AdminMuted))
                         }
-                    }
-                }
-                if (isAdmin && onDarkModeChange != null) {
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Icon(Icons.Outlined.DarkMode, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text("Modo oscuro", style = MaterialTheme.typography.labelLarge)
-                            Text("Vista de prueba · app y mapas", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        Switch(checked = darkMode, onCheckedChange = onDarkModeChange,
-                            modifier = Modifier.testTag("admin-dark-mode"))
                     }
                 }
                 val sections = listOf("Conductores" to Icons.Outlined.TwoWheeler, "Usuarios" to Icons.Outlined.People,
