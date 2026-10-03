@@ -29,7 +29,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -42,8 +42,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -59,9 +59,6 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-private val Teal = Color(0xFF08817E)
-private val Indigo = Color(0xFF1E1F47)
-private val Muted = Color(0xFF5F6570)
 private val DateLabel = DateTimeFormatter.ofPattern("d 'de' MMMM, HH:mm", Locale("es", "PE"))
 
 /**
@@ -113,29 +110,42 @@ fun TripsScreenEnhanced(padding: PaddingValues, isDriver: Boolean) {
         }
     }
 
+    TripsContent(padding, isDriver, rides, loadError, driverRating,
+        onRefresh = { reloadKey++ }, onRate = ::rate, onDetails = { selectedRide = it })
+}
+
+/** Presentation shared by the live screen and isolated UI verification. */
+@Composable
+internal fun TripsContent(
+    padding: PaddingValues,
+    isDriver: Boolean,
+    rides: List<RideHistoryItem>?,
+    loadError: String?,
+    driverRating: Pair<Double, Int>?,
+    onRefresh: () -> Unit,
+    onRate: (RideHistoryItem, Int) -> Unit,
+    onDetails: (RideHistoryItem) -> Unit
+) {
+    val colors = MaterialTheme.colorScheme
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(Brush.linearGradient(listOf(Teal, Indigo))),
+            .intuPageBackground().testTag("trips-screen"),
         contentPadding = PaddingValues(
-            start = 16.dp,
-            end = 16.dp,
-            top = padding.calculateTopPadding() + 20.dp,
-            bottom = padding.calculateBottomPadding() + 16.dp
+            start = 20.dp,
+            end = 20.dp,
+            top = padding.calculateTopPadding() + 24.dp,
+            bottom = padding.calculateBottomPadding() + 20.dp
         ),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
         item {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    if (isDriver) "Mis servicios" else "Mis viajes",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White,
-                    modifier = Modifier.weight(1f)
-                )
-                IconButton(onClick = { reloadKey++ }) {
-                    Icon(Icons.Default.Refresh, contentDescription = "Actualizar", tint = Color.White)
+            IntuPageHeading(
+                if (isDriver) "Mis servicios" else "Mis viajes",
+                if (isDriver) "Tus ganancias y tu actividad con Intu." else "Cada viaje y envío, en un solo lugar."
+            ) {
+                FilledTonalIconButton(onClick = onRefresh) {
+                    Icon(Icons.Default.Refresh, contentDescription = "Actualizar")
                 }
             }
         }
@@ -148,7 +158,7 @@ fun TripsScreenEnhanced(padding: PaddingValues, isDriver: Boolean) {
         when {
             list == null -> item {
                 Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = Color.White)
+                    CircularProgressIndicator(color = colors.primary)
                 }
             }
             loadError != null && list.isEmpty() -> item {
@@ -156,7 +166,7 @@ fun TripsScreenEnhanced(padding: PaddingValues, isDriver: Boolean) {
                     title = "No se pudieron cargar tus viajes",
                     body = loadError.orEmpty(),
                     actionLabel = "Reintentar",
-                    onAction = { reloadKey++ }
+                    onAction = onRefresh
                 )
             }
             list.isEmpty() -> item {
@@ -171,10 +181,10 @@ fun TripsScreenEnhanced(padding: PaddingValues, isDriver: Boolean) {
             }
             else -> {
                 item {
-                    Text("Historial · Toca un viaje para ver la ruta", style = MaterialTheme.typography.titleSmall, color = Color.White.copy(alpha = 0.85f))
+                    Text("Historial · Toca un viaje para ver la ruta", style = MaterialTheme.typography.titleSmall, color = colors.onSurfaceVariant)
                 }
                 items(list, key = { it.id }) { ride ->
-                    RideHistoryCard(ride = ride, isDriver = isDriver, onRate = { stars -> rate(ride, stars) }, onDetails = { selectedRide = ride })
+                    RideHistoryCard(ride = ride, isDriver = isDriver, onRate = { stars -> onRate(ride, stars) }, onDetails = { onDetails(ride) })
                 }
             }
         }
@@ -186,16 +196,16 @@ fun TripsScreenEnhanced(padding: PaddingValues, isDriver: Boolean) {
 private fun EarningsCard(rides: List<RideHistoryItem>, rating: Pair<Double, Int>?) {
     val (today, week, month) = RideHistoryRepository.earnings(rides)
     Card(
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
             modifier = Modifier
-                .background(Brush.linearGradient(listOf(Teal, Indigo)))
-                .padding(18.dp)
+                .fillMaxWidth()
+                .padding(20.dp)
         ) {
-            Text("Ganancias", color = Color.White, fontWeight = FontWeight.SemiBold)
+            Text("Ganancias", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 EarningsTile("Hoy", today, Modifier.weight(1f))
@@ -212,13 +222,13 @@ private fun EarningsCard(rides: List<RideHistoryItem>, rating: Pair<Double, Int>
                         else -> String.format(Locale.US, "%.2f", rating.first) +
                             " · ${rating.second} ${if (rating.second == 1) "calificación" else "calificaciones"}"
                     },
-                    color = Color.White
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
             Spacer(Modifier.height(6.dp))
             Text(
                 "Cuenta solo servicios completados. El pago lo recibes directamente de quien paga el transporte.",
-                color = Color.White.copy(alpha = 0.75f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodySmall
             )
         }
@@ -229,20 +239,20 @@ private fun EarningsCard(rides: List<RideHistoryItem>, rating: Pair<Double, Int>
 private fun EarningsTile(label: String, summary: EarningsSummary, modifier: Modifier) {
     Column(
         modifier = modifier
-            .background(Color.White.copy(alpha = 0.15f), RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(16.dp))
             .padding(horizontal = 10.dp, vertical = 10.dp)
     ) {
-        Text(label, color = Color.White.copy(alpha = 0.85f), style = MaterialTheme.typography.bodySmall)
+        Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
         Text(
             formatSoles(summary.total),
-            color = Color.White,
+            color = MaterialTheme.colorScheme.onSurface,
             fontWeight = FontWeight.Bold,
             style = MaterialTheme.typography.titleMedium,
             maxLines = 1
         )
         Text(
             "${summary.rides} ${if (summary.rides == 1) "viaje" else "viajes"}",
-            color = Color.White.copy(alpha = 0.85f),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodySmall
         )
     }
@@ -253,22 +263,21 @@ private fun RideHistoryCard(ride: RideHistoryItem, isDriver: Boolean, onRate: (I
     val completed = ride.status == "completed"
     Card(
         onClick = onDetails,
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = AppearanceColors.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        modifier = Modifier.fillMaxWidth()
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+        modifier = Modifier.fillMaxWidth().testTag("trip-${ride.id}")
     ) {
-        Column(Modifier.padding(14.dp)) {
+        Column(Modifier.padding(20.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     ride.requestedAt?.atZone(ZoneId.systemDefault())?.format(DateLabel).orEmpty(),
                     style = MaterialTheme.typography.bodySmall,
-                    color = AppearanceColors.secondary(Muted),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.weight(1f)
                 )
                 StatusChip(completed, ride.serviceKind == "delivery")
             }
-            if (ride.serviceKind == "delivery") Text("Envío · Moto lineal", color = AppearanceColors.highlight(Teal),
+            if (ride.serviceKind == "delivery") Text("Envío · Moto lineal", color = MaterialTheme.colorScheme.primary,
                 style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 6.dp))
             Spacer(Modifier.height(10.dp))
             RoutePoint(Color(0xFF16A34A), ride.originAddress.ifBlank { "Punto de recojo" })
@@ -287,7 +296,7 @@ private fun RideHistoryCard(ride: RideHistoryItem, isDriver: Boolean, onRate: (I
                         (if (isDriver) ride.riderName else ride.driverName)
                             .ifBlank { if (isDriver && ride.serviceKind == "delivery") "Quien envía" else if (isDriver) "Pasajero" else "Sin conductor" },
                         fontWeight = FontWeight.SemiBold,
-                        color = AppearanceColors.foreground(Indigo),
+                        color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -295,7 +304,7 @@ private fun RideHistoryCard(ride: RideHistoryItem, isDriver: Boolean, onRate: (I
                         Text(
                             "${if (ride.serviceKind == "delivery") "Moto lineal" else "Mototaxi"} ${listOf(ride.vehicleDescription, ride.vehiclePlate).filter { it.isNotBlank() }.joinToString(" · ")}",
                             style = MaterialTheme.typography.bodySmall,
-                            color = AppearanceColors.secondary(Muted),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -305,18 +314,18 @@ private fun RideHistoryCard(ride: RideHistoryItem, isDriver: Boolean, onRate: (I
                     Text(
                         formatSoles(ride.fare),
                         fontWeight = FontWeight.Bold,
-                        color = if (completed) Indigo else Muted
+                        color = if (completed) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
                         if (ride.paymentMethod == "yape_plin") "Yape" else "Efectivo",
                         style = MaterialTheme.typography.bodySmall,
-                        color = AppearanceColors.secondary(Muted)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
             if (completed) {
                 val myRating = if (isDriver) ride.ratingForRider else ride.ratingForDriver
-                HorizontalDivider(Modifier.padding(vertical = 10.dp), color = Color(0xFFECEEF1))
+                HorizontalDivider(Modifier.padding(vertical = 10.dp), color = MaterialTheme.colorScheme.outlineVariant)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         when {
@@ -326,7 +335,7 @@ private fun RideHistoryCard(ride: RideHistoryItem, isDriver: Boolean, onRate: (I
                             else -> "Califica a tu conductor"
                         },
                         style = MaterialTheme.typography.bodyMedium,
-                        color = AppearanceColors.secondary(Muted),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.weight(1f)
                     )
                     StarRating(
@@ -367,7 +376,7 @@ private fun RoutePoint(color: Color, text: String) {
         Text(
             text,
             style = MaterialTheme.typography.bodyMedium,
-            color = AppearanceColors.foreground(Color(0xFF1C1C1E)),
+            color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
@@ -377,17 +386,17 @@ private fun RoutePoint(color: Color, text: String) {
 @Composable
 private fun MessageCard(title: String, body: String, actionLabel: String? = null, onAction: () -> Unit = {}) {
     Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = AppearanceColors.surface),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(title, fontWeight = FontWeight.SemiBold, color = AppearanceColors.foreground(Indigo))
+            Text(title, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
             Spacer(Modifier.height(6.dp))
-            Text(body, style = MaterialTheme.typography.bodyMedium, color = AppearanceColors.secondary(Muted))
+            Text(body, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (actionLabel != null) {
                 Spacer(Modifier.height(12.dp))
-                Button(onClick = onAction, colors = ButtonDefaults.buttonColors(containerColor = Teal)) {
+                Button(onClick = onAction, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)) {
                     Text(actionLabel)
                 }
             }

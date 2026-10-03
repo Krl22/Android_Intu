@@ -2,7 +2,7 @@
 
 ## Uso
 
-En Cuenta → Apariencia, activar **Modo oscuro**. Disponible para cualquier usuario, incluidos pasajeros y conductores. El cambio aplica inmediatamente a la app y a sus mapas. Desactivarlo devuelve la apariencia clara.
+En Cuenta, activar **Modo oscuro** en la misma lista de ajustes que los métodos de pago y las direcciones guardadas. Disponible para cualquier usuario, incluidos pasajeros y conductores. El cambio aplica inmediatamente a la app y a sus mapas. Desactivarlo devuelve la apariencia clara.
 
 La preferencia empieza desactivada y se guarda por UID de Firebase en SharedPreferences del dispositivo. Se conserva al cerrar/reabrir la app o instalar una actualización conservando los datos. Otra cuenta en el mismo dispositivo tiene su propia elección; cerrar sesión devuelve las pantallas de acceso al modo claro. No cambia las preferencias de otros testers ni depende del tema de Android.
 

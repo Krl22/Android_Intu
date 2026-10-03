@@ -70,3 +70,25 @@ La revisión compiló y pasó seis pruebas en `Phone_1`: las cuatro de
 flujo completo de envío con solicitud simulada. Se verificó la nueva portada
 oscura en una captura nativa. Las pruebas anteriores que usaban el botón
 Marcador ahora usan el acceso `home-pick-destination`.
+
+## Revisión: Viajes y Cuenta con el estilo del Inicio
+
+Las tres pestañas comparten el degradado suave de la paleta mediante
+`intuPageBackground`. Viajes y Cuenta usan la misma cabecera de marca, márgenes
+de 20 dp y tarjetas de 24 dp, con superficies sólidas y acentos del tema.
+Se retiran el fondo índigo intenso de Viajes y la cabecera de cristal de Cuenta.
+El perfil queda en una tarjeta compacta con foto editable, nombre, teléfono y
+modo conductor cuando la cuenta está autorizada.
+
+Modo oscuro se integra como una fila en la misma tarjeta de ajustes que pagos
+y direcciones guardadas, manteniendo su preferencia por cuenta y el cambio
+inmediato de apariencia. El historial conserva detalles, calificaciones,
+estados de viajes/envíos, actualizaciones y ganancias del conductor.
+
+Validación: compilación debug y APK de pruebas correctas; cinco pruebas de
+interfaz aprobadas en `Phone_1`: historial para pasajero/conductor en ambos
+temas, estados vacío/error y reintento, interruptor integrado de Cuenta y las
+portadas oscura/clara con regreso desde mapa/búsqueda. Se revisaron capturas
+nativas de Cuenta y Viajes en ambos temas y ganancias en modo oscuro. Los
+datos del historial usados en estas capturas son fixtures locales; las pruebas
+no califican ni crean viajes reales.

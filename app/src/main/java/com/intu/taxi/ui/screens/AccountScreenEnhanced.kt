@@ -5,9 +5,7 @@ import com.intu.taxi.ui.theme.LocalAppearanceController
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
@@ -19,16 +17,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.TwoWheeler
-import androidx.compose.material.icons.filled.LocalTaxi
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -38,15 +32,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.animation.*
-import androidx.compose.animation.core.*
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.text.style.TextOverflow
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
@@ -56,17 +43,8 @@ import com.intu.taxi.auth.UserProfile
 import com.intu.taxi.data.PaymentPreferences
 import com.intu.taxi.ui.nationalPhoneForDisplay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.delay
-import com.intu.taxi.auth.DriverProfile
 
-/**
- * Enhanced Account Screen with modern design principles:
- * - Glassmorphism effects
- * - Smooth animations
- * - Better visual hierarchy
- * - Consistent color scheme
- * - Improved typography
- */
+/** Account actions, profile and appearance using the shared Intu page design. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AccountScreenEnhanced(
@@ -248,34 +226,29 @@ fun AccountScreenEnhanced(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.surface)
+            .intuPageBackground()
     ) {
-        // Animated background gradient
-        AnimatedGradientBackground()
         
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(padding)
+                .padding(top = padding.calculateTopPadding() + 24.dp,
+                    bottom = padding.calculateBottomPadding() + 20.dp)
         ) {
-            // Enhanced Header with glassmorphism
+            // Profile header follows the same brand hierarchy as Inicio and Viajes.
             AnimatedVisibility(
                 visible = headerVisible,
                 enter = fadeIn() + slideInVertically(initialOffsetY = { -it })
             ) {
                 EnhancedHeaderSection(
                     isDriver = isDriver,
-                    onDriverChange = onDriverChange,
                     authUser = authUser,
                     profile = profile,
                     loadingProfile = loadingProfile,
-                    profileError = profileError,
                     handleDriverModeChange = handleDriverModeChange,
                     checkingDriverProfile = checkingDriverProfile,
-                    hasCompleteDriverProfile = hasCompleteDriverProfile,
-                    canBecomeDriver = canBecomeDriver,
-                    googleLinked = googleLinked
+                    canBecomeDriver = canBecomeDriver
                 )
             }
             
@@ -287,11 +260,8 @@ fun AccountScreenEnhanced(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 16.dp)
+                        .padding(top = 24.dp)
                 ) {
-                    AccountAppearanceSection()
-                    Spacer(modifier = Modifier.height(16.dp))
-
                     val showDriverStats = isDriver && driverAccess.canDrive
                     if (showDriverStats) {
                         DriverStatsSection()
@@ -303,25 +273,25 @@ fun AccountScreenEnhanced(
                             onClick = onOpenAdmin,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 16.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1F47)),
-                            shape = RoundedCornerShape(16.dp)
+                                .padding(horizontal = 20.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+                            shape = RoundedCornerShape(24.dp)
                         ) {
                             Row(
                                 modifier = Modifier.padding(16.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(Icons.Default.AdminPanelSettings, contentDescription = null, tint = Color.White)
+                                Icon(Icons.Default.AdminPanelSettings, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Text("Panel de administración", color = Color.White, fontWeight = FontWeight.SemiBold)
+                                    Text("Panel de administración", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold)
                                     Text(
                                         "Aprobar conductores y reiniciar cuentas de prueba",
-                                        color = Color.White.copy(alpha = 0.75f),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         style = MaterialTheme.typography.bodySmall
                                     )
                                 }
-                                Icon(Icons.AutoMirrored.Filled.ArrowForwardIos, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                                Icon(Icons.AutoMirrored.Filled.ArrowForwardIos, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
                             }
                         }
                         Spacer(modifier = Modifier.height(16.dp))
@@ -332,13 +302,13 @@ fun AccountScreenEnhanced(
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 16.dp)
+                                .padding(horizontal = 20.dp)
                                 .padding(bottom = 16.dp),
                             colors = CardDefaults.cardColors(
                                 containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.1f)
                             ),
                             border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.3f)),
-                            shape = RoundedCornerShape(16.dp)
+                            shape = RoundedCornerShape(24.dp)
                         ) {
                             Column(
                                 modifier = Modifier
@@ -416,91 +386,17 @@ fun AccountScreenEnhanced(
     }
 }
 
-@Composable
-private fun AccountAppearanceSection() {
-    val appearance = LocalAppearanceController.current
-    Card(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-        colors = CardDefaults.cardColors(containerColor = AppearanceColors.surface.copy(alpha = 0.9f)),
-        shape = RoundedCornerShape(16.dp)
-    ) {
-        Text(
-            "Apariencia",
-            modifier = Modifier.padding(start = 16.dp, top = 16.dp),
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.SemiBold
-        )
-        Row(
-            modifier = Modifier.fillMaxWidth()
-                .testTag("account-dark-mode")
-                .toggleable(value = appearance.darkMode, role = Role.Switch,
-                    onValueChange = appearance.setDarkMode)
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Icon(Icons.Outlined.DarkMode, contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary)
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Modo oscuro", style = MaterialTheme.typography.bodyLarge)
-                Text("Usar colores oscuros en Intu", style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Switch(checked = appearance.darkMode, onCheckedChange = null)
-        }
-    }
-}
-
-@Composable
-private fun AnimatedGradientBackground() {
-    val infiniteTransition = rememberInfiniteTransition(label = "background")
-    val offset by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(20000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "gradientOffset"
-    )
-    
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                brush = Brush.linearGradient(
-                    colors = listOf(
-                        Color(0xFF08817E), // teal
-                        Color(0xFF1E1F47), // indigo
-                        Color(0xFF08817E).copy(alpha = 0.6f),
-                        Color(0xFF1E1F47).copy(alpha = 0.8f)
-                    ),
-                    start = Offset(0f, 0f),
-                    end = Offset(1000f, 1000f)
-                )
-            )
-            .alpha(0.1f)
-    )
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun EnhancedHeaderSection(
     isDriver: Boolean,
-    onDriverChange: (Boolean) -> Unit,
     authUser: com.google.firebase.auth.FirebaseUser?,
     profile: UserProfile?,
     loadingProfile: Boolean,
-    profileError: String?,
     handleDriverModeChange: (Boolean) -> Unit,
     checkingDriverProfile: Boolean,
-    hasCompleteDriverProfile: Boolean,
-    canBecomeDriver: () -> Boolean,
-    googleLinked: Boolean
+    canBecomeDriver: () -> Boolean
 ) {
-    // Fixed height since error message will be displayed outside the card
-    val totalHeight = 280.dp
-    val cardTotalHeight = 240.dp
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     // La foto se sube a Storage y queda en la cuenta; así el otro la ve en cada viaje.
@@ -530,173 +426,63 @@ private fun EnhancedHeaderSection(
         }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(totalHeight)
-    ) {
-        // Glassmorphism background
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(cardTotalHeight)
-                .align(Alignment.TopCenter)
-                .padding(horizontal = 16.dp)
-                .shadow(
-                    elevation = 20.dp,
-                    shape = RoundedCornerShape(24.dp),
-                    ambientColor = Color.Black.copy(alpha = 0.2f)
-                ),
-            colors = CardDefaults.cardColors(
-                containerColor = AppearanceColors.surface.copy(alpha = 0.2f)
-            ),
-            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.3f)),
-            shape = RoundedCornerShape(24.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                Color.Black.copy(alpha = 0.1f)
-                            )
-                        )
-                    )
-            ) {
-                // Driver mode toggle - show for existing drivers or users with complete driver profile
-                val showDriverToggle = canBecomeDriver()
-                if (showDriverToggle) {
-                    Column(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(16.dp),
-                        horizontalAlignment = Alignment.End
-                    ) {
-                        DriverModeToggleEnhanced(
-                            checked = isDriver,
-                            onCheckedChange = { newMode -> handleDriverModeChange(newMode) },
-                            enabled = !checkingDriverProfile && (isDriver || canBecomeDriver()),
-                            modifier = Modifier
-                        )
-                        
-                        if (checkingDriverProfile) {
-                            CircularProgressIndicator(
-                                modifier = Modifier
-                                    .size(12.dp)
-                                    .padding(top = 4.dp),
-                                strokeWidth = 2.dp,
-                                color = AppearanceColors.highlight(Color(0xFF08817E))
-                            )
+    val colors = MaterialTheme.colorScheme
+    val displayName = listOfNotNull(profile?.firstName, profile?.lastName)
+        .joinToString(" ").ifBlank { authUser?.displayName ?: "Mi cuenta" }
+    val phoneNumber = profile?.number?.takeIf { it.isNotBlank() }
+        ?: authUser?.phoneNumber?.takeIf { it.isNotBlank() }
+    val phoneLabel = phoneNumber?.let(::nationalPhoneForDisplay)?.ifBlank { "Sin número" } ?: "Sin número"
+    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(24.dp)) {
+        IntuPageHeading("Tu cuenta", "Tus preferencias y todo lo que necesitas de Intu.")
+        Card(shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = colors.surfaceContainer)) {
+            Column(Modifier.fillMaxWidth().padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Box(Modifier.size(72.dp)) {
+                        Box(Modifier.fillMaxSize().clip(CircleShape)
+                            .background(colors.primaryContainer)
+                            .clickable(enabled = !isUploadingPhoto) { takePhotoLauncher.launch(captureUri) },
+                            contentAlignment = Alignment.Center) {
+                            Icon(Icons.Outlined.Person, null, tint = colors.primary, modifier = Modifier.size(36.dp))
+                            if (!photoUrl.isNullOrBlank()) {
+                                coil.compose.AsyncImage(model = photoUrl, contentDescription = "Tu foto de perfil",
+                                    modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                            }
+                            if (isUploadingPhoto) {
+                                CircularProgressIndicator(modifier = Modifier.size(28.dp), strokeWidth = 3.dp)
+                            }
+                        }
+                        Surface(onClick = { takePhotoLauncher.launch(captureUri) }, enabled = !isUploadingPhoto,
+                            shape = CircleShape, color = colors.primary, contentColor = colors.onPrimary,
+                            modifier = Modifier.size(32.dp).align(Alignment.BottomEnd)) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(Icons.Outlined.PhotoCamera, "Cambiar foto de perfil", modifier = Modifier.size(18.dp))
+                            }
+                        }
+                    }
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        if (loadingProfile) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                        } else {
+                            Text(displayName, style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.SemiBold, color = colors.onSurface)
+                            Text(phoneLabel, style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
+                            Text(if (isDriver) "Conductor" else "Pasajero", style = MaterialTheme.typography.labelMedium,
+                                color = colors.primary)
                         }
                     }
                 }
-                
-                // Profile content
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 24.dp)
-                        .padding(top = 60.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    // Enhanced profile picture
-                    Box(
-                        modifier = Modifier
-                            .size(100.dp)
-                            .clip(CircleShape)
-                            .clickable { takePhotoLauncher.launch(captureUri) }
-                            .background(
-                                Brush.radialGradient(
-                                    colors = listOf(
-                                        Color(0xFF08817E), // teal
-                                        Color(0xFF1E1F47)  // indigo
-                                    )
-                                )
-                            )
-                            .border(3.dp, Color.White, CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Person,
-                            contentDescription = null,
-                            modifier = Modifier.size(40.dp),
-                            tint = Color.White
-                        )
-                        if (!photoUrl.isNullOrBlank()) {
-                            coil.compose.AsyncImage(
-                                model = photoUrl,
-                                contentDescription = "Tu foto de perfil",
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
-                            )
-                        }
-                        if (isUploadingPhoto) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(Color.Black.copy(alpha = 0.4f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                CircularProgressIndicator(color = Color.White, strokeWidth = 3.dp, modifier = Modifier.size(32.dp))
-                            }
-                        }
-                        
-                        // Edit overlay
-                        Box(
-                            modifier = Modifier
-                                .size(32.dp)
-                                .clip(CircleShape)
-                                .background(AppearanceColors.surface)
-                                .align(Alignment.BottomEnd)
-                                .border(2.dp, Color(0xFF08817E), CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.PhotoCamera,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp),
-                                tint = AppearanceColors.highlight(Color(0xFF08817E))
-                            )
-                        }
-                    }
-                    
-                    Spacer(modifier = Modifier.height(16.dp))
-                    
-                    // User info
-                    when {
-                        loadingProfile -> {
-                            CircularProgressIndicator(
-                                color = Color.White,
-                                strokeWidth = 3.dp
-                            )
-                        }
-                        else -> {
-                            val displayName = listOfNotNull(profile?.firstName, profile?.lastName)
-                                .joinToString(" ").ifBlank { authUser?.displayName ?: "Mi cuenta" }
-                            val phoneNumber = profile?.number?.takeIf { it.isNotBlank() }
-                                ?: authUser?.phoneNumber?.takeIf { it.isNotBlank() }
-                            val phoneLabel = phoneNumber?.let(::nationalPhoneForDisplay)?.ifBlank { "Sin número" }
-                                ?: "Sin número"
-                            
-                            Text(
-                                displayName,
-                                style = MaterialTheme.typography.headlineSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
-                            
-                            Text(
-                                when {
-                                    isDriver -> "Conductor • $phoneLabel"
-                                    else -> phoneLabel
-                                },
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = Color.White.copy(alpha = 0.8f)
-                            )
-                        }
+                if (canBecomeDriver()) {
+                    HorizontalDivider(color = colors.outlineVariant)
+                    Row(Modifier.fillMaxWidth().testTag("account-driver-mode")
+                        .toggleable(value = isDriver, role = Role.Switch,
+                            enabled = !checkingDriverProfile, onValueChange = handleDriverModeChange),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Text("Modo conductor", modifier = Modifier.weight(1f), color = colors.onSurface)
+                        Switch(checked = isDriver, onCheckedChange = null, enabled = !checkingDriverProfile)
                     }
                 }
             }
@@ -732,12 +518,11 @@ private fun DriverStatsSection() {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 20.dp),
         colors = CardDefaults.cardColors(
-            containerColor = AppearanceColors.surface.copy(alpha = 0.9f)
+            containerColor = MaterialTheme.colorScheme.surfaceContainer
         ),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+        shape = RoundedCornerShape(24.dp)
     ) {
         Row(
             modifier = Modifier
@@ -807,15 +592,14 @@ private fun SettingsSection(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 20.dp),
         colors = CardDefaults.cardColors(
-            containerColor = AppearanceColors.surface.copy(alpha = 0.95f)
+            containerColor = MaterialTheme.colorScheme.surfaceContainer
         ),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+        shape = RoundedCornerShape(24.dp)
     ) {
         Column(
-            modifier = Modifier.padding(vertical = 8.dp)
+            modifier = Modifier.testTag("account-settings").padding(vertical = 8.dp)
         ) {
             // Email verification - prioritize Firestore profile email, fallback to Firebase Auth
             // Google account
@@ -835,7 +619,7 @@ private fun SettingsSection(
                 actionColor = when {
                     googleLinkingInProgress -> Color.Gray
                     googleLinked -> Color(0xFF10B981)
-                    else -> Color(0xFF667eea)
+                    else -> MaterialTheme.colorScheme.primary
                 },
                 onClick = {
                     if (!googleLinked && !googleLinkingInProgress) {
@@ -876,6 +660,16 @@ private fun SettingsSection(
                 }
             )
             
+            val appearance = LocalAppearanceController.current
+            SettingsItemEnhanced(
+                icon = Icons.Outlined.DarkMode,
+                title = "Modo oscuro",
+                subtitle = "Usar colores oscuros en Intu",
+                checked = appearance.darkMode,
+                onCheckedChange = appearance.setDarkMode,
+                modifier = Modifier.testTag("account-dark-mode")
+            )
+
             // Earn as driver - only show for non-drivers who need to complete driver info
                     val shouldShowDriverOption = driverStatusLoaded && driverAccess.canApply
                     if (shouldShowDriverOption) {
@@ -984,133 +778,42 @@ private fun SettingsItemEnhanced(
     actionText: String? = null,
     actionColor: Color = MaterialTheme.colorScheme.primary,
     onClick: () -> Unit = {},
-    enabled: Boolean = true
-) {
-    Surface(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        color = Color.Transparent,
-        enabled = enabled
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Icon
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color(0xFF08817E).copy(alpha = 0.1f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = Color(0xFF667eea),
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-            
-            Spacer(modifier = Modifier.width(12.dp))
-            
-            // Content
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
-                Text(
-                    title,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Medium,
-                    color = AppearanceColors.foreground(Color(0xFF1C1C1E))
-                )
-                subtitle?.let {
-                    Text(
-                        it,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = AppearanceColors.secondary(Color(0xFF6B7280)),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-            
-            // Action
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                actionText?.let {
-                    Text(
-                        it,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = AppearanceColors.highlight(actionColor),
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
-                    contentDescription = null,
-                    tint = Color(0xFF9CA3AF),
-                    modifier = Modifier.size(16.dp)
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun DriverModeToggleEnhanced(
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
     enabled: Boolean = true,
+    checked: Boolean? = null,
+    onCheckedChange: ((Boolean) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    val scale by animateFloatAsState(
-        targetValue = if (checked) 1.05f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessLow
-        ),
-        label = "toggleScale"
-    )
-    
-    Card(
-        modifier = modifier
-            .scale(scale)
-            .clickable(enabled = enabled) { onCheckedChange(!checked) },
-        colors = CardDefaults.cardColors(
-            containerColor = when {
-                !enabled -> Color.Gray.copy(alpha = 0.3f)
-                checked -> Color(0xFF08817E)
-                else -> AppearanceColors.surface.copy(alpha = 0.8f)
-            }
-        ),
-        shape = RoundedCornerShape(20.dp),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = if (checked) 8.dp else 4.dp
-        )
+    val colors = MaterialTheme.colorScheme
+    val actionModifier = if (checked != null && onCheckedChange != null) {
+        modifier.toggleable(value = checked, role = Role.Switch, enabled = enabled,
+            onValueChange = onCheckedChange)
+    } else modifier.clickable(enabled = enabled, onClick = onClick)
+    Row(
+        modifier = actionModifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp)
+            .alpha(if (enabled) 1f else 0.5f),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Icon(
-                imageVector = if (checked) Icons.Default.DirectionsCar else Icons.Default.Person,
-                contentDescription = null,
-                tint = if (checked && enabled) Color.White else if (!enabled) AppearanceColors.secondary(Color.Gray) else AppearanceColors.muted,
-                modifier = Modifier.size(18.dp)
-            )
-            Text(
-                if (checked) "Conductor" else "Pasajero",
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold,
-                color = if (checked && enabled) Color.White else if (!enabled) AppearanceColors.secondary(Color.Gray) else AppearanceColors.muted
-            )
+        Icon(icon, contentDescription = null, tint = colors.primary, modifier = Modifier.size(24.dp))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium,
+                color = colors.onSurface)
+            subtitle?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant,
+                    maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        if (checked != null) {
+            Switch(checked = checked, onCheckedChange = null, enabled = enabled)
+        } else {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                actionText?.let {
+                    Text(it, style = MaterialTheme.typography.labelMedium,
+                        color = AppearanceColors.highlight(actionColor), fontWeight = FontWeight.Medium)
+                }
+                Icon(Icons.AutoMirrored.Filled.ArrowForwardIos, null,
+                    tint = colors.onSurfaceVariant, modifier = Modifier.size(14.dp))
+            }
         }
     }
 }

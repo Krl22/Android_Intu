@@ -1,6 +1,5 @@
 package com.intu.taxi.ui.screens
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -16,8 +15,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -39,10 +36,8 @@ internal fun CommercialHome(
     onDelivery: () -> Unit
 ) {
     val colors = MaterialTheme.colorScheme
-    val glowHeight = with(LocalDensity.current) { 420.dp.toPx() }
     Column(
-        Modifier.fillMaxSize().background(Brush.verticalGradient(
-            listOf(colors.primaryContainer, colors.background), endY = glowHeight)).testTag("commercial-home")
+        Modifier.fillMaxSize().intuPageBackground().testTag("commercial-home")
             .padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())
             .imePadding().verticalScroll(rememberScrollState())
     ) {

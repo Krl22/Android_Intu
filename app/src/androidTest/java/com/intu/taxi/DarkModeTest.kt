@@ -70,6 +70,7 @@ class DarkModeTest {
         }
         // No admin callback is provided: this is the ordinary account screen.
         compose.waitUntil(15_000) { compose.onAllNodesWithTag("account-dark-mode").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNode(hasTestTag("account-dark-mode") and hasAnyAncestor(hasTestTag("account-settings"))).assertExists()
         compose.onNodeWithTag("account-dark-mode").performScrollTo().assertIsOff().performClick()
         compose.onNodeWithTag("account-dark-mode").assertIsOn()
         compose.runOnIdle { assertTrue(paletteIsDark) }
@@ -78,6 +79,7 @@ class DarkModeTest {
         compose.onNodeWithTag("account-dark-mode").performScrollTo().assertIsOn().performClick()
         compose.onNodeWithTag("account-dark-mode").assertIsOff()
         compose.runOnIdle { assertFalse(paletteIsDark) }
+        captureNativeScreenshot(compose, "light-account.png")
     }
 
     @Test fun liveMapStyleChangeKeepsDestinationRouteVehicleAndCamera() {
