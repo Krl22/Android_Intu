@@ -40,21 +40,6 @@ internal fun DestinationSearchPanel(
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = Color.Transparent)) {
         Column(Modifier.padding(vertical = 8.dp)) {
-            Text("Tus direcciones", style = MaterialTheme.typography.labelLarge, color = colors.primary,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
-            val saved = listOf("casa" to "Casa", "trabajo" to "Trabajo") +
-                savedPlaces.filterNot { it.id == "casa" || it.id == "trabajo" }.map { it.id to it.name }
-            saved.forEach { (id, name) ->
-                val place = savedPlaces.find { it.id == id }
-                DestinationRow(name, place?.address?.takeIf { it.isNotBlank() } ?: "Agregar dirección",
-                    when (id) {
-                        "casa" -> Icons.Outlined.Home
-                        "trabajo" -> Icons.Outlined.Work
-                        else -> Icons.Outlined.StarOutline
-                    }, "home-place-$id") {
-                    if (place != null) onSavedPlaceClick(place) else onManagePlaces()
-                }
-            }
             if (query.trim().length >= 2) {
                 Text("Direcciones sugeridas", style = MaterialTheme.typography.labelLarge, color = colors.primary,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
@@ -82,6 +67,21 @@ internal fun DestinationSearchPanel(
                         .clickable { uri.openUri("https://www.mapbox.com/about/maps/") })
                 if (error != null) TextButton(onClick = onRefresh, enabled = !loading,
                     modifier = Modifier.padding(horizontal = 8.dp)) { Text("Actualizar lugares") }
+            }
+            Text("Tus direcciones", style = MaterialTheme.typography.labelLarge, color = colors.primary,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+            val saved = listOf("casa" to "Casa", "trabajo" to "Trabajo") +
+                savedPlaces.filterNot { it.id == "casa" || it.id == "trabajo" }.map { it.id to it.name }
+            saved.forEach { (id, name) ->
+                val place = savedPlaces.find { it.id == id }
+                DestinationRow(name, place?.address?.takeIf { it.isNotBlank() } ?: "Agregar dirección",
+                    when (id) {
+                        "casa" -> Icons.Outlined.Home
+                        "trabajo" -> Icons.Outlined.Work
+                        else -> Icons.Outlined.StarOutline
+                    }, "home-place-$id") {
+                    if (place != null) onSavedPlaceClick(place) else onManagePlaces()
+                }
             }
             DestinationRow("Elegir en mapa", "", Icons.Outlined.Place, "home-pick-destination", onPickMap)
             DestinationRow("Lugares guardados", "", Icons.Outlined.StarOutline, "home-manage-places", onManagePlaces)

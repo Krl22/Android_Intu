@@ -194,6 +194,40 @@ class PlaceCatalogTest {
         assertEquals(listOf("lima", "prado"), calls.toList())
     }
 
+    @Test fun gpsJitterKeepsSuggestionsAndSignificantMovementRefreshesWithoutClearing() {
+        val proximity = mutableStateOf(-11.252 to -74.638)
+        val calls = java.util.concurrent.atomic.AtomicInteger()
+        val result = PlaceSearchResult("mapbox:lima", "Resultado estable", "Satipo", -11.252, -74.638, PlaceSearchSource.MAPBOX)
+        compose.setContent { IntuTheme {
+            val state = rememberAddressSearch("lima", true, proximity.value) {
+                val call = calls.incrementAndGet()
+                kotlinx.coroutines.delay(if (call == 1) 10 else 1200)
+                listOf(result)
+            }
+            Column {
+                state.results.forEach { Text(it.name) }
+                if (state.loading) Text("Actualizando sugerencias")
+            }
+        } }
+        compose.mainClock.advanceTimeBy(700)
+        compose.waitUntil(5000) { compose.onAllNodesWithText(result.name).fetchSemanticsNodes().isNotEmpty() }
+        repeat(8) { index ->
+            compose.runOnIdle { proximity.value = (-11.252 + index * 0.000002) to -74.638 }
+            compose.onNodeWithText(result.name).assertIsDisplayed()
+            compose.mainClock.advanceTimeBy(700)
+        }
+        assertEquals(1, calls.get())
+        compose.runOnIdle { proximity.value = -12.10 to -77.03 }
+        compose.onNodeWithText(result.name).assertIsDisplayed()
+        compose.onNodeWithText("Actualizando sugerencias").assertIsDisplayed()
+        compose.mainClock.advanceTimeBy(700)
+        compose.waitUntil(5000) { calls.get() == 2 }
+        compose.onNodeWithText(result.name).assertIsDisplayed()
+        compose.mainClock.advanceTimeBy(1400)
+        compose.waitUntil(5000) { compose.onAllNodesWithText("Actualizando sugerencias").fetchSemanticsNodes().isEmpty() }
+        compose.onNodeWithText(result.name).assertIsDisplayed()
+    }
+
     @Test fun addressFailurePreservesCatalogAndMapFallback() {
         val place = CatalogPlace("qa", "Plaza QA", latitude = -11.252, longitude = -74.638, status = "published", pickupVerified = true)
         compose.setContent { IntuTheme {

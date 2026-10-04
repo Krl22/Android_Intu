@@ -13,6 +13,8 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import com.intu.taxi.data.PlaceSearchResult
 import com.intu.taxi.data.PlaceSearchSource
+import com.intu.taxi.ui.map.TripMap
+import com.mapbox.geojson.Point
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 
@@ -31,14 +33,26 @@ internal fun rememberAddressSearch(
 ): AddressSearchState {
     val text = query.trim()
     val active = enabled && text.length >= 2
-    var state by remember(text, active, proximity) { mutableStateOf(AddressSearchState(loading = active)) }
+    var state by remember(text, active) { mutableStateOf(AddressSearchState(loading = active)) }
+    // GPS jitter must neither clear results nor repeatedly cancel the pending lookup.
+    var searchProximity by remember { mutableStateOf(proximity) }
+    LaunchedEffect(proximity) {
+        val previous = searchProximity
+        if (proximity != null && (previous == null || TripMap.metersBetween(
+                Point.fromLngLat(previous.second, previous.first),
+                Point.fromLngLat(proximity.second, proximity.first)) >= 250.0)) {
+            searchProximity = proximity
+        }
+    }
     val currentSearch by rememberUpdatedState(search)
-    LaunchedEffect(text, active, proximity) {
+    LaunchedEffect(text, active, searchProximity) {
         if (!active) return@LaunchedEffect
+        state = state.copy(loading = true, error = null)
         delay(600)
         try { state = AddressSearchState(results = currentSearch(text)) }
         catch (e: CancellationException) { throw e }
-        catch (_: Exception) { state = AddressSearchState(error = "No se pudieron buscar las direcciones. Revisa tu conexión o elige en el mapa.") }
+        catch (_: Exception) { state = state.copy(loading = false,
+            error = "No se pudieron buscar las direcciones. Revisa tu conexión o elige en el mapa.") }
     }
     return state
 }

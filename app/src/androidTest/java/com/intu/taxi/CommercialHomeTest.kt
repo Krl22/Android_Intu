@@ -154,6 +154,8 @@ class CommercialHomeTest {
         compose.onNodeWithTag("home-place-trabajo").assertDoesNotExist()
         compose.onNodeWithTag("home-pick-destination").assertDoesNotExist()
         compose.onNodeWithText("¿A dónde vamos?").performClick()
+        assertTrue(compose.onNodeWithText("Parque Central").fetchSemanticsNode().boundsInRoot.top <
+            compose.onNodeWithTag("home-place-casa").fetchSemanticsNode().boundsInRoot.top)
         compose.onNode(hasTestTag("home-place-casa") and hasAnyAncestor(hasTestTag("destination-search-panel")))
             .performScrollTo().performClick()
         assertEquals(home, selected.get())
