@@ -97,7 +97,7 @@ class CommercialHomeTest {
         compose.onNodeWithText("No encontramos ese lugar. Puedes elegirlo en el mapa.").assertDoesNotExist()
         compose.onNode(hasSetTextAction()).assertIsFocused().performTextInput("zzzz")
         compose.onNodeWithTag("home-map").assertIsDisplayed()
-        compose.onNodeWithText("Tu día se mueve\ncon Intu.").assertDoesNotExist()
+        compose.onNodeWithText("Muévete con Intu.").assertDoesNotExist()
         // Android handles IME dismissal before the screen's BackHandler.
         compose.onNodeWithContentDescription("Limpiar").performClick()
         closeSoftKeyboard()
@@ -105,9 +105,9 @@ class CommercialHomeTest {
         compose.onNodeWithTag("commercial-home").assertIsDisplayed()
         // The native keyboard inset animation can finish after Compose becomes idle.
         compose.waitUntil(10_000) {
-            compose.onAllNodesWithText("Tu día se mueve\ncon Intu.").fetchSemanticsNodes().isNotEmpty()
+            compose.onAllNodesWithText("Muévete con Intu.").fetchSemanticsNodes().isNotEmpty()
         }
-        compose.onNodeWithText("Tu día se mueve\ncon Intu.").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Muévete con Intu.").performScrollTo().assertIsDisplayed()
         compose.onNodeWithTag("home-map").assertDoesNotExist()
         compose.onNodeWithTag("home-place-casa").assertDoesNotExist()
         compose.onNodeWithTag("home-pick-destination").assertDoesNotExist()

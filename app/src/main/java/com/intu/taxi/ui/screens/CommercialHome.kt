@@ -14,6 +14,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.intu.taxi.models.MotoOption
@@ -40,45 +42,52 @@ internal fun CommercialHome(
     ) {
         Column(
             Modifier.fillMaxWidth().padding(horizontal = 20.dp)
-                .padding(top = if (searchActive) 16.dp else 24.dp, bottom = 8.dp)
+                .padding(top = if (searchActive) 16.dp else 20.dp, bottom = 8.dp)
         ) {
             if (!searchActive) {
-                Text("intu", color = colors.primary, fontSize = 32.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(20.dp))
-                Text(if (greetingName.isBlank()) "¡Hola!" else "¡Hola, $greetingName!",
-                    color = colors.onSurfaceVariant, style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(8.dp))
-                Text("Tu día se mueve\ncon Intu.", color = colors.onBackground,
-                    style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(12.dp))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("Viaja y envía lo que necesitas. Más cerca de tu ciudad.",
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Text("intu", color = colors.primary, fontSize = 32.sp, fontWeight = FontWeight.Bold)
+                    Text(if (greetingName.isBlank()) "¡Hola!" else "¡Hola, $greetingName!",
                         modifier = Modifier.weight(1f), color = colors.onSurfaceVariant,
-                        style = MaterialTheme.typography.bodyMedium)
-                    MotoOptionArt(MotoOption.HONDA, animate = false, modifier = Modifier.size(112.dp, 72.dp))
+                        style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.End,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                Spacer(Modifier.height(24.dp))
+                Spacer(Modifier.height(12.dp))
+                Text("Muévete con Intu.", color = colors.onBackground,
+                    style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(4.dp))
+                Text("Viaja, envía y descubre.", color = colors.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.height(16.dp))
             }
             searchContent()
         }
         if (!searchActive) {
-            Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Card(colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+                    shape = RoundedCornerShape(24.dp), modifier = Modifier.testTag("home-local-businesses")
+                        .intuCardBackground(emphasized = true)) {
+                    Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                        Surface(shape = RoundedCornerShape(14.dp), color = colors.primary.copy(alpha = 0.12f)) {
+                            Icon(Icons.Outlined.Storefront, contentDescription = null, tint = colors.primary,
+                                modifier = Modifier.padding(12.dp).size(26.dp))
+                        }
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("Más de tu ciudad", color = colors.onSurface,
+                                style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                            Text("Pronto, descubre negocios locales con Intu.", color = colors.onSurfaceVariant,
+                                style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                }
                 Text("¿Qué necesitas hoy?", color = colors.onBackground,
                     style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     HomeServiceCard(MotoOption.ANY, "Viajar", "En mototaxi", onTravel, Modifier.weight(1f))
                     HomeServiceCard(MotoOption.DELIVERY, "Enviar", "Paquetes pequeños", onDelivery, Modifier.weight(1f))
-                }
-                Card(colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-                    shape = RoundedCornerShape(24.dp), modifier = Modifier.testTag("home-local-businesses").intuCardBackground()) {
-                    Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Icon(Icons.Outlined.Storefront, contentDescription = null, tint = colors.primary)
-                        Text("Más de tu ciudad", color = colors.onSurface,
-                            style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                        Text("Pronto, descubre negocios locales con Intu.", color = colors.onSurfaceVariant,
-                            style = MaterialTheme.typography.bodyMedium)
-                    }
                 }
             }
         }
