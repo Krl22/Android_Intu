@@ -1,6 +1,5 @@
 package com.intu.taxi.ui.screens
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -8,9 +7,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.outlined.Storefront
-import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Work
-import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -21,7 +17,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.intu.taxi.models.MotoOption
-import com.intu.taxi.data.SavedPlace
 import com.intu.taxi.ui.components.MotoOptionArt
 
 /** Brand-first landing; booking, saved places and search remain owned by HomeScreen. */
@@ -31,8 +26,6 @@ internal fun CommercialHome(
     greetingName: String,
     searchActive: Boolean,
     searchContent: @Composable () -> Unit,
-    destinations: @Composable () -> Unit,
-    onPickMap: () -> Unit,
     onTravel: () -> Unit,
     onDelivery: () -> Unit
 ) {
@@ -68,13 +61,6 @@ internal fun CommercialHome(
                 Spacer(Modifier.height(24.dp))
             }
             searchContent()
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                TextButton(onClick = onPickMap, modifier = Modifier.testTag("home-pick-destination")) {
-                    Icon(Icons.Outlined.Place, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("Elegir en mapa")
-                }
-            }
         }
         if (!searchActive) {
             Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -84,7 +70,6 @@ internal fun CommercialHome(
                     HomeServiceCard(MotoOption.ANY, "Viajar", "En mototaxi", onTravel, Modifier.weight(1f))
                     HomeServiceCard(MotoOption.DELIVERY, "Enviar", "Paquetes pequeños", onDelivery, Modifier.weight(1f))
                 }
-                destinations()
                 Card(colors = CardDefaults.cardColors(containerColor = Color.Transparent),
                     shape = RoundedCornerShape(24.dp), modifier = Modifier.testTag("home-local-businesses").intuCardBackground()) {
                     Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -95,48 +80,6 @@ internal fun CommercialHome(
                             style = MaterialTheme.typography.bodyMedium)
                     }
                 }
-            }
-        }
-    }
-}
-
-@Composable
-internal fun HomeDestinations(
-    places: List<SavedPlace>,
-    onSavedPlaceClick: (SavedPlace) -> Unit,
-    onConfigurePlace: () -> Unit
-) {
-    val colors = MaterialTheme.colorScheme
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("Tus lugares", style = MaterialTheme.typography.titleMedium,
-                color = colors.onBackground, fontWeight = FontWeight.SemiBold)
-            TextButton(onClick = onConfigurePlace, modifier = Modifier.testTag("home-manage-places")) { Text("Gestionar") }
-        }
-        Card(shape = RoundedCornerShape(24.dp), modifier = Modifier.intuCardBackground(),
-            colors = CardDefaults.cardColors(containerColor = Color.Transparent)) {
-            val destinations = listOf("casa" to "Casa", "trabajo" to "Trabajo") +
-                places.filterNot { it.id == "casa" || it.id == "trabajo" }.map { it.id to it.name }
-            destinations.forEachIndexed { index, (id, name) ->
-                val place = places.find { it.id == id }
-                ListItem(
-                    headlineContent = { Text(name) },
-                    supportingContent = { Text(place?.address?.takeIf { it.isNotBlank() } ?: "Agregar dirección") },
-                    leadingContent = { Icon(when (id) {
-                        "casa" -> Icons.Outlined.Home
-                        "trabajo" -> Icons.Outlined.Work
-                        else -> Icons.Outlined.Place
-                    }, contentDescription = null, tint = colors.primary) },
-                    trailingContent = { Icon(Icons.AutoMirrored.Filled.ArrowForward, null,
-                        tint = colors.onSurfaceVariant, modifier = Modifier.size(18.dp)) },
-                    colors = ListItemDefaults.colors(containerColor = Color.Transparent,
-                        headlineColor = colors.onSurface, supportingColor = colors.onSurfaceVariant),
-                    modifier = Modifier.testTag("home-place-$id").clickable {
-                        if (place != null) onSavedPlaceClick(place) else onConfigurePlace()
-                    }
-                )
-                if (index < destinations.lastIndex) HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = colors.outlineVariant)
             }
         }
     }

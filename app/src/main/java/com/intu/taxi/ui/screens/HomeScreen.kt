@@ -1046,7 +1046,6 @@ fun HomeScreen(
                 padding = padding,
                 greetingName = greetingName,
                 searchActive = searchActive,
-                onPickMap = { focusManager.clearFocus(); keyboard?.hide(); isSelectingDestination = true },
                 onTravel = {
                     selectedMotoOptionCode = com.intu.taxi.models.MotoOption.ANY.code
                     isDelivery = false
@@ -1069,32 +1068,47 @@ fun HomeScreen(
                         showClearButton = true,
                         onClearClick = { searchQuery = "" }
                     )
-                    if (isSearchFocused && searchQuery.trim().length >= 2) {
-                        PlaceSearchPanel(mergePlaceSearchResults(suggestions, addressSearch.results), catalog.places.isNotEmpty(), catalogLoading, catalogError,
+                    if (searchActive) {
+                        DestinationSearchPanel(
+                            query = searchQuery,
+                            savedPlaces = savedPlaces,
+                            results = mergePlaceSearchResults(suggestions, addressSearch.results),
+                            hasCatalog = catalog.places.isNotEmpty(),
+                            loading = catalogLoading,
+                            error = catalogError,
+                            addressLoading = addressSearch.loading,
+                            addressError = addressSearch.error,
                             onSelect = { place ->
+                                focusManager.clearFocus()
+                                keyboard?.hide()
                                 val point = Point.fromLngLat(place.longitude, place.latitude)
                                 mapView.mapboxMap.setCamera(CameraOptions.Builder().center(point).zoom(16.0).build())
                                 selectedDestination = point
                                 searchQuery = place.name
                                 suggestions = emptyList()
                                 isSelectingDestination = true
-                            }, onRefresh = { catalogRefresh++ },
-                            onPickMap = { searchQuery = ""; isSelectingDestination = true },
-                            modifier = Modifier.padding(vertical = 6.dp),
-                            addressLoading = addressSearch.loading, addressError = addressSearch.error)
+                            },
+                            onSavedPlaceClick = { place ->
+                                focusManager.clearFocus()
+                                keyboard?.hide()
+                                searchQuery = place.name
+                                suggestions = emptyList()
+                                confirmDestination(Point.fromLngLat(place.longitude, place.latitude))
+                            },
+                            onRefresh = { catalogRefresh++ },
+                            onPickMap = {
+                                focusManager.clearFocus()
+                                keyboard?.hide()
+                                searchQuery = ""
+                                isSelectingDestination = true
+                            },
+                            onManagePlaces = {
+                                keyboard?.hide()
+                                showSavedPlaces = true
+                            },
+                            modifier = Modifier.padding(top = 12.dp)
+                        )
                     }
-                },
-                destinations = {
-                    HomeDestinations(
-                        places = savedPlaces,
-                        onSavedPlaceClick = { place ->
-                            val destination = Point.fromLngLat(place.longitude, place.latitude)
-                            searchQuery = place.name
-                            suggestions = emptyList()
-                            confirmDestination(destination)
-                        },
-                        onConfigurePlace = { showSavedPlaces = true }
-                    )
                 }
             )
         } else if (isSelectingPoint && !isSearchingDriver && activeRide == null) {

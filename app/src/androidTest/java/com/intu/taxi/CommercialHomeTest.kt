@@ -8,8 +8,12 @@ import androidx.test.espresso.Espresso.closeSoftKeyboard
 import com.intu.taxi.ui.map.TripRoute
 import com.intu.taxi.ui.screens.HomeScreen
 import com.intu.taxi.ui.screens.CommercialHome
-import com.intu.taxi.ui.screens.HomeDestinations
+import com.intu.taxi.ui.screens.DestinationSearchPanel
 import com.intu.taxi.data.SavedPlace
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.material3.TextButton
+import com.intu.taxi.data.PlaceSearchResult
+import com.intu.taxi.data.PlaceSearchSource
 import androidx.compose.material3.Text
 import com.intu.taxi.ui.theme.IntuTheme
 import com.mapbox.geojson.Point
@@ -50,7 +54,14 @@ class CommercialHomeTest {
         compose.onNodeWithText("¿A dónde vamos?").assertIsDisplayed()
         compose.onNodeWithTag("home-map").assertDoesNotExist()
         captureNativeScreenshot(compose, "commercial-home-dark.png")
-        compose.onNodeWithTag("home-pick-destination").performClick()
+        compose.onNodeWithTag("home-pick-destination").assertDoesNotExist()
+        compose.onNodeWithTag("home-place-casa").assertDoesNotExist()
+        compose.onNodeWithTag("home-place-trabajo").assertDoesNotExist()
+        compose.onNode(hasSetTextAction()).performClick()
+        compose.onNodeWithTag("destination-search-panel").assertIsDisplayed()
+        closeSoftKeyboard()
+        captureNativeScreenshot(compose, "destination-panel-empty-dark.png")
+        compose.onNodeWithTag("home-pick-destination").performScrollTo().performClick()
         compose.onNodeWithTag("home-map").assertIsDisplayed()
         compose.onNodeWithTag("commercial-home").assertDoesNotExist()
         pressBack()
@@ -80,6 +91,10 @@ class CommercialHomeTest {
         compose.onNodeWithTag("home-map").assertIsDisplayed()
         compose.onNodeWithTag("home-search-overlay").assertIsDisplayed()
         compose.onNodeWithTag("commercial-home").assertDoesNotExist()
+        compose.onNodeWithTag("home-place-casa").assertIsDisplayed()
+        compose.onNodeWithTag("home-place-trabajo").assertIsDisplayed()
+        compose.onAllNodesWithText("Elegir en mapa").assertCountEquals(1)
+        compose.onNodeWithText("No encontramos ese lugar. Puedes elegirlo en el mapa.").assertDoesNotExist()
         compose.onNode(hasSetTextAction()).assertIsFocused().performTextInput("zzzz")
         compose.onNodeWithTag("home-map").assertIsDisplayed()
         compose.onNodeWithText("Tu día se mueve\ncon Intu.").assertDoesNotExist()
@@ -94,6 +109,8 @@ class CommercialHomeTest {
         }
         compose.onNodeWithText("Tu día se mueve\ncon Intu.").performScrollTo().assertIsDisplayed()
         compose.onNodeWithTag("home-map").assertDoesNotExist()
+        compose.onNodeWithTag("home-place-casa").assertDoesNotExist()
+        compose.onNodeWithTag("home-pick-destination").assertDoesNotExist()
         captureNativeScreenshot(compose, "commercial-home-light.png")
     }
 
@@ -107,7 +124,7 @@ class CommercialHomeTest {
         compose.onNode(hasSetTextAction()).assertTextContains("zzzz")
         compose.onNodeWithTag("home-map").assertIsDisplayed()
         captureNativeScreenshot(compose, "home-search-map-dark.png")
-        compose.onNodeWithTag("home-pick-destination").performClick()
+        compose.onNodeWithTag("home-pick-destination").performScrollTo().performClick()
         compose.onNodeWithText("Confirmar destino").assertIsDisplayed()
         compose.onNodeWithTag("home-search-overlay").assertDoesNotExist()
         pressBack()
@@ -120,18 +137,35 @@ class CommercialHomeTest {
         val work = SavedPlace("trabajo", "Trabajo", "Mi trabajo", -11.24, -74.62)
         val selected = AtomicReference<SavedPlace>()
         val managing = AtomicBoolean()
+        val searching = mutableStateOf(false)
+        val result = PlaceSearchResult("qa:park", "Parque Central", "Av. Principal", -11.26, -74.64, PlaceSearchSource.MAPBOX)
+        val selectedResult = AtomicReference<PlaceSearchResult>()
+        val pickingMap = AtomicBoolean()
         compose.setContent { IntuTheme(darkTheme = true) {
-            CommercialHome(PaddingValues(), "Carlos", searchActive = false,
-                searchContent = { Text("¿A dónde vamos?") },
-                destinations = { HomeDestinations(listOf(home, work), selected::set) { managing.set(true) } },
-                onPickMap = {}, onTravel = {}, onDelivery = {})
+            CommercialHome(PaddingValues(), "Carlos", searchActive = searching.value,
+                searchContent = {
+                    TextButton(onClick = { searching.value = true }) { Text("¿A dónde vamos?") }
+                    if (searching.value) DestinationSearchPanel("Parque", listOf(home, work), listOf(result),
+                        true, false, null, false, null, selectedResult::set, selected::set, {},
+                        { pickingMap.set(true) }, { managing.set(true) })
+                }, onTravel = {}, onDelivery = {})
         } }
-        compose.onNodeWithTag("home-place-casa").performScrollTo().performClick()
+        compose.onNodeWithTag("home-place-casa").assertDoesNotExist()
+        compose.onNodeWithTag("home-place-trabajo").assertDoesNotExist()
+        compose.onNodeWithTag("home-pick-destination").assertDoesNotExist()
+        compose.onNodeWithText("¿A dónde vamos?").performClick()
+        compose.onNode(hasTestTag("home-place-casa") and hasAnyAncestor(hasTestTag("destination-search-panel")))
+            .performScrollTo().performClick()
         assertEquals(home, selected.get())
         compose.onNodeWithTag("home-place-trabajo").performScrollTo().performClick()
         assertEquals(work, selected.get())
+        compose.onNodeWithText("Parque Central").performScrollTo().performClick()
+        assertEquals(result, selectedResult.get())
         compose.onNodeWithTag("home-manage-places").performScrollTo().performClick()
         assertTrue(managing.get())
-        captureNativeScreenshot(compose, "commercial-home-places.png")
+        compose.onNodeWithTag("home-pick-destination").performScrollTo().performClick()
+        assertTrue(pickingMap.get())
+        compose.onAllNodesWithText("Elegir en mapa").assertCountEquals(1)
+        captureNativeScreenshot(compose, "destination-list-dark.png")
     }
 }
