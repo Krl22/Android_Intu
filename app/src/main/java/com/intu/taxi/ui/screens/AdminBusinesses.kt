@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -15,6 +16,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.google.firebase.auth.FirebaseAuth
 import com.intu.taxi.models.*
@@ -53,7 +55,8 @@ internal fun AdminBusinesses(reloadKey: Int) {
     AdminBusinessesContent(state, busy, error, { retry++ },
         { enabled -> mutate({ repository.setEnabled(enabled) }) },
         { courier -> mutate({ repository.setCourier(courier.id, !courier.selected) }) },
-        { editor = BusinessAd(); error = null }, { editor = it; error = null }, { removing = it; error = null })
+        { editor = BusinessAd(); error = null }, { editor = it; error = null }, { removing = it; error = null },
+        onAdInterval = { seconds -> mutate({ repository.setAdInterval(seconds) }) })
     editor?.let { ad -> BusinessAdEditor(ad, busy, error, { if (!busy) { editor = null; error = null } },
         { draft -> mutate({ repository.save(draft) }) { editor = null } }) }
     removing?.let { ad -> AlertDialog(onDismissRequest = { if (!busy) removing = null },
@@ -67,7 +70,8 @@ internal fun AdminBusinesses(reloadKey: Int) {
 @Composable
 internal fun AdminBusinessesContent(state: AdminBusinessState?, busy: Boolean, error: String?, onRetry: () -> Unit,
     onEnabled: (Boolean) -> Unit, onCourier: (BusinessTestCourier) -> Unit,
-    onAdd: () -> Unit, onEdit: (BusinessAd) -> Unit, onArchive: (BusinessAd) -> Unit) {
+    onAdd: () -> Unit, onEdit: (BusinessAd) -> Unit, onArchive: (BusinessAd) -> Unit,
+    onAdInterval: (Int) -> Unit = {}) {
     val colors = MaterialTheme.colorScheme
     LazyColumn(Modifier.fillMaxWidth(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item { AdminSectionHeading("Negocios y publicidad", "Prueba los anuncios y pedidos de negocios ficticios.") }
@@ -91,6 +95,9 @@ internal fun AdminBusinessesContent(state: AdminBusinessState?, busy: Boolean, e
             }
             item { Text("Solo controla los negocios. Los envíos normales siguen disponibles y los pedidos ya solicitados pueden finalizar.",
                 style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant) }
+            item {
+                AdRotationSetting(state.adIntervalSeconds, busy, onAdInterval)
+            }
             if (busy) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
             error?.let { item { Text(it, color = colors.error); TextButton(onClick = onRetry, enabled = !busy) { Text("Actualizar lista") } } }
             item { Text("Repartidores de prueba", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
@@ -120,6 +127,25 @@ internal fun AdminBusinessesContent(state: AdminBusinessState?, busy: Boolean, e
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+internal fun AdRotationSetting(savedSeconds: Int, busy: Boolean, onSave: (Int) -> Unit) {
+    var draft by rememberSaveable(savedSeconds) { mutableStateOf(savedSeconds.toString()) }
+    val seconds = draft.toIntOrNull()
+    val valid = seconds != null && seconds in 1..60
+    Card(Modifier.fillMaxWidth().intuCardBackground(), colors = CardDefaults.cardColors(containerColor = Color.Transparent)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Rotación de publicidad", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text("Cada anuncio pasa al siguiente automáticamente en Inicio.", style = MaterialTheme.typography.bodySmall)
+            OutlinedTextField(draft, { draft = it }, enabled = !busy, singleLine = true,
+                label = { Text("Intervalo en segundos") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                isError = !valid, supportingText = { Text("Entre 1 y 60 segundos · guardado: $savedSeconds s") },
+                modifier = Modifier.fillMaxWidth().testTag("admin-ad-interval"))
+            Button(onClick = { if (valid) onSave(seconds!!) }, enabled = !busy && valid && seconds != savedSeconds,
+                modifier = Modifier.testTag("admin-save-ad-interval")) { Text("Guardar intervalo") }
         }
     }
 }

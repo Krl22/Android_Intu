@@ -32,7 +32,8 @@ internal fun CommercialHome(
     businessFeed: com.intu.taxi.models.BusinessFeed = com.intu.taxi.models.BusinessFeed(),
     businessError: String? = null,
     onBusinessRetry: () -> Unit = {},
-    onBusiness: (com.intu.taxi.models.BusinessAd) -> Unit = {}
+    onBusiness: (com.intu.taxi.models.BusinessAd) -> Unit = {},
+    autoAdvanceAds: Boolean = true
 ) {
     val colors = MaterialTheme.colorScheme
     // Search stays mounted over the map so moving the header preserves focus and typing.
@@ -69,7 +70,7 @@ internal fun CommercialHome(
         if (!searchActive) {
             Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                BusinessAdsSection(businessFeed, businessError, onBusinessRetry, onBusiness)
+                BusinessAdsSection(businessFeed, businessError, onBusinessRetry, onBusiness, autoAdvanceAds)
                 Text("¿Qué necesitas hoy?", color = colors.onBackground,
                     style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {

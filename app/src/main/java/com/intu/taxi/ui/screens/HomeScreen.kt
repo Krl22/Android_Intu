@@ -1156,6 +1156,7 @@ fun HomeScreen(
                 businessError = businessError,
                 onBusinessRetry = { businessRefresh++ },
                 onBusiness = { previewBusiness = it },
+                autoAdvanceAds = previewBusiness == null,
                 onTravel = { openPlanner() },
                 onDelivery = { openPlanner(delivery = true) },
                 searchContent = {

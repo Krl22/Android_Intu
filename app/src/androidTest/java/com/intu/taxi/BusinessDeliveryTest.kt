@@ -47,7 +47,7 @@ class BusinessDeliveryTest {
                 ad.copy(id = "qa-rio-negro", name = "Sazón Río Negro · Demo", title = "Juane tradicional", city = "Río Negro",
                     offerDetail = "Pollo, arroz y sabor de la selva", offerPrice = 14.90, demoPhoto = BusinessPhoto.JUANE),
                 ad.copy(id = "qa-cafe", name = "Café Satipo · Demo", title = "Café + sánguche", offerDetail = "Tu pausa de media mañana",
-                    offerPrice = 9.90, demoPhoto = BusinessPhoto.COFFEE))) },
+                    offerPrice = 9.90, demoPhoto = BusinessPhoto.COFFEE)), adIntervalSeconds = 60) },
                 routeLoader = { origin, target -> TripRoute(listOf(origin, target), 2100.0, 420.0) },
                 rideRequestSender = { booking -> requested.set(booking); Result.failure(IllegalStateException("QA · solicitud simulada")) })
         } }
@@ -117,7 +117,10 @@ class BusinessDeliveryTest {
         assertEquals(4.2, booking.estimatedPrice, .001)
         assertNull(booking.preferredVehicleBrand)
         pressBack()
-        closeSoftKeyboard(); pressBack()
+        compose.waitUntil(20_000) { compose.onAllNodesWithTag("trip-planning-panel").fetchSemanticsNodes().isNotEmpty() }
+        closeSoftKeyboard()
+        compose.onNodeWithContentDescription("Volver al inicio").performClick()
+        compose.waitUntil(20_000) { compose.onAllNodesWithTag("home-start-delivery").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("home-start-delivery").performScrollTo().performClick()
         closeSoftKeyboard()
         compose.onNodeWithTag("home-pick-destination").performScrollTo().performClick()
@@ -190,7 +193,7 @@ class BusinessDeliveryTest {
     @Test fun promotionPagerSurvivesFeedRefreshAndOpensTheVisibleBusiness() {
         val second = ad.copy(id = "qa-rio-negro", name = "Sazón Río Negro · Demo", title = "Juane tradicional", city = "Río Negro",
             offerPrice = 14.90, demoPhoto = BusinessPhoto.JUANE)
-        val feed = mutableStateOf(BusinessFeed(true, listOf(ad, second)))
+        val feed = mutableStateOf(BusinessFeed(true, listOf(ad, second), adIntervalSeconds = 60))
         val selected = AtomicReference<BusinessAd>()
         compose.setContent { IntuTheme(darkTheme = true) { BusinessAdsSection(feed.value, null, {}, selected::set) } }
         compose.onNodeWithContentDescription("Promoción 1 de 2").assertExists()

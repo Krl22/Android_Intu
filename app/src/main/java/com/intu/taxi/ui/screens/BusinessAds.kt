@@ -1,6 +1,7 @@
 package com.intu.taxi.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -20,6 +21,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalDensity
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -29,6 +34,8 @@ import coil.compose.AsyncImage
 import com.intu.taxi.R
 import com.intu.taxi.models.*
 import java.util.Locale
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 
 internal fun businessImage(url: String, photo: BusinessPhoto): Any? = url.takeIf { it.isNotBlank() } ?: when (photo) {
     BusinessPhoto.CHICKEN -> R.drawable.demo_chicken
@@ -45,25 +52,28 @@ internal fun BusinessAdCard(ad: BusinessAd, onClick: () -> Unit, modifier: Modif
     val dark = colors.onSurface.luminance() > .5f
     val background = if (dark) Color(0xFF171B3D) else Color(0xFFFFFBF4)
     val photo = businessImage(ad.imageUrl, ad.demoPhoto)
+    // Every promotion has the same footprint, including offers without a price or photo.
+    val cardHeight = 248.dp * LocalDensity.current.fontScale.coerceAtLeast(1f)
     Card(onClick = onClick, modifier = modifier.testTag("business-ad-${ad.id}"),
         colors = CardDefaults.cardColors(containerColor = background), shape = RoundedCornerShape(26.dp)) {
-        Box(Modifier.fillMaxWidth().heightIn(min = 192.dp)) {
+        Box(Modifier.fillMaxWidth().height(cardHeight)) {
             if (photo != null) Box(Modifier.matchParentSize()) {
                 AsyncImage(photo, ad.title, contentScale = ContentScale.Crop,
                     modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight().fillMaxWidth(.48f))
                 Box(Modifier.matchParentSize().background(Brush.horizontalGradient(
                     0f to background, .48f to background, .67f to Color.Transparent)))
             }
-            Column(Modifier.fillMaxWidth(if (photo != null) .61f else 1f).padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(Modifier.fillMaxHeight().fillMaxWidth(if (photo != null) .61f else 1f).padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("DEMO · ${ad.city.ifBlank { ad.category.label }}", style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold, color = colors.primary, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.clip(RoundedCornerShape(20.dp)).background(colors.primary.copy(alpha = .12f)).padding(horizontal = 9.dp, vertical = 4.dp))
                 Text(ad.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold,
-                    color = colors.onSurface, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                    color = colors.onSurface, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 if (ad.offerDetail.isNotBlank()) Text(ad.offerDetail, style = MaterialTheme.typography.bodySmall,
                     color = colors.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 ad.offerPrice?.let { Text(productPrice(it), style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.ExtraBold, color = colors.onSurface) }
+                    fontWeight = FontWeight.ExtraBold, color = colors.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                Spacer(Modifier.weight(1f))
                 Text(ad.name, style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text("Ver menú →", color = colors.primary, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
             }
@@ -72,13 +82,27 @@ internal fun BusinessAdCard(ad: BusinessAd, onClick: () -> Unit, modifier: Modif
 }
 
 @Composable
-internal fun BusinessAdsSection(feed: BusinessFeed, error: String?, onRetry: () -> Unit, onBusiness: (BusinessAd) -> Unit) {
+internal fun BusinessAdsSection(feed: BusinessFeed, error: String?, onRetry: () -> Unit, onBusiness: (BusinessAd) -> Unit,
+    autoAdvanceEnabled: Boolean = true) {
     val colors = MaterialTheme.colorScheme
     Column(Modifier.testTag("home-local-businesses"), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Más de tu ciudad", color = colors.onBackground, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
         if (feed.enabled && feed.ads.isNotEmpty()) {
             Text("Sabores locales · promociones demo", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
             val pager = rememberPagerState { feed.ads.size }
+            val dragged by pager.interactionSource.collectIsDraggedAsState()
+            val lifecycleOwner = LocalLifecycleOwner.current
+            val adIds = feed.ads.map { it.id }
+            val interval = feed.adIntervalSeconds.takeIf { it in 1..60 } ?: 3
+            LaunchedEffect(pager, adIds, interval, autoAdvanceEnabled, dragged, pager.settledPage, lifecycleOwner) {
+                if (autoAdvanceEnabled && !dragged && feed.ads.size > 1) {
+                    lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                        snapshotFlow { pager.isScrollInProgress }.first { !it }
+                        delay(interval * 1000L)
+                        if (!pager.isScrollInProgress) pager.animateScrollToPage((pager.currentPage + 1) % pager.pageCount)
+                    }
+                }
+            }
             HorizontalPager(pager, key = { feed.ads[it].id!! }, pageSpacing = 12.dp,
                 modifier = Modifier.fillMaxWidth().testTag("business-promotions-pager")) { index ->
                 val ad = feed.ads[index]

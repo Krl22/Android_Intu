@@ -9,10 +9,14 @@ import org.json.JSONObject
 class BusinessRepository {
     suspend fun feed(): BusinessFeed {
         val data = SupabaseApi.rpc("business_feed")
-        return BusinessFeed(data.getBoolean("enabled"), ads(data.optJSONArray("ads")))
+        return BusinessFeed(data.getBoolean("enabled"), ads(data.optJSONArray("ads")), adInterval(data))
     }
     suspend fun adminState(): AdminBusinessState = parse(SupabaseApi.rpc("admin_business_state"))
     suspend fun setEnabled(enabled: Boolean) = parse(SupabaseApi.rpc("admin_set_business_enabled", JSONObject().put("p_enabled", enabled)))
+    suspend fun setAdInterval(seconds: Int): AdminBusinessState {
+        require(seconds in 1..60) { "El intervalo debe estar entre 1 y 60 segundos." }
+        return parse(SupabaseApi.rpc("admin_set_ad_interval", JSONObject().put("p_seconds", seconds)))
+    }
     suspend fun setCourier(id: String, selected: Boolean) = parse(SupabaseApi.rpc("admin_set_business_courier",
         JSONObject().put("p_driver_id", id).put("p_selected", selected)))
     suspend fun archive(ad: BusinessAd) = parse(SupabaseApi.rpc("admin_archive_business_ad",
@@ -30,7 +34,8 @@ class BusinessRepository {
     private fun parse(data: JSONObject) = AdminBusinessState(data.getBoolean("enabled"), ads(data.optJSONArray("ads")),
         data.optJSONArray("couriers")?.let { rows -> (0 until rows.length()).map { i ->
             rows.getJSONObject(i).let { BusinessTestCourier(it.getString("id"), it.str("name"), it.str("plate"), it.getBoolean("selected")) }
-        } }.orEmpty())
+        } }.orEmpty(), adInterval(data))
+    private fun adInterval(data: JSONObject) = data.optInt("ad_interval_seconds", 3).takeIf { it in 1..60 } ?: 3
     private fun ads(rows: JSONArray?) = rows?.let { (0 until it.length()).map { i ->
         it.getJSONObject(i).let { a -> BusinessAd(a.getString("id"), a.getString("name"),
             BusinessCategory.entries.first { category -> category.code == a.getString("category") },

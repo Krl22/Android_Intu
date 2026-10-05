@@ -89,6 +89,6 @@ fun businessCart(menu: List<BusinessMenuItem>, quantities: Map<String, Int>): Li
 
 fun List<BusinessOrderItem>.productsTotal(): Double = fold(java.math.BigDecimal.ZERO) { sum, item -> sum + item.total }.toDouble()
 
-data class BusinessFeed(val enabled: Boolean = false, val ads: List<BusinessAd> = emptyList())
+data class BusinessFeed(val enabled: Boolean = false, val ads: List<BusinessAd> = emptyList(), val adIntervalSeconds: Int = 3)
 data class BusinessTestCourier(val id: String, val name: String, val plate: String, val selected: Boolean)
-data class AdminBusinessState(val enabled: Boolean, val ads: List<BusinessAd>, val couriers: List<BusinessTestCourier>)
+data class AdminBusinessState(val enabled: Boolean, val ads: List<BusinessAd>, val couriers: List<BusinessTestCourier>, val adIntervalSeconds: Int = 3)
