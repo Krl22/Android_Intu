@@ -38,7 +38,11 @@ class AdCarouselTest {
             }
         } }
         val heights = ads.map {
-            compose.onNodeWithTag("business-ad-${it.id}").performScrollTo().fetchSemanticsNode().boundsInRoot.height
+            val card = compose.onNodeWithTag("business-ad-${it.id}").performScrollTo()
+            card.assertHeightIsEqualTo(124.dp * if (largeText) 1.5f else 1f)
+            compose.onNode(hasText("Ver menú →") and hasAnyAncestor(hasTestTag("business-ad-${it.id}")),
+                useUnmergedTree = true).assertIsDisplayed()
+            card.fetchSemanticsNode().boundsInRoot.height
         }
         heights.forEach { assertEquals(heights.first(), it, 1f) }
         compose.onAllNodesWithText("Ver menú →", useUnmergedTree = true).assertCountEquals(3)

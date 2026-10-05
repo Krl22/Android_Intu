@@ -1,8 +1,10 @@
 # Publicidad en Inicio
 
-Las promociones de negocios usan una altura común de 248 dp. El tamaño se adapta
-por igual a la escala de texto del dispositivo. Títulos y detalles largos se
-truncan en la tarjeta; el menú conserva la información completa.
+Las promociones de negocios usan una altura común de 124 dp, la mitad de la
+altura anterior. El tamaño se adapta por igual a la escala de texto del
+dispositivo. La tarjeta muestra ciudad, título, precio y «Ver menú» junto a la
+foto. Los títulos largos se truncan; al abrir el menú aparecen el negocio,
+la oferta completa y sus detalles.
 
 El carrusel muestra cada anuncio durante 3 segundos por defecto, avanza al
 siguiente y vuelve al primero al terminar. Permite deslizar manualmente y reinicia
@@ -29,3 +31,7 @@ Validado el 5 de octubre de 2026: 67 pruebas unitarias y 17 escenarios nativos
 de carrusel y negocios completados (incluidas repeticiones de los casos pendientes),
 tres suites SQL con rollback y lint sin errores. Se revisaron capturas en claro,
 oscuro y texto grande. La APK se instaló en Samsung con `adb install -r`.
+
+La versión compacta de 124 dp se recompiló y verificó con cuatro escenarios
+nativos: altura uniforme y menú visible en claro, oscuro y texto grande, y
+apertura del negocio desde Inicio. También se instaló en Samsung conservando datos.

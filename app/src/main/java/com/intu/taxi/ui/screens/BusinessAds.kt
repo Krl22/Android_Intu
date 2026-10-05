@@ -30,6 +30,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.intu.taxi.R
 import com.intu.taxi.models.*
@@ -53,9 +54,9 @@ internal fun BusinessAdCard(ad: BusinessAd, onClick: () -> Unit, modifier: Modif
     val background = if (dark) Color(0xFF171B3D) else Color(0xFFFFFBF4)
     val photo = businessImage(ad.imageUrl, ad.demoPhoto)
     // Every promotion has the same footprint, including offers without a price or photo.
-    val cardHeight = 248.dp * LocalDensity.current.fontScale.coerceAtLeast(1f)
+    val cardHeight = 124.dp * LocalDensity.current.fontScale.coerceAtLeast(1f)
     Card(onClick = onClick, modifier = modifier.testTag("business-ad-${ad.id}"),
-        colors = CardDefaults.cardColors(containerColor = background), shape = RoundedCornerShape(26.dp)) {
+        colors = CardDefaults.cardColors(containerColor = background), shape = RoundedCornerShape(20.dp)) {
         Box(Modifier.fillMaxWidth().height(cardHeight)) {
             if (photo != null) Box(Modifier.matchParentSize()) {
                 AsyncImage(photo, ad.title, contentScale = ContentScale.Crop,
@@ -63,19 +64,19 @@ internal fun BusinessAdCard(ad: BusinessAd, onClick: () -> Unit, modifier: Modif
                 Box(Modifier.matchParentSize().background(Brush.horizontalGradient(
                     0f to background, .48f to background, .67f to Color.Transparent)))
             }
-            Column(Modifier.fillMaxHeight().fillMaxWidth(if (photo != null) .61f else 1f).padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("DEMO · ${ad.city.ifBlank { ad.category.label }}", style = MaterialTheme.typography.labelSmall,
+            Column(Modifier.fillMaxHeight().fillMaxWidth(if (photo != null) .61f else 1f)
+                .padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("DEMO · ${ad.city.ifBlank { ad.category.label }}",
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, lineHeight = 12.sp),
                     fontWeight = FontWeight.Bold, color = colors.primary, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.clip(RoundedCornerShape(20.dp)).background(colors.primary.copy(alpha = .12f)).padding(horizontal = 9.dp, vertical = 4.dp))
-                Text(ad.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold,
+                    modifier = Modifier.clip(RoundedCornerShape(20.dp)).background(colors.primary.copy(alpha = .12f)).padding(horizontal = 7.dp, vertical = 2.dp))
+                Text(ad.title, style = MaterialTheme.typography.titleMedium.copy(lineHeight = 20.sp), fontWeight = FontWeight.ExtraBold,
                     color = colors.onSurface, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                if (ad.offerDetail.isNotBlank()) Text(ad.offerDetail, style = MaterialTheme.typography.bodySmall,
-                    color = colors.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                ad.offerPrice?.let { Text(productPrice(it), style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.ExtraBold, color = colors.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                 Spacer(Modifier.weight(1f))
-                Text(ad.name, style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text("Ver menú →", color = colors.primary, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                ad.offerPrice?.let { Text(productPrice(it), style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp, lineHeight = 24.sp),
+                    fontWeight = FontWeight.ExtraBold, color = colors.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                Text("Ver menú →", color = colors.primary, style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
     }
@@ -166,6 +167,8 @@ internal fun BusinessAdDialog(ad: BusinessAd, onDismiss: () -> Unit, onStart: (L
         }, content = {
             Column(Modifier.verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text(ad.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                if (ad.offerDetail.isNotBlank()) Text(ad.offerDetail, style = MaterialTheme.typography.bodyMedium)
+                ad.offerPrice?.let { Text(productPrice(it), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold) }
                 Text(ad.description, style = MaterialTheme.typography.bodyMedium)
                 if (ad.menu.isNotEmpty()) Text("Elige del menú", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 ad.menu.forEach { item ->
