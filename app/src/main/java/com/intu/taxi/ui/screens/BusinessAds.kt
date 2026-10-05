@@ -65,14 +65,14 @@ internal fun BusinessAdCard(ad: BusinessAd, onClick: () -> Unit, modifier: Modif
                     0f to background, .48f to background, .67f to Color.Transparent)))
             }
             Column(Modifier.fillMaxHeight().fillMaxWidth(if (photo != null) .61f else 1f)
-                .padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically)) {
                 Text("DEMO · ${ad.city.ifBlank { ad.category.label }}",
                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, lineHeight = 12.sp),
                     fontWeight = FontWeight.Bold, color = colors.primary, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.clip(RoundedCornerShape(20.dp)).background(colors.primary.copy(alpha = .12f)).padding(horizontal = 7.dp, vertical = 2.dp))
                 Text(ad.title, style = MaterialTheme.typography.titleMedium.copy(lineHeight = 20.sp), fontWeight = FontWeight.ExtraBold,
                     color = colors.onSurface, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Spacer(Modifier.weight(1f))
                 ad.offerPrice?.let { Text(productPrice(it), style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp, lineHeight = 24.sp),
                     fontWeight = FontWeight.ExtraBold, color = colors.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                 Text("Ver menú →", color = colors.primary, style = MaterialTheme.typography.labelSmall,
