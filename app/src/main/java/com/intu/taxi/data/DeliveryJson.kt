@@ -12,5 +12,9 @@ internal fun JSONObject.deliveryDetails(): DeliveryDetails? {
         detail.str("pickup_reference"), detail.str("delivery_reference"), payer,
         paymentCollected = detail.has("payment_collected_at") && !detail.isNull("payment_collected_at"),
         smallPackageConfirmed = detail.optBoolean("small_package_confirmed", false),
-        businessName = detail.str("business_name").ifBlank { null })
+        businessName = detail.str("business_name").ifBlank { null },
+        businessItems = detail.optJSONArray("business_order_items")?.let { rows -> (0 until rows.length()).map { i ->
+            rows.getJSONObject(i).let { com.intu.taxi.models.BusinessOrderItem(it.getString("item_id"), it.getString("name"),
+                it.getDouble("unit_price"), it.getInt("quantity")) }
+        } }.orEmpty())
 }

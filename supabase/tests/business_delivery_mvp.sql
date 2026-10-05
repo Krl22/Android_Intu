@@ -21,6 +21,7 @@ insert into public.vehicles(driver_id,vehicle_type,brand,model,year,plate) value
 update public.vehicle_types set is_active=true where code='motorcycle';
 update private.ride_security_settings set pin_enabled=false;
 update private.business_delivery_settings set enabled=false;
+delete from private.business_test_couriers;
 -- Isolate feed assertions from any other demo advertisements.
 update private.business_ads set published=false;
 set local role authenticated;

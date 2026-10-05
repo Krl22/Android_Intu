@@ -27,9 +27,12 @@ import java.util.concurrent.atomic.AtomicReference
 /** Local UI fixtures; no live orders, announcements or courier identities are changed. */
 class BusinessDeliveryTest {
     @get:Rule val compose = createComposeRule()
-    private val ad = BusinessAd("qa-business", "Cocina Demo", BusinessCategory.FOOD, "Algo rico, cerca de ti",
+    private val product = BusinessMenuItem(name = "1/4 de pollo + papas", description = "Papas, ensalada y ají", price = 18.90, demoPhoto = BusinessPhoto.CHICKEN)
+    private val ad = BusinessAd("qa-business", "Brasa Satipo · Demo", BusinessCategory.FOOD, "1/4 de pollo + papas",
         "Un negocio ficticio para probar un envío.", address = "Recojo demo en Satipo", latitude = -11.254, longitude = -74.640,
-        published = true, updatedAt = "2026-10-05T05:00:00Z")
+        published = true, updatedAt = "2026-10-05T05:00:00Z", city = "Satipo", offerDetail = "Papas, ensalada y ají", offerPrice = 18.90,
+        demoPhoto = BusinessPhoto.CHICKEN, menu = listOf(product,
+            BusinessMenuItem(name = "Chaufa de pollo", price = 15.90, demoPhoto = BusinessPhoto.CHAUFA)))
 
     private fun launch(dark: Boolean, requested: AtomicReference<RideBooking>) {
         val ready = AtomicBoolean()
@@ -40,7 +43,11 @@ class BusinessDeliveryTest {
             override fun unRegisterLocationConsumer(consumer: LocationConsumer) = Unit
         }
         compose.setContent { IntuTheme(darkTheme = dark) {
-            HomeScreen(PaddingValues(), locationProvider = gps, businessFeedLoader = { BusinessFeed(true, listOf(ad)) },
+            HomeScreen(PaddingValues(), locationProvider = gps, businessFeedLoader = { BusinessFeed(true, listOf(ad,
+                ad.copy(id = "qa-rio-negro", name = "Sazón Río Negro · Demo", title = "Juane tradicional", city = "Río Negro",
+                    offerDetail = "Pollo, arroz y sabor de la selva", offerPrice = 14.90, demoPhoto = BusinessPhoto.JUANE),
+                ad.copy(id = "qa-cafe", name = "Café Satipo · Demo", title = "Café + sánguche", offerDetail = "Tu pausa de media mañana",
+                    offerPrice = 9.90, demoPhoto = BusinessPhoto.COFFEE))) },
                 routeLoader = { origin, target -> TripRoute(listOf(origin, target), 2100.0, 420.0) },
                 rideRequestSender = { booking -> requested.set(booking); Result.failure(IllegalStateException("QA · solicitud simulada")) })
         } }
@@ -54,7 +61,9 @@ class BusinessDeliveryTest {
             compose.onNodeWithTag("home-start-delivery").fetchSemanticsNode().boundsInRoot.top)
         captureNativeScreenshot(compose, "business-home-light.png")
         compose.onNodeWithTag("business-ad-qa-business").performClick()
-        compose.onNodeWithText("Recojo demo en Satipo").assertIsDisplayed()
+        compose.onNodeWithTag("business-start-delivery").assertIsNotEnabled()
+        compose.onNodeWithTag("business-product-plus-${product.id}").performScrollTo().performClick()
+        compose.onNodeWithText("Recojo demo en Satipo").performScrollTo().assertIsDisplayed()
         compose.onNodeWithTag("business-start-delivery").assertIsEnabled()
         pressBack()
         compose.onNodeWithTag("commercial-home").assertIsDisplayed()
@@ -66,6 +75,7 @@ class BusinessDeliveryTest {
         launch(true, requested)
         captureNativeScreenshot(compose, "business-home-dark.png")
         compose.onNodeWithTag("business-ad-qa-business").performClick()
+        compose.onNodeWithTag("business-product-plus-${product.id}").performScrollTo().performClick()
         captureNativeScreenshot(compose, "business-details-dark.png")
         compose.onNodeWithTag("business-start-delivery").performClick()
         compose.onNodeWithText("Confirmar destino").performClick()
@@ -92,6 +102,8 @@ class BusinessDeliveryTest {
         assertEquals(ad.point, booking.route.points.first())
         assertEquals("motorcycle", booking.rideType)
         assertEquals(DeliveryPayer.RECIPIENT, booking.delivery?.payer)
+        assertEquals(product.id, booking.delivery?.businessItems?.single()?.itemId)
+        assertEquals(18.90, booking.delivery!!.businessItems.productsTotal(), .001)
         assertEquals(4.2, booking.estimatedPrice, .001)
         assertNull(booking.preferredVehicleBrand)
         pressBack()
@@ -159,5 +171,76 @@ class BusinessDeliveryTest {
         compose.onNodeWithText("Confirmar punto").performClick()
         compose.onNodeWithText("Guardar anuncio").performClick()
         compose.runOnIdle { assertEquals(picked, saved.get().point); assertEquals("Anuncio editado QA", saved.get().title) }
+    }
+
+    @Test fun promotionPagerSurvivesFeedRefreshAndOpensTheVisibleBusiness() {
+        val second = ad.copy(id = "qa-rio-negro", name = "Sazón Río Negro · Demo", title = "Juane tradicional", city = "Río Negro",
+            offerPrice = 14.90, demoPhoto = BusinessPhoto.JUANE)
+        val feed = mutableStateOf(BusinessFeed(true, listOf(ad, second)))
+        val selected = AtomicReference<BusinessAd>()
+        compose.setContent { IntuTheme(darkTheme = true) { BusinessAdsSection(feed.value, null, {}, selected::set) } }
+        compose.onNodeWithContentDescription("Promoción 1 de 2").assertExists()
+        compose.onNodeWithTag("business-promotions-pager").performTouchInput { swipeLeft() }
+        compose.onNodeWithContentDescription("Promoción 2 de 2").assertExists()
+        compose.runOnIdle { feed.value = feed.value.copy(ads = listOf(ad.copy(description = "Actualizado QA"), second)) }
+        compose.onNodeWithContentDescription("Promoción 2 de 2").assertExists()
+        compose.onNodeWithTag("business-ad-qa-rio-negro").performClick()
+        compose.runOnIdle { assertEquals(second.id, selected.get().id) }
+        captureNativeScreenshot(compose, "business-rio-negro-dark.png")
+    }
+
+    @Test fun menuTotalsFollowQuantitiesAndCannotContinueAfterRemovingAllItems() {
+        val selected = AtomicReference<List<BusinessOrderItem>>()
+        compose.setContent { IntuTheme(darkTheme = false) { BusinessAdDialog(ad, {}, selected::set) } }
+        compose.onNodeWithTag("business-start-delivery").assertIsNotEnabled()
+        repeat(2) { compose.onNodeWithTag("business-product-plus-${product.id}").performScrollTo().performClick() }
+        val second = ad.menu[1]
+        compose.onNodeWithTag("business-product-plus-${second.id}").performScrollTo().performClick()
+        compose.onNodeWithTag("business-products-total").performScrollTo().assertTextEquals("Productos simulados: S/ 53.70")
+        compose.onNodeWithTag("business-start-delivery").performClick()
+        compose.runOnIdle { assertEquals(53.70, selected.get().productsTotal(), .001); assertEquals(3, selected.get().sumOf { it.quantity }) }
+        compose.onNodeWithTag("business-product-minus-${second.id}").performScrollTo().performClick()
+        repeat(2) { compose.onNodeWithTag("business-product-minus-${product.id}").performScrollTo().performClick() }
+        compose.onNodeWithTag("business-start-delivery").assertIsNotEnabled()
+        compose.onNodeWithTag("business-products-total").assertDoesNotExist()
+        captureNativeScreenshot(compose, "business-menu-light.png")
+    }
+
+    @Test fun adminMenuEditsAreRetainedUntilSavingTheAnnouncement() {
+        val saved = AtomicReference<BusinessAd>()
+        compose.setContent { IntuTheme(darkTheme = true) { BusinessAdEditor(ad, false, null, {}, saved::set) } }
+        compose.onNodeWithTag("admin-edit-business-menu").performScrollTo().performClick()
+        compose.onAllNodesWithText("Editar producto")[0].performClick()
+        compose.onNode(hasSetTextAction() and hasText("Precio del producto")).performTextReplacement("20.901")
+        closeSoftKeyboard()
+        compose.onNodeWithText("Guardar producto").performClick()
+        compose.onNodeWithText("El precio debe ser de S/ 0.10 a S/ 999.99, con hasta dos decimales.").performScrollTo().assertIsDisplayed()
+        compose.onNode(hasSetTextAction() and hasText("Precio del producto")).performScrollTo().performTextReplacement("20.90")
+        closeSoftKeyboard()
+        compose.onNodeWithText("Guardar producto").performClick()
+        compose.onNodeWithText("Usar este menú").performClick()
+        compose.onNodeWithText("Guardar anuncio").performClick()
+        compose.runOnIdle { assertEquals(20.90, saved.get().menu.first().price, .001); assertEquals(product.id, saved.get().menu.first().id) }
+    }
+
+    @Test fun largeTextMenuKeepsQuantityControlsAndContinueAccessible() {
+        // Run this case with the emulator's system font_scale=1.4; Dialog has its own density.
+        compose.setContent { IntuTheme(darkTheme = true) { BusinessAdDialog(ad, {}, {}) } }
+        compose.onNodeWithTag("business-product-plus-${product.id}").performScrollTo().assertIsDisplayed().performClick()
+        compose.onNodeWithTag("business-start-delivery").assertIsDisplayed().assertIsEnabled()
+        compose.onNodeWithTag("business-products-total").performScrollTo().assertIsDisplayed()
+        captureNativeScreenshot(compose, "business-menu-large-text.png")
+    }
+
+    @Test fun completedBusinessOrderKeepsProductsSeparateFromTransportInHistory() {
+        val ride = com.intu.taxi.repositories.RideHistoryItem("qa-completed", "completed", null, ad.address, "Destino QA", 4.20,
+            "efectivo", "Repartidor QA", "", "Moto", "QAMENU1", "Persona QA", "", null, null,
+            serviceKind = "delivery", delivery = DeliveryDetails("Persona QA", "+51987654321", "Pedido demo", businessName = ad.name,
+                businessItems = businessCart(ad.menu, mapOf(product.id to 2))))
+        compose.setContent { IntuTheme(darkTheme = true) { RideDetailsDialog(ride, mutableMapOf(), {}) } }
+        compose.onNodeWithTag("business-products-total").assertTextEquals("Productos simulados: S/ 37.80").assertIsDisplayed()
+        compose.onNodeWithText("Tarifa del transporte").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText(com.intu.taxi.ui.formatSoles(4.20)).assertIsDisplayed()
+        captureNativeScreenshot(compose, "business-history-dark.png")
     }
 }

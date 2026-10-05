@@ -27,17 +27,18 @@ internal fun DeliveryDetailsDialog(
     allowedPayers: List<DeliveryPayer> = DeliveryPayer.entries,
     busy: Boolean = false,
     error: String? = null,
-    businessName: String? = null
+    businessName: String? = null,
+    businessItems: List<com.intu.taxi.models.BusinessOrderItem> = emptyList()
 ) {
     var name by rememberSaveable { mutableStateOf(initial?.recipientName.orEmpty()) }
     var phone by rememberSaveable { mutableStateOf(PhoneFormatter.nationalDigits("+51", initial?.recipientPhone.orEmpty())) }
-    var description by rememberSaveable { mutableStateOf(initial?.description.orEmpty()) }
+    var description by rememberSaveable { mutableStateOf(initial?.description ?: if (businessItems.isNotEmpty()) "Pedido demo · ${businessItems.sumOf { it.quantity }} productos" else "") }
     var pickupReference by rememberSaveable { mutableStateOf(initial?.pickupReference.orEmpty()) }
     var deliveryReference by rememberSaveable { mutableStateOf(initial?.deliveryReference.orEmpty()) }
     var smallPackage by rememberSaveable { mutableStateOf(initial?.smallPackageConfirmed ?: false) }
     var payerCode by rememberSaveable { mutableStateOf((initial?.payer?.takeIf { it in allowedPayers } ?: allowedPayers.first()).code) }
     val details = DeliveryDetails(name, phone, description, pickupReference, deliveryReference,
-        DeliveryPayer.entries.first { it.code == payerCode }, smallPackageConfirmed = smallPackage)
+        DeliveryPayer.entries.first { it.code == payerCode }, smallPackageConfirmed = smallPackage, businessName = businessName, businessItems = businessItems)
     val valid = runCatching { details.normalized() }.isSuccess
 
     AccountDialogLayout(
@@ -60,6 +61,7 @@ internal fun DeliveryDetailsDialog(
         content = {
             Column(Modifier.verticalScroll(rememberScrollState()).padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                if (businessItems.isNotEmpty()) BusinessCartSummary(businessItems)
                 OutlinedTextField(description, { description = it.take(280) }, label = { Text("¿Qué enviarás?") },
                     placeholder = { Text("Ej. documentos en un sobre") }, minLines = 2, enabled = !busy,
                     modifier = Modifier.fillMaxWidth())

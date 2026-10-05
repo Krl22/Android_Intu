@@ -17,6 +17,7 @@ internal fun DeliverySummary(details: DeliveryDetails, allowCall: Boolean = fals
     val context = LocalContext.current
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         details.businessName?.let { Text("DEMO · $it", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary) }
+        if (details.businessItems.isNotEmpty()) BusinessCartSummary(details.businessItems)
         Text("Envío · ${details.description}", fontWeight = FontWeight.SemiBold)
         Text("Recibe: ${details.recipientName}", style = MaterialTheme.typography.bodyMedium)
         Text(details.recipientPhone.removePrefix("+51"), style = MaterialTheme.typography.bodySmall)

@@ -98,6 +98,8 @@ object SupabaseApi {
         message == "business_ad_unavailable" -> "Este anuncio ya no está disponible. Vuelve a Inicio y actualiza."
         message == "business_ad_changed" -> "Otro administrador cambió este anuncio. Cierra el editor y actualiza la lista."
         message == "invalid_business_ad" -> "Revisa el anuncio y el punto de recojo del negocio."
+        message == "invalid_business_menu" -> "Revisa los productos, sus precios e imágenes antes de guardar."
+        message == "invalid_business_order" -> "Revisa los productos y cantidades. Abre el menú actualizado desde Inicio."
         message == "business_no_test_courier" -> "Un admin debe seleccionar un repartidor de prueba en Negocios antes de solicitar este envío."
         message == "business_test_courier_required" -> "Solo los repartidores de moto seleccionados para pruebas pueden tomar estos pedidos."
         message == "pickup_not_verified" -> "Confirma el punto de recojo antes de publicar."

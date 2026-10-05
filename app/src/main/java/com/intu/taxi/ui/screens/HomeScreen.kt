@@ -291,6 +291,7 @@ fun HomeScreen(
     var pendingDeliveryRoute by remember { mutableStateOf<TripRoute?>(null) }
     var deliveryDraft by remember { mutableStateOf<com.intu.taxi.models.DeliveryDetails?>(null) }
     var selectedBusiness by remember { mutableStateOf<com.intu.taxi.models.BusinessAd?>(null) }
+    var selectedBusinessItems by remember { mutableStateOf<List<com.intu.taxi.models.BusinessOrderItem>>(emptyList()) }
     var previewBusiness by remember { mutableStateOf<com.intu.taxi.models.BusinessAd?>(null) }
     val businessRepository = remember { com.intu.taxi.repositories.BusinessRepository() }
     var businessFeed by remember(placesUid) { mutableStateOf(com.intu.taxi.models.BusinessFeed()) }
@@ -365,7 +366,7 @@ fun HomeScreen(
 
     // Descarta solo la preparación del viaje; nunca cancela una solicitud ya enviada.
     fun returnHomeFromPreparation() {
-        selectedBusiness = null
+        selectedBusiness = null; selectedBusinessItems = emptyList()
         previewBusiness = null
         isRideOptionsVisible = false
         isSelectingDestination = false
@@ -543,6 +544,7 @@ fun HomeScreen(
         initial = deliveryDraft,
         allowedPayers = if (selectedBusiness != null) listOf(com.intu.taxi.models.DeliveryPayer.RECIPIENT) else com.intu.taxi.models.DeliveryPayer.entries,
         businessName = selectedBusiness?.name,
+        businessItems = selectedBusinessItems,
         onDismiss = { pendingDeliveryOrigin = null; pendingDeliveryRoute = null },
         onConfirm = { details ->
             deliveryDraft = details
@@ -552,9 +554,10 @@ fun HomeScreen(
         }
     )
 
-    previewBusiness?.let { ad -> BusinessAdDialog(ad, onDismiss = { previewBusiness = null }, onStart = {
+    previewBusiness?.let { ad -> BusinessAdDialog(ad, onDismiss = { previewBusiness = null }, onStart = { items ->
         returnHomeFromPreparation()
         selectedBusiness = ad
+        selectedBusinessItems = items
         pickupLocation = ad.point
         selectedMotoOptionCode = com.intu.taxi.models.MotoOption.DELIVERY.code
         isDelivery = true
@@ -1101,14 +1104,14 @@ fun HomeScreen(
                 onBusinessRetry = { businessRefresh++ },
                 onBusiness = { previewBusiness = it },
                 onTravel = {
-                    selectedBusiness = null
+                    selectedBusiness = null; selectedBusinessItems = emptyList()
                     pickupLocation = null
                     selectedMotoOptionCode = com.intu.taxi.models.MotoOption.ANY.code
                     isDelivery = false
                     isSelectingDestination = true
                 },
                 onDelivery = {
-                    selectedBusiness = null
+                    selectedBusiness = null; selectedBusinessItems = emptyList()
                     pickupLocation = null
                     selectedMotoOptionCode = com.intu.taxi.models.MotoOption.DELIVERY.code
                     isDelivery = true
@@ -1431,7 +1434,7 @@ fun HomeScreen(
 
         // Deja el mapa listo para pedir otro viaje
         fun resetRideState() {
-            selectedBusiness = null
+            selectedBusiness = null; selectedBusinessItems = emptyList()
             isDelivery = false
             selectedMotoOptionCode = com.intu.taxi.models.MotoOption.ANY.code
             deliveryDraft = null

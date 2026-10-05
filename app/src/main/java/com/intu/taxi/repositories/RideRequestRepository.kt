@@ -45,7 +45,10 @@ class RideRequestRepository {
                     .put("description", details.description).put("pickup_reference", details.pickupReference)
                     .put("delivery_reference", details.deliveryReference).put("payer", details.payer.code)
                     .put("small_package_confirmed", details.smallPackageConfirmed)
-                    .put("business_ad_updated_at", businessAdUpdatedAt ?: JSONObject.NULL))
+                    .put("business_ad_updated_at", businessAdUpdatedAt ?: JSONObject.NULL)
+                    .put("business_order_items", org.json.JSONArray().apply { details.businessItems.forEach {
+                        put(JSONObject().put("item_id", it.itemId).put("quantity", it.quantity))
+                    } }))
             // The business RPC owns the pickup; clients cannot substitute an address or point.
             if (businessAdId != null) body.put("p_ad_id", businessAdId)
             else body.put("p_origin_lat", originLatitude).put("p_origin_lng", originLongitude).put("p_origin_address", originAddress)

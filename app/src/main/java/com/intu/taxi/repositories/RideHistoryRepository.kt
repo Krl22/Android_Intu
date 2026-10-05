@@ -3,6 +3,7 @@ package com.intu.taxi.repositories
 import com.google.firebase.auth.FirebaseAuth
 import com.intu.taxi.data.SupabaseApi
 import com.intu.taxi.data.str
+import com.intu.taxi.data.deliveryDetails
 import org.json.JSONObject
 import java.time.Instant
 import java.time.LocalDate
@@ -33,7 +34,8 @@ data class RideHistoryItem(
     val distanceMeters: Int = 0,
     val durationSeconds: Int = 0,
     val vehicleType: String = "mototaxi",
-    val serviceKind: String = "passenger"
+    val serviceKind: String = "passenger",
+    val delivery: com.intu.taxi.models.DeliveryDetails? = null
 )
 
 /** Ganancias de un período (solo viajes completados). */
@@ -51,7 +53,7 @@ class RideHistoryRepository {
     private suspend fun history(column: String): List<RideHistoryItem> {
         val rows = SupabaseApi.rows(
             "rides?$column=eq.${SupabaseApi.encode(uid)}&status=in.(completed,cancelled)" +
-                "&select=*&order=requested_at.desc&limit=200"
+                "&select=*,delivery_details(*)&order=requested_at.desc&limit=200"
         )
         return (0 until rows.length()).map { rows.getJSONObject(it).toHistoryItem() }
     }
@@ -92,7 +94,7 @@ class RideHistoryRepository {
         routeGeometry = str("route_polyline").ifBlank { null },
         distanceMeters = optInt("distance_meters"),
         durationSeconds = optInt("duration_seconds"),
-        vehicleType = str("vehicle_type", "mototaxi"), serviceKind = str("service_kind", "passenger")
+        vehicleType = str("vehicle_type", "mototaxi"), serviceKind = str("service_kind", "passenger"), delivery = deliveryDetails()
     )
 
     companion object {

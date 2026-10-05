@@ -130,6 +130,12 @@ internal fun BusinessAdEditor(ad: BusinessAd, busy: Boolean, error: String?, onD
     var title by rememberSaveable(ad.id) { mutableStateOf(ad.title) }
     var description by rememberSaveable(ad.id) { mutableStateOf(ad.description) }
     var image by rememberSaveable(ad.id) { mutableStateOf(ad.imageUrl) }
+    var city by rememberSaveable(ad.id) { mutableStateOf(ad.city) }
+    var offerDetail by rememberSaveable(ad.id) { mutableStateOf(ad.offerDetail) }
+    var offerPrice by rememberSaveable(ad.id) { mutableStateOf(ad.offerPrice?.let { "%.2f".format(java.util.Locale.US, it) }.orEmpty()) }
+    var photoCode by rememberSaveable(ad.id) { mutableStateOf(ad.demoPhoto.code) }
+    var menuJson by rememberSaveable(ad.id) { mutableStateOf(com.intu.taxi.repositories.businessMenuJson(ad.menu).toString()) }
+    var editingMenu by remember { mutableStateOf(false) }
     var address by rememberSaveable(ad.id) { mutableStateOf(ad.address) }
     var lat by rememberSaveable(ad.id) { mutableStateOf(ad.latitude) }
     var lng by rememberSaveable(ad.id) { mutableStateOf(ad.longitude) }
@@ -140,7 +146,16 @@ internal fun BusinessAdEditor(ad: BusinessAd, busy: Boolean, error: String?, onD
     var validation by remember { mutableStateOf<String?>(null) }
     val draft = ad.copy(name = name, title = title, description = description, imageUrl = image, address = address,
         latitude = lat, longitude = lng, category = BusinessCategory.entries.first { it.code == categoryCode },
-        published = published, sortOrder = order.toIntOrNull() ?: -1)
+        published = published, sortOrder = order.toIntOrNull() ?: -1, city = city, offerDetail = offerDetail,
+        offerPrice = if (offerPrice.isBlank()) null else offerPrice.replace(',', '.').toDoubleOrNull() ?: Double.NaN,
+        demoPhoto = com.intu.taxi.repositories.businessPhoto(photoCode),
+        menu = com.intu.taxi.repositories.parseBusinessMenu(org.json.JSONArray(menuJson)))
+    if (editingMenu) {
+        BusinessMenuEditor(draft.menu, { editingMenu = false }, { menu ->
+            menuJson = com.intu.taxi.repositories.businessMenuJson(menu).toString(); editingMenu = false
+        })
+        return
+    }
     if (picking) {
         PlacePointPicker(Point.fromLngLat(lng, lat), { picking = false }, { point ->
             lat = point.latitude(); lng = point.longitude(); picking = false
@@ -159,8 +174,17 @@ internal fun BusinessAdEditor(ad: BusinessAd, busy: Boolean, error: String?, onD
                     FilterChip(categoryCode == c.code, { categoryCode = c.code }, { Text(c.label) }, enabled = !busy)
                 } }
                 OutlinedTextField(title, { title = it.take(100) }, label = { Text("Título del anuncio") }, modifier = Modifier.fillMaxWidth(), enabled = !busy)
+                OutlinedTextField(city, { city = it.take(50) }, label = { Text("Ciudad") }, modifier = Modifier.fillMaxWidth(), enabled = !busy)
+                OutlinedTextField(offerDetail, { offerDetail = it.take(100) }, label = { Text("Detalle de la promoción") }, modifier = Modifier.fillMaxWidth(), enabled = !busy)
+                OutlinedTextField(offerPrice, { offerPrice = it.take(10) }, label = { Text("Precio destacado (opcional)") },
+                    prefix = { Text("S/ ") }, modifier = Modifier.fillMaxWidth(), enabled = !busy)
+                BusinessPhotoPicker(photoCode, !busy) { photoCode = it }
                 OutlinedTextField(description, { description = it.take(500) }, label = { Text("Descripción") }, minLines = 3, modifier = Modifier.fillMaxWidth(), enabled = !busy)
                 OutlinedTextField(image, { image = it.take(1000) }, label = { Text("URL HTTPS de imagen (opcional)") }, modifier = Modifier.fillMaxWidth(), enabled = !busy)
+                OutlinedButton({ editingMenu = true }, enabled = !busy, modifier = Modifier.fillMaxWidth().testTag("admin-edit-business-menu")) {
+                    Text("Editar menú (${draft.menu.size} productos)")
+                }
+                Text("La URL reemplaza la foto demo. El menú se guarda junto con el anuncio.", style = MaterialTheme.typography.bodySmall)
                 OutlinedTextField(address, { address = it.take(200) }, label = { Text("Dirección de recojo") }, modifier = Modifier.fillMaxWidth(), enabled = !busy)
                 OutlinedButton({ picking = true }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Elegir recojo en mapa") }
                 Text("Punto: %.5f, %.5f".format(java.util.Locale.US, lat, lng), style = MaterialTheme.typography.bodySmall)

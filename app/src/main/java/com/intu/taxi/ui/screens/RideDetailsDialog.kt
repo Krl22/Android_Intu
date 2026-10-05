@@ -115,6 +115,14 @@ fun RideDetailsDialog(ride: RideHistoryItem, cache: MutableMap<String, List<Poin
                         }
                         Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(18.dp),
                             verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                            ride.delivery?.takeIf { it.businessItems.isNotEmpty() }?.let { details ->
+                                DetailCard {
+                                    Text("DEMO · ${details.businessName.orEmpty()}", color = MaterialTheme.colorScheme.primary)
+                                    BusinessCartSummary(details.businessItems)
+                                    Text("Productos simulados, sin cobro. La tarifa corresponde al transporte.",
+                                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
                             DetailCard {
                                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.SpaceBetween) {
