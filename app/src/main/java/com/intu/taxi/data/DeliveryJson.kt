@@ -11,5 +11,6 @@ internal fun JSONObject.deliveryDetails(): DeliveryDetails? {
     return DeliveryDetails(detail.str("recipient_name"), detail.str("recipient_phone"), detail.str("description"),
         detail.str("pickup_reference"), detail.str("delivery_reference"), payer,
         paymentCollected = detail.has("payment_collected_at") && !detail.isNull("payment_collected_at"),
-        smallPackageConfirmed = detail.optBoolean("small_package_confirmed", false))
+        smallPackageConfirmed = detail.optBoolean("small_package_confirmed", false),
+        businessName = detail.str("business_name").ifBlank { null })
 }

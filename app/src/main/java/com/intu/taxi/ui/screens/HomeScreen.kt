@@ -1,5 +1,9 @@
 package com.intu.taxi.ui.screens
 
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.compose.runtime.mutableIntStateOf
+import kotlinx.coroutines.isActive
+
 import com.intu.taxi.ui.theme.AppearanceColors
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -214,6 +218,7 @@ fun HomeScreen(
     routeLoader: (suspend (Point, Point) -> TripRoute?)? = null,
     rideRequestSender: (suspend (RideBooking) -> Result<String>)? = null,
     locationProvider: com.mapbox.maps.plugin.locationcomponent.LocationProvider? = null,
+    businessFeedLoader: (suspend () -> com.intu.taxi.models.BusinessFeed)? = null,
     onBottomBarVisibilityChanged: (Boolean) -> Unit = {}
 ) {
     val mapboxToken = stringResource(id = com.intu.taxi.R.string.mapbox_access_token)
@@ -285,6 +290,25 @@ fun HomeScreen(
     var pendingDeliveryOrigin by remember { mutableStateOf<Point?>(null) }
     var pendingDeliveryRoute by remember { mutableStateOf<TripRoute?>(null) }
     var deliveryDraft by remember { mutableStateOf<com.intu.taxi.models.DeliveryDetails?>(null) }
+    var selectedBusiness by remember { mutableStateOf<com.intu.taxi.models.BusinessAd?>(null) }
+    var previewBusiness by remember { mutableStateOf<com.intu.taxi.models.BusinessAd?>(null) }
+    val businessRepository = remember { com.intu.taxi.repositories.BusinessRepository() }
+    var businessFeed by remember(placesUid) { mutableStateOf(com.intu.taxi.models.BusinessFeed()) }
+    var businessError by remember(placesUid) { mutableStateOf<String?>(null) }
+    var businessRefresh by remember { mutableIntStateOf(0) }
+    val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    LaunchedEffect(placesUid, businessRefresh, businessFeedLoader, lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
+            while (kotlinx.coroutines.currentCoroutineContext().isActive) {
+                try {
+                    businessFeed = businessFeedLoader?.invoke() ?: businessRepository.feed()
+                    businessError = null
+                } catch (e: CancellationException) { throw e }
+                catch (e: Exception) { businessError = e.message ?: "No se pudieron actualizar los negocios." }
+                kotlinx.coroutines.delay(15_000)
+            }
+        }
+    }
     
     // Estado de direcciones para el diálogo de búsqueda
     var originAddress by remember { mutableStateOf<String>("") }
@@ -341,6 +365,8 @@ fun HomeScreen(
 
     // Descarta solo la preparación del viaje; nunca cancela una solicitud ya enviada.
     fun returnHomeFromPreparation() {
+        selectedBusiness = null
+        previewBusiness = null
         isRideOptionsVisible = false
         isSelectingDestination = false
         showPickupPicker = false
@@ -448,6 +474,7 @@ fun HomeScreen(
         val destination = confirmedDestination ?: return
         val option = com.intu.taxi.models.MotoOption.fromCode(selectedMotoOptionCode) ?: return
         val rideType = option.vehicleType
+        val businessSnapshot = selectedBusiness
         if (isCreatingRideRequest || currentRideRequestId != null) return
         isCreatingRideRequest = true
         errorMessage = null
@@ -455,7 +482,8 @@ fun HomeScreen(
             try {
                 val route = routeSnapshot ?: loadBookingRoute(origin, destination)
                     ?: throw IllegalStateException("No se pudo calcular la ruta desde el punto de recojo. Intenta de nuevo.")
-                val booking = RideBooking(origin, destination, route, rideType, selectedPaymentMethod, delivery, option.preferredBrand)
+                val booking = RideBooking(origin, destination, route, rideType, selectedPaymentMethod, delivery, option.preferredBrand,
+                    businessSnapshot?.id, businessSnapshot?.updatedAt)
                 pickupLocation = origin
                 routePoints = route.points
                 routeDistanceMeters = route.distanceMeters
@@ -463,14 +491,16 @@ fun HomeScreen(
                 estimatedPrice = booking.estimatedPrice
                 val result = if (rideRequestSender != null) rideRequestSender(booking) else {
                     check(FirebaseAuth.getInstance().currentUser != null) { "Inicia sesión para solicitar el viaje." }
-                    originAddress = readableAddress(context, httpClient, mapboxToken, origin) ?: "Punto de recojo en el mapa"
+                    originAddress = businessSnapshot?.let { "[DEMO] ${it.name} · ${it.address}" }
+                        ?: readableAddress(context, httpClient, mapboxToken, origin) ?: "Punto de recojo en el mapa"
                     destinationAddress = readableAddress(context, httpClient, mapboxToken, destination) ?: "Destino en el mapa"
                     rideRequestRepository.createRideRequest(
                         originLatitude = origin.latitude(), originLongitude = origin.longitude(), originAddress = originAddress,
                         destinationLatitude = destination.latitude(), destinationLongitude = destination.longitude(), destinationAddress = destinationAddress,
                         distanceMeters = route.distanceMeters, durationSeconds = route.durationSeconds, estimatedPrice = booking.estimatedPrice,
                         rideType = rideType, paymentMethod = booking.paymentMethod,
-                        routeGeometry = LineString.fromLngLats(route.points).toJson(), delivery = delivery, preferredVehicleBrand = option.preferredBrand
+                        routeGeometry = LineString.fromLngLats(route.points).toJson(), delivery = delivery, preferredVehicleBrand = option.preferredBrand,
+                        businessAdId = businessSnapshot?.id, businessAdUpdatedAt = businessSnapshot?.updatedAt
                     )
                 }
                 result.onSuccess { requestId ->
@@ -511,6 +541,8 @@ fun HomeScreen(
     if (deliveryOrigin != null && deliveryRoute != null) DeliveryDetailsDialog(
         fare = com.intu.taxi.models.ServiceFare.estimate(deliveryRoute.distanceMeters, deliveryRoute.durationSeconds, true),
         initial = deliveryDraft,
+        allowedPayers = if (selectedBusiness != null) listOf(com.intu.taxi.models.DeliveryPayer.RECIPIENT) else com.intu.taxi.models.DeliveryPayer.entries,
+        businessName = selectedBusiness?.name,
         onDismiss = { pendingDeliveryOrigin = null; pendingDeliveryRoute = null },
         onConfirm = { details ->
             deliveryDraft = details
@@ -520,8 +552,26 @@ fun HomeScreen(
         }
     )
 
+    previewBusiness?.let { ad -> BusinessAdDialog(ad, onDismiss = { previewBusiness = null }, onStart = {
+        returnHomeFromPreparation()
+        selectedBusiness = ad
+        pickupLocation = ad.point
+        selectedMotoOptionCode = com.intu.taxi.models.MotoOption.DELIVERY.code
+        isDelivery = true
+        selectedDestination = userLocation
+        isSelectingDestination = true
+    }) }
+
     fun beginPickupSelection() {
         val initial = pickupLocation ?: userLocation ?: return
+        if (selectedBusiness != null) {
+            pendingDeliveryOrigin = selectedBusiness!!.point
+            pendingDeliveryRoute = null
+            errorMessage = null
+            focusManager.clearFocus(force = true)
+            keyboard?.hide()
+            return
+        }
         errorMessage = null
         selectedPickup = initial
         pinSearchQuery = ""
@@ -535,7 +585,7 @@ fun HomeScreen(
             .bearing(0.0).pitch(0.0).padding(EdgeInsets(0.0, 0.0, 0.0, 0.0)).build())
     }
 
-    if (showPickupPicker && isCreatingRideRequest) AlertDialog(
+    if ((showPickupPicker || selectedBusiness != null) && isCreatingRideRequest) AlertDialog(
         onDismissRequest = {},
         title = { Text(if (isDelivery) "Solicitando envío" else "Solicitando viaje") },
         text = { Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -683,7 +733,7 @@ fun HomeScreen(
             userLocation = point
             if (first) {
                 if (activeRide == null && !isSearchingDriver) {
-                    if (replacingLocation) {
+                    if (replacingLocation && selectedBusiness == null) {
                         // A draft route must not retain a pickup from the previous test city.
                         pickupLocation = null
                         selectedDestination = null
@@ -1046,12 +1096,20 @@ fun HomeScreen(
                 padding = padding,
                 greetingName = greetingName,
                 searchActive = searchActive,
+                businessFeed = businessFeed,
+                businessError = businessError,
+                onBusinessRetry = { businessRefresh++ },
+                onBusiness = { previewBusiness = it },
                 onTravel = {
+                    selectedBusiness = null
+                    pickupLocation = null
                     selectedMotoOptionCode = com.intu.taxi.models.MotoOption.ANY.code
                     isDelivery = false
                     isSelectingDestination = true
                 },
                 onDelivery = {
+                    selectedBusiness = null
+                    pickupLocation = null
                     selectedMotoOptionCode = com.intu.taxi.models.MotoOption.DELIVERY.code
                     isDelivery = true
                     isSelectingDestination = true
@@ -1241,7 +1299,10 @@ fun HomeScreen(
                 distanceKm = km, durationMinutes = minutes,
                 selectedOption = com.intu.taxi.models.MotoOption.fromCode(selectedMotoOptionCode),
                 paymentMethod = selectedPaymentMethod,
-                confirmEnabled = selectedMotoOptionCode != null && userLocation != null && confirmedDestination != null,
+                confirmEnabled = !isCreatingRideRequest && selectedMotoOptionCode != null && (pickupLocation != null || userLocation != null) && confirmedDestination != null,
+                options = if (selectedBusiness != null) listOf(com.intu.taxi.models.MotoOption.DELIVERY) else com.intu.taxi.models.MotoOption.entries,
+                confirmLabel = if (selectedBusiness != null) "Continuar con pedido demo" else "Elegir recojo",
+                pickupLabel = selectedBusiness?.let { "${it.name} · ${it.address}" },
                 error = errorMessage,
                 onSelect = { selectedMotoOptionCode = it.code; isDelivery = it.delivery; errorMessage = null },
                 onChangePayment = {
@@ -1370,6 +1431,7 @@ fun HomeScreen(
 
         // Deja el mapa listo para pedir otro viaje
         fun resetRideState() {
+            selectedBusiness = null
             isDelivery = false
             selectedMotoOptionCode = com.intu.taxi.models.MotoOption.ANY.code
             deliveryDraft = null

@@ -11,7 +11,9 @@ data class RideBooking(
     val rideType: String,
     val paymentMethod: String,
     val delivery: com.intu.taxi.models.DeliveryDetails? = null,
-    val preferredVehicleBrand: String? = null
+    val preferredVehicleBrand: String? = null,
+    val businessAdId: String? = null,
+    val businessAdUpdatedAt: String? = null
 ) {
     val estimatedPrice: Double get() = com.intu.taxi.models.ServiceFare.withBrandPremium(
         com.intu.taxi.models.ServiceFare.estimate(route.distanceMeters, route.durationSeconds, delivery != null),

@@ -28,7 +28,10 @@ internal fun RideOptionsDrawer(
     fare: Double, deliveryFare: Double, distanceKm: Double, durationMinutes: Double,
     selectedOption: MotoOption?, paymentMethod: String, confirmEnabled: Boolean, error: String?,
     onSelect: (MotoOption) -> Unit, onChangePayment: () -> Unit, onConfirm: () -> Unit,
-    onVisibleHeightChanged: (Int) -> Unit, modifier: Modifier = Modifier
+    onVisibleHeightChanged: (Int) -> Unit, modifier: Modifier = Modifier,
+    options: List<MotoOption> = MotoOption.entries,
+    confirmLabel: String = "Elegir recojo",
+    pickupLabel: String? = null
 ) {
     val density = LocalDensity.current
     val scroll = rememberScrollState()
@@ -93,6 +96,7 @@ internal fun RideOptionsDrawer(
                 .nestedScroll(connection).draggable(rememberDraggableState { drag.value(it) }, Orientation.Vertical,
                     onDragStopped = { settle.value(it) }),
             compact = !expanded && !dragging,
-            onToggleExpansion = { dragging = false; expanded = !expanded }, scrollState = scroll)
+            onToggleExpansion = { dragging = false; expanded = !expanded }, scrollState = scroll,
+            options = options, confirmLabel = confirmLabel, pickupLabel = pickupLabel)
     }
 }

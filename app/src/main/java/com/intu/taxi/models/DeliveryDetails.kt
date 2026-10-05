@@ -15,7 +15,8 @@ data class DeliveryDetails(
     val deliveryReference: String = "",
     val payer: DeliveryPayer = DeliveryPayer.SENDER,
     val paymentCollected: Boolean = false,
-    val smallPackageConfirmed: Boolean = false
+    val smallPackageConfirmed: Boolean = false,
+    val businessName: String? = null
 ) {
     fun normalized(): DeliveryDetails {
         require(recipientName.trim().length in 2..100) { "Ingresa el nombre de quien recibe el paquete." }

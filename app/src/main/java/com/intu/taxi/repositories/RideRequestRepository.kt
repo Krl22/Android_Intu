@@ -20,10 +20,14 @@ class RideRequestRepository {
         distanceMeters: Double, durationSeconds: Double, estimatedPrice: Double,
         rideType: String, paymentMethod: String, routeGeometry: String? = null,
         delivery: com.intu.taxi.models.DeliveryDetails? = null,
-        preferredVehicleBrand: String? = null
+        preferredVehicleBrand: String? = null,
+        businessAdId: String? = null,
+        businessAdUpdatedAt: String? = null
     ): Result<String> = runCatching {
         val vehicleType = com.intu.taxi.auth.DriverVehicleType.requireCode(rideType)
         check((vehicleType == "motorcycle") == (delivery != null)) { "Completa los datos del envío antes de solicitarlo." }
+        require(businessAdId == null || delivery != null) { "Los negocios requieren envío en moto." }
+        require(businessAdId == null || !businessAdUpdatedAt.isNullOrBlank()) { "Actualiza el anuncio antes de solicitar el envío." }
         require(preferredVehicleBrand == null || (vehicleType == "mototaxi" && preferredVehicleBrand in setOf("honda", "bajaj"))) {
             "Selecciona una opción de moto válida."
         }
@@ -32,8 +36,7 @@ class RideRequestRepository {
         AuthRepository().syncProfileToSupabase(uid)
         if (delivery != null) {
             val details = delivery.normalized()
-            return@runCatching SupabaseApi.rpc("create_delivery_request", JSONObject()
-                .put("p_origin_lat", originLatitude).put("p_origin_lng", originLongitude).put("p_origin_address", originAddress)
+            val body = JSONObject()
                 .put("p_destination_lat", destinationLatitude).put("p_destination_lng", destinationLongitude).put("p_destination_address", destinationAddress)
                 .put("p_distance_meters", distanceMeters.toInt()).put("p_duration_seconds", durationSeconds.toInt())
                 .put("p_route_polyline", routeGeometry ?: JSONObject.NULL)
@@ -41,8 +44,12 @@ class RideRequestRepository {
                 .put("p_details", JSONObject().put("recipient_name", details.recipientName).put("recipient_phone", details.recipientPhone)
                     .put("description", details.description).put("pickup_reference", details.pickupReference)
                     .put("delivery_reference", details.deliveryReference).put("payer", details.payer.code)
-                    .put("small_package_confirmed", details.smallPackageConfirmed)))
-                .getString("id")
+                    .put("small_package_confirmed", details.smallPackageConfirmed)
+                    .put("business_ad_updated_at", businessAdUpdatedAt ?: JSONObject.NULL))
+            // The business RPC owns the pickup; clients cannot substitute an address or point.
+            if (businessAdId != null) body.put("p_ad_id", businessAdId)
+            else body.put("p_origin_lat", originLatitude).put("p_origin_lng", originLongitude).put("p_origin_address", originAddress)
+            return@runCatching SupabaseApi.rpc(if (businessAdId != null) "create_business_delivery_request" else "create_delivery_request", body).getString("id")
         }
         val body = JSONObject()
             .put("vehicle_type", vehicleType)

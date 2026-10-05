@@ -6,7 +6,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.outlined.Storefront
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -29,7 +28,11 @@ internal fun CommercialHome(
     searchActive: Boolean,
     searchContent: @Composable () -> Unit,
     onTravel: () -> Unit,
-    onDelivery: () -> Unit
+    onDelivery: () -> Unit,
+    businessFeed: com.intu.taxi.models.BusinessFeed = com.intu.taxi.models.BusinessFeed(),
+    businessError: String? = null,
+    onBusinessRetry: () -> Unit = {},
+    onBusiness: (com.intu.taxi.models.BusinessAd) -> Unit = {}
 ) {
     val colors = MaterialTheme.colorScheme
     // Search stays mounted over the map so moving the header preserves focus and typing.
@@ -66,23 +69,7 @@ internal fun CommercialHome(
         if (!searchActive) {
             Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Card(colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-                    shape = RoundedCornerShape(24.dp), modifier = Modifier.testTag("home-local-businesses")
-                        .intuCardBackground(emphasized = true)) {
-                    Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                        Surface(shape = RoundedCornerShape(14.dp), color = colors.primary.copy(alpha = 0.12f)) {
-                            Icon(Icons.Outlined.Storefront, contentDescription = null, tint = colors.primary,
-                                modifier = Modifier.padding(12.dp).size(26.dp))
-                        }
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text("Más de tu ciudad", color = colors.onSurface,
-                                style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-                            Text("Pronto, descubre negocios locales con Intu.", color = colors.onSurfaceVariant,
-                                style = MaterialTheme.typography.bodyMedium)
-                        }
-                    }
-                }
+                BusinessAdsSection(businessFeed, businessError, onBusinessRetry, onBusiness)
                 Text("¿Qué necesitas hoy?", color = colors.onBackground,
                     style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {

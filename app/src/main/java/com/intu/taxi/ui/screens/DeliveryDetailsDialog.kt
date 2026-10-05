@@ -26,7 +26,8 @@ internal fun DeliveryDetailsDialog(
     initial: DeliveryDetails? = null,
     allowedPayers: List<DeliveryPayer> = DeliveryPayer.entries,
     busy: Boolean = false,
-    error: String? = null
+    error: String? = null,
+    businessName: String? = null
 ) {
     var name by rememberSaveable { mutableStateOf(initial?.recipientName.orEmpty()) }
     var phone by rememberSaveable { mutableStateOf(PhoneFormatter.nationalDigits("+51", initial?.recipientPhone.orEmpty())) }
@@ -40,9 +41,10 @@ internal fun DeliveryDetailsDialog(
     val valid = runCatching { details.normalized() }.isSuccess
 
     AccountDialogLayout(
-        eyebrow = "INTU · MOTO LINEAL",
+        eyebrow = if (businessName != null) "INTU · DELIVERY DEMO" else "INTU · MOTO LINEAL",
         title = "Datos del envío",
-        subtitle = "Indica qué enviarás y quién recibirá el paquete.",
+        subtitle = businessName?.let { "Recojo en $it. El pago es solo por transporte." }
+            ?: "Indica qué enviarás y quién recibirá el paquete.",
         onDismiss = onDismiss,
         dismissEnabled = !busy,
         footer = {

@@ -53,7 +53,10 @@ internal fun RideOptionsSheet(
     modifier: Modifier = Modifier,
     compact: Boolean = false,
     onToggleExpansion: (() -> Unit)? = null,
-    scrollState: ScrollState = rememberScrollState()
+    scrollState: ScrollState = rememberScrollState(),
+    options: List<MotoOption> = MotoOption.entries,
+    confirmLabel: String = "Elegir recojo",
+    pickupLabel: String? = null
 ) {
     val ink = AppearanceColors.foreground(Color(0xFF202538))
     val muted = AppearanceColors.secondary(Color(0xFF667175))
@@ -73,7 +76,8 @@ internal fun RideOptionsSheet(
             Column(Modifier.weight(1f, fill = false).verticalScroll(scrollState),
                 verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("Elige tu moto", style = if (compact) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge,
+                    Text(if (options == listOf(MotoOption.DELIVERY)) "Delivery en moto" else "Elige tu moto",
+                        style = if (compact) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold, color = ink)
                     val routeSummary = buildList {
                         if (durationMinutes > 0) add("${ceil(durationMinutes).toInt()} min de recorrido")
@@ -81,13 +85,14 @@ internal fun RideOptionsSheet(
                     }.joinToString(" · ")
                     Text(routeSummary.ifBlank { "Tarifas estimadas según tu recorrido" },
                         style = MaterialTheme.typography.bodySmall, color = muted)
+                    pickupLabel?.let { Text("Recojo: $it", style = MaterialTheme.typography.bodySmall, color = muted) }
                 }
                 if (compact) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     Text(selectedOption?.label ?: "Selecciona tu moto", modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold, color = ink)
                     selectedOption?.let { Text(formatSoles(it.fare(fare, deliveryFare)), color = teal, fontWeight = FontWeight.Bold) }
                 }
-                if (!compact) MotoOption.entries.forEach { option ->
+                if (!compact) options.forEach { option ->
                     val selected = selectedOption == option
                     Row(Modifier.fillMaxWidth().testTag("moto-option-${option.code}").clip(RoundedCornerShape(16.dp))
                         .background(AppearanceColors.tint(if (selected) Color(0xFFEAF6F3) else Color(0xFFF7F9F9)))
@@ -123,7 +128,7 @@ internal fun RideOptionsSheet(
             }
             Button(onConfirm, enabled = confirmEnabled, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
                 shape = RoundedCornerShape(16.dp), colors = ButtonDefaults.buttonColors(containerColor = ink)) {
-                Text("Elegir recojo", fontWeight = FontWeight.SemiBold)
+                Text(confirmLabel, fontWeight = FontWeight.SemiBold)
             }
         }
     }
