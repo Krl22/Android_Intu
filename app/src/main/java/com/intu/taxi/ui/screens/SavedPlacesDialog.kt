@@ -1,6 +1,7 @@
 package com.intu.taxi.ui.screens
 
 import com.intu.taxi.ui.theme.AppearanceColors
+import com.intu.taxi.ui.theme.LocalIntuDarkMode
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -27,6 +28,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -68,14 +70,14 @@ fun SavedPlacesDialog(onDismiss: () -> Unit) {
 }
 
 @Composable
-private fun SavedPlacesDialogContent(
+internal fun SavedPlacesDialogContent(
     places: List<SavedPlace>,
     onDismiss: () -> Unit,
     onEdit: (SavedPlace?, String) -> Unit,
     onRemove: (String) -> Unit
 ) {
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        MaterialTheme(colorScheme = if (com.intu.taxi.ui.theme.LocalIntuDarkMode.current) MaterialTheme.colorScheme else SavedPlaceColors) {
+        MaterialTheme(colorScheme = if (LocalIntuDarkMode.current) MaterialTheme.colorScheme else SavedPlaceColors) {
             BoxWithConstraints(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
                 Surface(Modifier.widthIn(max = 560.dp).fillMaxWidth().heightIn(max = maxHeight * 0.92f),
                     shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.background,
@@ -101,9 +103,11 @@ private fun SavedPlacesDialogContent(
                             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween) {
                                 Text("Accesos rápidos", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                                Surface(shape = RoundedCornerShape(50), color = SavedPlaceTeal.copy(alpha = 0.08f)) {
+                                Surface(shape = RoundedCornerShape(50), color = if (LocalIntuDarkMode.current)
+                                    MaterialTheme.colorScheme.primaryContainer else SavedPlaceTeal.copy(alpha = 0.08f)) {
                                     Text("${places.size} de 8", Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                                        color = AppearanceColors.highlight(SavedPlaceTeal), style = MaterialTheme.typography.labelMedium)
+                                        color = if (LocalIntuDarkMode.current) MaterialTheme.colorScheme.onPrimaryContainer else SavedPlaceTeal,
+                                        style = MaterialTheme.typography.labelMedium)
                                 }
                             }
                             listOf("casa" to "Casa", "trabajo" to "Trabajo").forEach { (id, name) ->
@@ -123,7 +127,7 @@ private fun SavedPlacesDialogContent(
                             }
                             if (places.size < 8) OutlinedButton(onClick = { onEdit(null, "Favorito") },
                                 modifier = Modifier.fillMaxWidth().padding(top = 4.dp).heightIn(min = 50.dp),
-                                shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, SavedPlaceTeal.copy(alpha = 0.4f))) {
+                                shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.45f))) {
                                 Icon(Icons.Outlined.Add, contentDescription = null, modifier = Modifier.size(20.dp))
                                 Spacer(Modifier.width(8.dp))
                                 Text("Agregar otro lugar", fontWeight = FontWeight.SemiBold)
@@ -150,17 +154,25 @@ private fun SavedPlacesDialogContent(
 
 @Composable
 private fun SavedPlaceCard(name: String, place: SavedPlace?, icon: ImageVector, accent: Color, onEdit: () -> Unit, onRemove: () -> Unit) {
-    Surface(Modifier.fillMaxWidth().clickable(onClick = onEdit), shape = RoundedCornerShape(20.dp), color = Color.White,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
+    val colors = MaterialTheme.colorScheme
+    val dark = LocalIntuDarkMode.current
+    val work = accent == SavedPlaceIndigo
+    val iconColor = if (dark) { if (work) colors.onSecondaryContainer else colors.onPrimaryContainer } else accent
+    val iconBackground = if (dark) { if (work) colors.secondaryContainer else colors.primaryContainer } else accent.copy(alpha = 0.09f)
+    val statusColor = if (dark) { if (work) colors.secondary else colors.primary } else accent
+    Surface(Modifier.fillMaxWidth().testTag("saved-place-card-${place?.id ?: name.lowercase()}").clickable(onClick = onEdit),
+        shape = RoundedCornerShape(20.dp), color = if (dark) colors.surfaceContainerLow else colors.surface,
+        contentColor = colors.onSurface,
+        border = BorderStroke(1.dp, if (dark) colors.outlineVariant.copy(alpha = 0.6f) else colors.outlineVariant)) {
         Column(Modifier.padding(start = 16.dp, top = 16.dp, end = 12.dp, bottom = 6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Surface(shape = RoundedCornerShape(15.dp), color = accent.copy(alpha = 0.09f)) {
+                Surface(shape = RoundedCornerShape(15.dp), color = iconBackground) {
                     Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
-                        Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(26.dp))
+                        Icon(icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(26.dp))
                     }
                 }
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text(name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = colors.onSurface)
                     Text(place?.address ?: "Elige su ubicación en el mapa", style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
@@ -168,9 +180,9 @@ private fun SavedPlaceCard(name: String, place: SavedPlace?, icon: ImageVector, 
             Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (place != null) Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Icon(Icons.Outlined.LocationOn, contentDescription = null, tint = accent, modifier = Modifier.size(14.dp))
-                    Text("Guardada", color = accent, style = MaterialTheme.typography.labelSmall)
-                } else Text("Por agregar", Modifier.weight(1f), style = MaterialTheme.typography.labelSmall,
+                    Icon(Icons.Outlined.LocationOn, contentDescription = null, tint = statusColor, modifier = Modifier.size(14.dp))
+                    Text("Guardada", color = statusColor, style = MaterialTheme.typography.labelSmall)
+                } else Text("Sin guardar", Modifier.weight(1f), style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 TextButton(onClick = onEdit) {
                     Icon(if (place == null) Icons.Outlined.Add else Icons.Outlined.Edit, contentDescription = null, modifier = Modifier.size(16.dp))

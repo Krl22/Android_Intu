@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -80,21 +81,37 @@ class RideOptionsDrawerTest {
         compose.onNodeWithTag("moto-option-delivery").performScrollTo().assertIsDisplayed().assertIsSelected()
     }
 
-    @Test fun pinHasContrastAndLeavesRouteVisibleInside() {
+    @Test fun elevatedPinHasContrastAndLeavesRouteVisibleBesideStem() {
         compose.setContent { IntuTheme {
-            Box(Modifier.size(140.dp).testTag("pin-route-preview")) {
-                Canvas(Modifier.fillMaxSize()) {
-                    drawLine(TripRouteStyle.lineColor, Offset(size.width * .5f, 0f),
-                        Offset(size.width * .5f, size.height), strokeWidth = 5.dp.toPx())
+            Row {
+                for (dark in listOf(false, true)) {
+                    Box(Modifier.size(140.dp).testTag("pin-route-preview-$dark")) {
+                        Canvas(Modifier.fillMaxSize()) {
+                            drawRect(if (dark) Color(0xFF25272B) else Color(0xFFEEF0EC))
+                            drawLine(TripRouteStyle.lineColor, Offset(size.width * .5f, 0f),
+                                Offset(size.width * .5f, size.height), strokeWidth = 8.dp.toPx())
+                        }
+                        RoutePin("Destino", Modifier.offset(49.dp, 42.dp).size(42.dp))
+                    }
                 }
-                RoutePin("Destino", Modifier.offset(49.dp, 42.dp).size(42.dp))
             }
         } }
-        val pixels = compose.onNodeWithTag("pin-route-preview").captureToImage().toPixelMap()
-        // Relative to the centered pin: this location is inside its open body, below the center dot.
-        val centerRoute = pixels[(pixels.width * .5f).toInt(), (pixels.height * .45f).toInt()]
-        assertEquals(TripRouteStyle.lineColor.red, centerRoute.red, .04f)
-        assertEquals(TripRouteStyle.lineColor.green, centerRoute.green, .04f)
+        for (dark in listOf(false, true)) {
+            val pixels = compose.onNodeWithTag("pin-route-preview-$dark").captureToImage().toPixelMap()
+            fun at(x: Float, y: Float) = pixels[(pixels.width * x / 140).toInt(), (pixels.height * y / 140).toInt()]
+            fun matches(expected: Color, actual: Color) {
+                assertEquals(expected.red, actual.red, .05f)
+                assertEquals(expected.green, actual.green, .05f)
+                assertEquals(expected.blue, actual.blue, .05f)
+            }
+            // The thin mast exposes the route beside it; the white foot marks the anchor at (70, 81.5).
+            matches(TripRouteStyle.lineColor, at(73.4f, 73f))
+            matches(TripRouteStyle.lineColor, at(70f, 86f))
+            matches(Color.White, at(70f, 82f))
+            matches(RoutePinStyle.headColor, at(76f, 55.6f))
+            matches(Color.White, at(81f, 55.6f))
+        }
         assertNotEquals(TripRouteStyle.lineColor, RoutePinStyle.destinationColor)
+        captureNativeScreenshot(compose, "pin-b-light-dark.png")
     }
 }

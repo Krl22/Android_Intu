@@ -22,8 +22,8 @@ android {
         applicationId = "com.intu.taxi"
         minSdk = 24
         targetSdk = 36
-        versionCode = 29
-        versionName = "1.28"
+        versionCode = 32
+        versionName = "1.31"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

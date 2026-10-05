@@ -864,7 +864,8 @@ fun HomeScreen(
                 com.intu.taxi.ui.map.RoutePin(
                     description = "Destino confirmado",
                     modifier = Modifier.size(iconSize)
-                        .offset(x = xDp - iconSize / 2, y = yDp - iconSize)
+                        .offset(x = xDp - iconSize / 2,
+                            y = yDp - iconSize + com.intu.taxi.ui.map.RoutePinStyle.anchorInset)
                         .testTag("home-confirmed-destination-pin")
                 )
                 // Botón de regresar - SOLO visible durante opciones de viaje, NO durante búsqueda
@@ -1412,7 +1413,8 @@ fun HomeScreen(
                 com.intu.taxi.ui.map.RoutePin(
                     description = if (showPickupPicker) "Punto de recojo" else "Destino seleccionado",
                     pickup = showPickupPicker,
-                    modifier = Modifier.size(pinSizeDp).offset(y = -(pinSizeDp / 2))
+                    modifier = Modifier.size(pinSizeDp).offset(
+                        y = -(pinSizeDp / 2) + com.intu.taxi.ui.map.RoutePinStyle.anchorInset)
                         .testTag(if (showPickupPicker) "home-pickup-pin" else "home-destination-pin")
                 )
             }

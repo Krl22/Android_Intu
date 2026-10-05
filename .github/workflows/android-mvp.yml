@@ -3,7 +3,7 @@ name: Android MVP
 on:
   workflow_dispatch:
   push:
-    branches: [codex/intu-mvp]
+    branches: [main, codex/intu-mvp]
 
 jobs:
   build:

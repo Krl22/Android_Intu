@@ -393,8 +393,9 @@ fun PlacePointPicker(
                         CircularProgressIndicator()
                         Text("Buscando tu ubicación…")
                     }
-                    if (start.point != null) Icon(Icons.Default.LocationOn, contentDescription = pinDescription, tint = AppearanceColors.highlight(PlaceTeal),
-                        modifier = Modifier.align(Alignment.Center).size(pinSize).offset(y = -(pinSize / 2)))
+                    if (start.point != null) com.intu.taxi.ui.map.RoutePin(description = pinDescription,
+                        modifier = Modifier.align(Alignment.Center).size(pinSize).offset(
+                            y = -(pinSize / 2) + com.intu.taxi.ui.map.RoutePinStyle.anchorInset))
                 }
                 if (showCoordinates && start.point != null) Text("${coordinateText(point.latitude())}, ${coordinateText(point.longitude())}", style = MaterialTheme.typography.bodySmall)
                 start.message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }

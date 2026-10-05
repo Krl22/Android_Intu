@@ -69,19 +69,19 @@ internal fun DestinationSearchPanel(
                 if (error != null) TextButton(onClick = onRefresh, enabled = !loading,
                     modifier = Modifier.padding(horizontal = 8.dp)) { Text("Actualizar lugares") }
             }
-            Text("Tus direcciones", style = MaterialTheme.typography.labelLarge, color = colors.primary,
+            val saved = listOf("casa", "trabajo").mapNotNull { id -> savedPlaces.find { it.id == id } } +
+                savedPlaces.filterNot { it.id == "casa" || it.id == "trabajo" }
+            if (saved.isNotEmpty()) Text("Tus direcciones", style = MaterialTheme.typography.labelLarge, color = colors.primary,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
-            val saved = listOf("casa" to "Casa", "trabajo" to "Trabajo") +
-                savedPlaces.filterNot { it.id == "casa" || it.id == "trabajo" }.map { it.id to it.name }
-            saved.forEach { (id, name) ->
-                val place = savedPlaces.find { it.id == id }
-                DestinationRow(name, place?.address?.takeIf { it.isNotBlank() } ?: "Agregar dirección",
-                    when (id) {
+            saved.forEach { place ->
+                val name = when (place.id) { "casa" -> "Casa"; "trabajo" -> "Trabajo"; else -> place.name }
+                DestinationRow(name, place.address.takeIf { it.isNotBlank() } ?: place.name,
+                    when (place.id) {
                         "casa" -> Icons.Outlined.Home
                         "trabajo" -> Icons.Outlined.Work
                         else -> Icons.Outlined.StarOutline
-                    }, "home-place-$id") {
-                    if (place != null) onSavedPlaceClick(place) else onManagePlaces()
+                    }, "home-place-${place.id}") {
+                    onSavedPlaceClick(place)
                 }
             }
             DestinationRow("Elegir en mapa", "", Icons.Outlined.Place, "home-pick-destination", onPickMap)

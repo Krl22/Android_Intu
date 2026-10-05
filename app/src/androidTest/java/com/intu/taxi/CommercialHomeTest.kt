@@ -99,8 +99,8 @@ class CommercialHomeTest {
         compose.onNodeWithTag("home-map").assertIsDisplayed()
         compose.onNodeWithTag("trip-planning-panel").assertIsDisplayed()
         compose.onNodeWithTag("commercial-home").assertDoesNotExist()
-        compose.onNodeWithTag("home-place-casa").assertIsDisplayed()
-        compose.onNodeWithTag("home-place-trabajo").assertIsDisplayed()
+        compose.onNodeWithTag("home-place-casa").assertDoesNotExist()
+        compose.onNodeWithTag("home-place-trabajo").assertDoesNotExist()
         compose.onAllNodesWithText("Elegir en mapa").assertCountEquals(1)
         compose.onNodeWithText("No encontramos ese lugar. Puedes elegirlo en el mapa.").assertDoesNotExist()
         compose.onNodeWithTag("home-destination-search").assertIsFocused().performTextInput("zzzz")
@@ -148,6 +148,7 @@ class CommercialHomeTest {
         val selected = AtomicReference<SavedPlace>()
         val managing = AtomicBoolean()
         val searching = mutableStateOf(false)
+        val savedPlaces = mutableStateOf(emptyList<SavedPlace>())
         val result = PlaceSearchResult("qa:park", "Parque Central", "Av. Principal", -11.26, -74.64, PlaceSearchSource.MAPBOX)
         val selectedResult = AtomicReference<PlaceSearchResult>()
         val pickingMap = AtomicBoolean()
@@ -155,7 +156,7 @@ class CommercialHomeTest {
             CommercialHome(PaddingValues(), "Carlos", searchActive = searching.value,
                 searchContent = {
                     TextButton(onClick = { searching.value = true }) { Text("¿A dónde vamos?") }
-                    if (searching.value) DestinationSearchPanel("Parque", listOf(home, work), listOf(result),
+                    if (searching.value) DestinationSearchPanel("Parque", savedPlaces.value, listOf(result),
                         true, false, null, false, null, selectedResult::set, selected::set, {},
                         { pickingMap.set(true) }, { managing.set(true) })
                 }, onTravel = {}, onDelivery = {})
@@ -164,6 +165,15 @@ class CommercialHomeTest {
         compose.onNodeWithTag("home-place-trabajo").assertDoesNotExist()
         compose.onNodeWithTag("home-pick-destination").assertDoesNotExist()
         compose.onNodeWithText("¿A dónde vamos?").performClick()
+        compose.onNodeWithTag("home-place-casa").assertDoesNotExist()
+        compose.onNodeWithTag("home-place-trabajo").assertDoesNotExist()
+        compose.onNodeWithText("Tus direcciones").assertDoesNotExist()
+        compose.onNodeWithTag("home-pick-destination").assertIsDisplayed()
+        compose.onNodeWithTag("home-manage-places").assertIsDisplayed()
+        compose.runOnIdle { savedPlaces.value = listOf(work) }
+        compose.onNodeWithTag("home-place-casa").assertDoesNotExist()
+        compose.onNodeWithTag("home-place-trabajo").assertIsDisplayed()
+        compose.runOnIdle { savedPlaces.value = listOf(home, work) }
         assertTrue(compose.onNodeWithText("Parque Central").fetchSemanticsNode().boundsInRoot.top <
             compose.onNodeWithTag("home-place-casa").fetchSemanticsNode().boundsInRoot.top)
         compose.onNode(hasTestTag("home-place-casa") and hasAnyAncestor(hasTestTag("destination-search-panel")))
@@ -179,5 +189,8 @@ class CommercialHomeTest {
         assertTrue(pickingMap.get())
         compose.onAllNodesWithText("Elegir en mapa").assertCountEquals(1)
         captureNativeScreenshot(compose, "destination-list-dark.png")
+        compose.runOnIdle { savedPlaces.value = listOf(home) }
+        compose.onNodeWithTag("home-place-trabajo").assertDoesNotExist()
+        compose.onNodeWithTag("home-place-casa").assertExists()
     }
 }
