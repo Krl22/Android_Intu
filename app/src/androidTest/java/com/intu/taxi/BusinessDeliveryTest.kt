@@ -78,6 +78,13 @@ class BusinessDeliveryTest {
         compose.onNodeWithTag("business-product-plus-${product.id}").performScrollTo().performClick()
         captureNativeScreenshot(compose, "business-details-dark.png")
         compose.onNodeWithTag("business-start-delivery").performClick()
+        compose.onNodeWithTag("booking-person").performClick()
+        compose.onNodeWithTag("booking-contact-name").performTextInput("Persona QA")
+        compose.onNodeWithTag("booking-contact-phone").performTextInput("987654321")
+        compose.onNodeWithTag("booking-contact-confirm").performClick()
+        compose.onNodeWithTag("planning-pickup-search").assertTextContains(ad.name, substring = true)
+        closeSoftKeyboard()
+        compose.onNodeWithTag("home-pick-destination").performScrollTo().performClick()
         compose.onNodeWithText("Confirmar destino").performClick()
         compose.waitUntil(30_000) { compose.onAllNodesWithTag("moto-option-delivery").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("moto-option-delivery").assertIsSelected()
@@ -87,8 +94,8 @@ class BusinessDeliveryTest {
         compose.waitUntil(20_000) { compose.onAllNodesWithText("Datos del envío").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("home-pickup-pin").assertDoesNotExist()
         compose.onNode(hasSetTextAction() and hasText("¿Qué enviarás?")).performTextInput("Paquete demo")
-        compose.onNode(hasSetTextAction() and hasText("Nombre de quien recibe")).performTextInput("Persona QA")
-        compose.onNode(hasSetTextAction() and hasText("Celular de quien recibe")).performTextInput("987654321")
+        compose.onNode(hasSetTextAction() and hasText("Nombre de quien recibe")).performTextReplacement("Persona QA")
+        compose.onNode(hasSetTextAction() and hasText("Celular de quien recibe")).performTextReplacement("987654321")
         closeSoftKeyboard()
         compose.onNodeWithText(DeliveryPayer.RECIPIENT.label).performScrollTo().assertIsDisplayed()
         compose.onNodeWithText(DeliveryPayer.SENDER.label).assertDoesNotExist()
@@ -102,16 +109,23 @@ class BusinessDeliveryTest {
         assertEquals(ad.point, booking.route.points.first())
         assertEquals("motorcycle", booking.rideType)
         assertEquals(DeliveryPayer.RECIPIENT, booking.delivery?.payer)
+        assertEquals("Persona QA", booking.delivery?.recipientName)
+        assertEquals("+51987654321", booking.delivery?.recipientPhone)
+        assertNull(booking.delivery?.sender)
         assertEquals(product.id, booking.delivery?.businessItems?.single()?.itemId)
         assertEquals(18.90, booking.delivery!!.businessItems.productsTotal(), .001)
         assertEquals(4.2, booking.estimatedPrice, .001)
         assertNull(booking.preferredVehicleBrand)
         pressBack()
+        closeSoftKeyboard(); pressBack()
         compose.onNodeWithTag("home-start-delivery").performScrollTo().performClick()
+        closeSoftKeyboard()
+        compose.onNodeWithTag("home-pick-destination").performScrollTo().performClick()
         compose.onNodeWithText("Confirmar destino").performClick()
         compose.waitUntil(20_000) { compose.onAllNodesWithTag("moto-option-any").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithText("Elegir recojo").performClick()
-        compose.onNodeWithTag("home-pickup-pin").assertIsDisplayed()
+        compose.onNodeWithText("Continuar con envío").performClick()
+        compose.waitUntil(20_000) { compose.onAllNodesWithText("Datos del envío").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("home-pickup-pin").assertDoesNotExist()
     }
 
     @Test fun adminSwitchUsesSavedValueAndCourierControlsOnlyConfirmedState() {

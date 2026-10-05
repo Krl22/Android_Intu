@@ -51,8 +51,11 @@ data class ActiveRide(
     val driverOnOtherTrip: Boolean = false,
     val vehicleType: String = "mototaxi",
     val serviceKind: String = "passenger",
-    val delivery: DeliveryDetails? = null
+    val delivery: DeliveryDetails? = null,
+    val passenger: BookingContact? = null
 ) {
+    val passengerName: String get() = passenger?.name ?: riderName
+    val passengerPhone: String get() = passenger?.phone ?: riderPhone
     val isDelivery: Boolean get() = serviceKind == "delivery"
     companion object {
         private fun readGeoPoint(value: Any?): GeoPoint? {

@@ -286,14 +286,16 @@ private fun RideHistoryCard(ride: RideHistoryItem, isDriver: Boolean, onRate: (I
             Spacer(Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Avatar(
-                    url = if (isDriver) ride.riderPhotoUrl else ride.driverPhotoUrl,
+                    url = if (isDriver && ride.passenger != null) "" else if (isDriver) ride.riderPhotoUrl else ride.driverPhotoUrl,
                     size = 36.dp,
                     zoomable = true
                 )
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
+                    ride.passenger?.let { Text(if (isDriver) "Solicitó: ${ride.riderName}" else "Para ${it.name}",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary) }
                     Text(
-                        (if (isDriver) ride.riderName else ride.driverName)
+                        (if (isDriver) ride.passenger?.name ?: ride.riderName else ride.driverName)
                             .ifBlank { if (isDriver && ride.serviceKind == "delivery") "Quien envía" else if (isDriver) "Pasajero" else "Sin conductor" },
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface,
@@ -330,7 +332,7 @@ private fun RideHistoryCard(ride: RideHistoryItem, isDriver: Boolean, onRate: (I
                     Text(
                         when {
                             myRating != null -> "Tu calificación"
-                            isDriver && ride.serviceKind == "delivery" -> "Califica a quien envía"
+                            isDriver && (ride.serviceKind == "delivery" || ride.passenger != null) -> "Califica a quien solicitó"
                             isDriver -> "Califica al pasajero"
                             else -> "Califica a tu conductor"
                         },

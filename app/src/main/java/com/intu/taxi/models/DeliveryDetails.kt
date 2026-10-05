@@ -17,7 +17,8 @@ data class DeliveryDetails(
     val paymentCollected: Boolean = false,
     val smallPackageConfirmed: Boolean = false,
     val businessName: String? = null,
-    val businessItems: List<BusinessOrderItem> = emptyList()
+    val businessItems: List<BusinessOrderItem> = emptyList(),
+    val sender: BookingContact? = null
 ) {
     fun normalized(): DeliveryDetails {
         require(recipientName.trim().length in 2..100) { "Ingresa el nombre de quien recibe el paquete." }
@@ -27,7 +28,7 @@ data class DeliveryDetails(
         require(pickupReference.length <= 200 && deliveryReference.length <= 200) { "La referencia debe tener hasta 200 caracteres." }
         require(smallPackageConfirmed) { "Confirma que es un paquete pequeño y que solicitas solo transporte." }
         return copy(recipientName = recipientName.trim(), recipientPhone = phone, description = description.trim(),
-            pickupReference = pickupReference.trim(), deliveryReference = deliveryReference.trim())
+            pickupReference = pickupReference.trim(), deliveryReference = deliveryReference.trim(), sender = sender?.normalized())
     }
 }
 

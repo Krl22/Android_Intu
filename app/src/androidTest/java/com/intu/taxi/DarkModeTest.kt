@@ -98,6 +98,8 @@ class DarkModeTest {
                 routeLoader = { origin, destination -> TripRoute(listOf(origin, destination), 1800.0, 360.0).also { plannedRoute.set(it) } },
                 rideRequestSender = { error("QA must never request a trip") })
         } }
+        compose.waitUntil(30_000) { compose.onAllNodesWithTag("home-destination-search").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("home-destination-search").performClick()
         waitForText("Elegir en mapa")
         compose.waitUntil(60_000) { ready.get() }
         compose.onNodeWithTag("home-pick-destination").performClick()
@@ -138,7 +140,7 @@ class DarkModeTest {
         compose.runOnIdle { dark = false }
         waitForStyle(map, Style.MAPBOX_STREETS)
         compose.onNodeWithText("Mototaxi Honda").assertIsDisplayed()
-        compose.onNodeWithText("Elegir recojo").assertIsEnabled()
+        compose.onNodeWithText("Solicitar viaje").assertIsEnabled()
     }
 
     @Test fun darkCatalogPickerKeepsPinCenteredWhenZoomingAndConfirmsPoint() {

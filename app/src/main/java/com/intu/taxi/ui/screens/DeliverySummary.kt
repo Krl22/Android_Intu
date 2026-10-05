@@ -19,6 +19,13 @@ internal fun DeliverySummary(details: DeliveryDetails, allowCall: Boolean = fals
         details.businessName?.let { Text("DEMO · $it", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary) }
         if (details.businessItems.isNotEmpty()) BusinessCartSummary(details.businessItems)
         Text("Envío · ${details.description}", fontWeight = FontWeight.SemiBold)
+        details.sender?.let { sender ->
+            Text("Entrega el paquete: ${sender.name}", style = MaterialTheme.typography.bodyMedium)
+            Text(sender.phone, style = MaterialTheme.typography.bodySmall)
+            if (allowCall) OutlinedButton(onClick = {
+                context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:${sender.phone}")))
+            }) { Text("Llamar al contacto de recojo") }
+        }
         Text("Recibe: ${details.recipientName}", style = MaterialTheme.typography.bodyMedium)
         Text(details.recipientPhone.removePrefix("+51"), style = MaterialTheme.typography.bodySmall)
         if (details.pickupReference.isNotBlank()) Text("Recojo: ${details.pickupReference}", style = MaterialTheme.typography.bodySmall)

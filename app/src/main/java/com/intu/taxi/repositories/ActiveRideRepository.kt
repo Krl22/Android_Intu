@@ -5,6 +5,7 @@ import com.intu.taxi.data.PostgresChangeFilter
 import com.intu.taxi.data.SupabaseApi
 import com.intu.taxi.data.SupabaseRealtime
 import com.intu.taxi.data.str
+import com.intu.taxi.data.ridePassenger
 import com.intu.taxi.data.deliveryDetails
 import com.intu.taxi.models.ActiveRide
 import kotlinx.coroutines.channels.Channel
@@ -27,14 +28,14 @@ class ActiveRideRepository {
 
     suspend fun findOpenRideForRider(userId: String): ActiveRide? {
         val rows = SupabaseApi.rows(
-            "rides?rider_id=eq.${SupabaseApi.encode(userId)}&status=in.(searching,accepted,arrived,in_progress)&select=*,delivery_details(*)&order=requested_at.desc&limit=1"
+            "rides?rider_id=eq.${SupabaseApi.encode(userId)}&status=in.(searching,accepted,arrived,in_progress)&select=*,delivery_details(*),ride_passengers(*)&order=requested_at.desc&limit=1"
         )
         return rows.optJSONObject(0)?.toActiveRide()
     }
 
     suspend fun findOpenRideForDriver(userId: String): ActiveRide? {
         val rows = SupabaseApi.rows(
-            "rides?driver_id=eq.${SupabaseApi.encode(userId)}&status=in.(accepted,arrived,in_progress)&select=*,delivery_details(*)&order=requested_at.desc&limit=1"
+            "rides?driver_id=eq.${SupabaseApi.encode(userId)}&status=in.(accepted,arrived,in_progress)&select=*,delivery_details(*),ride_passengers(*)&order=requested_at.desc&limit=1"
         )
         return rows.optJSONObject(0)?.toActiveRide()
     }
@@ -45,20 +46,20 @@ class ActiveRideRepository {
      */
     suspend fun findOpenRidesForDriver(userId: String): List<ActiveRide> {
         val rows = SupabaseApi.rows(
-            "rides?driver_id=eq.${SupabaseApi.encode(userId)}&status=in.(accepted,arrived,in_progress)&select=*,delivery_details(*)&order=accepted_at.asc"
+            "rides?driver_id=eq.${SupabaseApi.encode(userId)}&status=in.(accepted,arrived,in_progress)&select=*,delivery_details(*),ride_passengers(*)&order=accepted_at.asc"
         )
         return (0 until rows.length()).map { rows.getJSONObject(it).toActiveRide() }
     }
 
     /** Fila del viaje, sin la ubicación del conductor. */
     suspend fun getRide(rideId: String): ActiveRide? =
-        SupabaseApi.rows("rides?id=eq.${SupabaseApi.encode(rideId)}&select=*,delivery_details(*)&limit=1").optJSONObject(0)?.toActiveRide()
+        SupabaseApi.rows("rides?id=eq.${SupabaseApi.encode(rideId)}&select=*,delivery_details(*),ride_passengers(*)&limit=1").optJSONObject(0)?.toActiveRide()
 
     /** Estado de un viaje cada 3 s, sin la ubicación del conductor (para el siguiente viaje en espera). */
     fun watchRide(rideId: String): Flow<ActiveRide?> = flow {
         while (currentCoroutineContext().isActive) {
             try {
-                emit(SupabaseApi.rows("rides?id=eq.${SupabaseApi.encode(rideId)}&select=*,delivery_details(*)&limit=1").optJSONObject(0)?.toActiveRide())
+                emit(SupabaseApi.rows("rides?id=eq.${SupabaseApi.encode(rideId)}&select=*,delivery_details(*),ride_passengers(*)&limit=1").optJSONObject(0)?.toActiveRide())
             } catch (_: Exception) { }
             delay(3_000)
         }
@@ -68,7 +69,7 @@ class ActiveRideRepository {
         while (currentCoroutineContext().isActive) {
             try {
                 val rows = SupabaseApi.rows(
-                    "rides?driver_id=eq.${SupabaseApi.encode(userId)}&status=in.(accepted,arrived,in_progress)&select=*,delivery_details(*)&limit=1"
+                    "rides?driver_id=eq.${SupabaseApi.encode(userId)}&status=in.(accepted,arrived,in_progress)&select=*,delivery_details(*),ride_passengers(*)&limit=1"
                 )
                 emit(rows.optJSONObject(0)?.toActiveRide())
             } catch (_: Exception) { }
@@ -132,7 +133,7 @@ class ActiveRideRepository {
 
     /** Fila del viaje y, si hay conductor en camino o en viaje, su última ubicación. */
     private suspend fun fetchRide(rideId: String): ActiveRide? {
-        val rows = SupabaseApi.rows("rides?id=eq.${SupabaseApi.encode(rideId)}&select=*,delivery_details(*)&limit=1")
+        val rows = SupabaseApi.rows("rides?id=eq.${SupabaseApi.encode(rideId)}&select=*,delivery_details(*),ride_passengers(*)&limit=1")
         val ride = rows.optJSONObject(0)?.toActiveRide() ?: return null
         if (ride.driverId.isBlank() || ride.status !in setOf("accepted", "arrived", "in_progress")) return ride
         val location = runCatching {
@@ -212,7 +213,7 @@ class ActiveRideRepository {
         driverOnOtherTrip = optBoolean("driver_on_other_trip", false),
         paymentConfirmed = !isNull("payment_confirmed_at"),
         vehicleType = str("vehicle_type", "mototaxi"), serviceKind = str("service_kind", "passenger"),
-        delivery = deliveryDetails()
+        delivery = deliveryDetails(), passenger = ridePassenger()
         )
     }
 

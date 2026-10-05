@@ -1192,9 +1192,9 @@ fun AnimatedGradientButton(
 private fun com.intu.taxi.models.ActiveRide.toDriverRequest() = DriverRideRequest(
     requestId = rideId,
     userId = clientId,
-    userName = riderName,
-    userPhone = riderPhone,
-    userPhotoUrl = riderPhotoUrl.ifBlank { null },
+    userName = passengerName,
+    userPhone = passengerPhone,
+    userPhotoUrl = if (passenger == null) riderPhotoUrl.ifBlank { null } else null,
     originLatitude = originLatitude,
     originLongitude = originLongitude,
     originAddress = originAddress,
@@ -1471,8 +1471,14 @@ fun EnhancedActiveRideCard(
                     if (request.userPhone.isNotBlank()) {
                         val context = LocalContext.current
                         OutlinedButton(onClick = { context.startActivity(android.content.Intent(android.content.Intent.ACTION_DIAL,
-                            android.net.Uri.parse("tel:${request.userPhone}"))) }) { Text("Llamar a quien envía") }
+                            android.net.Uri.parse("tel:${request.userPhone}"))) }) { Text("Llamar a quien solicitó") }
                     }
+                }
+
+                if (!request.isDelivery && request.userPhone.isNotBlank()) {
+                    val context = LocalContext.current
+                    OutlinedButton(onClick = { context.startActivity(android.content.Intent(android.content.Intent.ACTION_DIAL,
+                        android.net.Uri.parse("tel:${request.userPhone}"))) }) { Text("Llamar al pasajero") }
                 }
 
                 Text(

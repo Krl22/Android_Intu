@@ -33,14 +33,15 @@ internal fun DestinationSearchPanel(
     onRefresh: () -> Unit,
     onPickMap: () -> Unit,
     onManagePlaces: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    showInitialSuggestions: Boolean = false
 ) {
     val colors = MaterialTheme.colorScheme
     Card(modifier.fillMaxWidth().testTag("destination-search-panel").intuCardBackground(),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = Color.Transparent)) {
         Column(Modifier.padding(vertical = 8.dp)) {
-            if (query.trim().length >= 2) {
+            if (query.trim().length >= 2 || showInitialSuggestions) {
                 Text("Direcciones sugeridas", style = MaterialTheme.typography.labelLarge, color = colors.primary,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
                 results.forEach { place ->
@@ -51,7 +52,7 @@ internal fun DestinationSearchPanel(
                 if (addressLoading || loading) Text(
                     if (addressLoading) "Buscando calles y direcciones…" else "Actualizando lugares…",
                     style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(16.dp))
-                else if (results.isEmpty()) Text("No encontramos ese lugar. Puedes elegirlo en el mapa.",
+                else if (results.isEmpty() && query.trim().length >= 2) Text("No encontramos ese lugar. Puedes elegirlo en el mapa.",
                     style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(16.dp))
                 addressError?.let { Text(it, color = colors.error, style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) }

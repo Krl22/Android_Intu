@@ -28,17 +28,25 @@ internal fun DeliveryDetailsDialog(
     busy: Boolean = false,
     error: String? = null,
     businessName: String? = null,
-    businessItems: List<com.intu.taxi.models.BusinessOrderItem> = emptyList()
+    businessItems: List<com.intu.taxi.models.BusinessOrderItem> = emptyList(),
+    sender: com.intu.taxi.models.BookingContact? = null,
+    recipient: com.intu.taxi.models.BookingContact? = null
 ) {
-    var name by rememberSaveable { mutableStateOf(initial?.recipientName.orEmpty()) }
-    var phone by rememberSaveable { mutableStateOf(PhoneFormatter.nationalDigits("+51", initial?.recipientPhone.orEmpty())) }
+    var name by rememberSaveable { mutableStateOf(initial?.recipientName ?: recipient?.name.orEmpty()) }
+    var phone by rememberSaveable { mutableStateOf(PhoneFormatter.nationalDigits("+51", initial?.recipientPhone ?: recipient?.phone.orEmpty())) }
+    val pickRecipient = rememberPhoneContactPicker {
+        name = it.name
+        val normalized = PhoneFormatter.normalizeMobile(it.phone)
+        phone = if (normalized?.matches(Regex("\\+519[0-9]{8}")) == true) normalized.removePrefix("+51") else it.phone
+    }
     var description by rememberSaveable { mutableStateOf(initial?.description ?: if (businessItems.isNotEmpty()) "Pedido demo · ${businessItems.sumOf { it.quantity }} productos" else "") }
     var pickupReference by rememberSaveable { mutableStateOf(initial?.pickupReference.orEmpty()) }
     var deliveryReference by rememberSaveable { mutableStateOf(initial?.deliveryReference.orEmpty()) }
     var smallPackage by rememberSaveable { mutableStateOf(initial?.smallPackageConfirmed ?: false) }
     var payerCode by rememberSaveable { mutableStateOf((initial?.payer?.takeIf { it in allowedPayers } ?: allowedPayers.first()).code) }
     val details = DeliveryDetails(name, phone, description, pickupReference, deliveryReference,
-        DeliveryPayer.entries.first { it.code == payerCode }, smallPackageConfirmed = smallPackage, businessName = businessName, businessItems = businessItems)
+        DeliveryPayer.entries.first { it.code == payerCode }, smallPackageConfirmed = smallPackage, businessName = businessName, businessItems = businessItems,
+        sender = sender ?: initial?.sender)
     val valid = runCatching { details.normalized() }.isSuccess
 
     AccountDialogLayout(
@@ -62,9 +70,11 @@ internal fun DeliveryDetailsDialog(
             Column(Modifier.verticalScroll(rememberScrollState()).padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 if (businessItems.isNotEmpty()) BusinessCartSummary(businessItems)
+                details.sender?.let { Text("Entrega el paquete: ${it.name} · ${it.phone}", color = MaterialTheme.colorScheme.primary) }
                 OutlinedTextField(description, { description = it.take(280) }, label = { Text("¿Qué enviarás?") },
                     placeholder = { Text("Ej. documentos en un sobre") }, minLines = 2, enabled = !busy,
                     modifier = Modifier.fillMaxWidth())
+                OutlinedButton(onClick = pickRecipient, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Elegir contacto que recibe") }
                 OutlinedTextField(name, { name = it.take(100) }, label = { Text("Nombre de quien recibe") },
                     singleLine = true, enabled = !busy, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(phone, { phone = PhoneFormatter.nationalDigits("+51", it).take(9) },

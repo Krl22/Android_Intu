@@ -238,6 +238,13 @@ fun HomeScreen(
     var isCalculatingDestinationRoute by remember { mutableStateOf(false) }
     var pendingDestination by remember { mutableStateOf<Point?>(null) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
+    var showPlanner by remember { mutableStateOf(false) }
+    var planningField by remember { mutableStateOf(PlanningField.DESTINATION) }
+    var planningMapField by remember { mutableStateOf<PlanningField?>(null) }
+    var pickupQuery by remember { mutableStateOf("") }
+    var hasPlannedPickup by remember { mutableStateOf(false) }
+    var bookingContact by remember { mutableStateOf<com.intu.taxi.models.BookingContact?>(null) }
+    var showBookingContact by remember { mutableStateOf(false) }
     val placesUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
     val savedPlacesStore = remember(placesUid) {
         placesUid.takeIf { it.isNotBlank() }?.let { com.intu.taxi.data.SavedPlaces(context, it) }
@@ -366,6 +373,8 @@ fun HomeScreen(
 
     // Descarta solo la preparación del viaje; nunca cancela una solicitud ya enviada.
     fun returnHomeFromPreparation() {
+        showPlanner = false; planningMapField = null; pickupQuery = ""; hasPlannedPickup = false
+        bookingContact = null; showBookingContact = false
         selectedBusiness = null; selectedBusinessItems = emptyList()
         previewBusiness = null
         isRideOptionsVisible = false
@@ -409,10 +418,26 @@ fun HomeScreen(
         }
     }
 
-    BackHandler(enabled = (isRideOptionsVisible || isSelectingPoint || isCalculatingDestinationRoute ||
+    fun returnToPlanner() {
+        planningMapField = null
+        isSelectingDestination = false; showPickupPicker = false; isRideOptionsVisible = false
+        pendingDestination = null; isCalculatingDestinationRoute = false
+        showPlanner = true
+    }
+
+    fun openPlanner(delivery: Boolean = false) {
+        returnHomeFromPreparation()
+        isDelivery = delivery
+        selectedMotoOptionCode = if (delivery) com.intu.taxi.models.MotoOption.DELIVERY.code else com.intu.taxi.models.MotoOption.ANY.code
+        pickupLocation = userLocation; hasPlannedPickup = userLocation != null
+        pickupQuery = "Mi ubicación"
+        planningField = PlanningField.DESTINATION; showPlanner = true
+    }
+
+    BackHandler(enabled = (showPlanner || isRideOptionsVisible || isSelectingPoint || isCalculatingDestinationRoute ||
         isSearchFocused || searchQuery.isNotBlank()) && !showSavedPlaces &&
         !isCreatingRideRequest && !isSearchingDriver && currentRideRequestId == null && activeRide == null) {
-        returnHomeFromPreparation()
+        if (planningMapField != null || isRideOptionsVisible) returnToPlanner() else returnHomeFromPreparation()
     }
 
     suspend fun loadBookingRoute(origin: Point, destination: Point): TripRoute? =
@@ -422,11 +447,13 @@ fun HomeScreen(
         if (isCalculatingDestinationRoute || isCreatingRideRequest) return
         errorMessage = null
         selectedDestination = destination
+        showPlanner = false; planningMapField = null
+        showPickupPicker = false
         isCalculatingDestinationRoute = true
         pendingDestination = destination
     }
 
-    LaunchedEffect(pendingDestination, userLocation != null) {
+    LaunchedEffect(pendingDestination, pickupLocation, userLocation != null) {
         val destination = pendingDestination ?: return@LaunchedEffect
         val origin = pickupLocation ?: userLocation ?: return@LaunchedEffect
         try {
@@ -476,6 +503,7 @@ fun HomeScreen(
         val option = com.intu.taxi.models.MotoOption.fromCode(selectedMotoOptionCode) ?: return
         val rideType = option.vehicleType
         val businessSnapshot = selectedBusiness
+        val passengerSnapshot = bookingContact.takeIf { !option.delivery }
         if (isCreatingRideRequest || currentRideRequestId != null) return
         isCreatingRideRequest = true
         errorMessage = null
@@ -484,7 +512,7 @@ fun HomeScreen(
                 val route = routeSnapshot ?: loadBookingRoute(origin, destination)
                     ?: throw IllegalStateException("No se pudo calcular la ruta desde el punto de recojo. Intenta de nuevo.")
                 val booking = RideBooking(origin, destination, route, rideType, selectedPaymentMethod, delivery, option.preferredBrand,
-                    businessSnapshot?.id, businessSnapshot?.updatedAt)
+                    businessSnapshot?.id, businessSnapshot?.updatedAt, passengerSnapshot)
                 pickupLocation = origin
                 routePoints = route.points
                 routeDistanceMeters = route.distanceMeters
@@ -501,7 +529,8 @@ fun HomeScreen(
                         distanceMeters = route.distanceMeters, durationSeconds = route.durationSeconds, estimatedPrice = booking.estimatedPrice,
                         rideType = rideType, paymentMethod = booking.paymentMethod,
                         routeGeometry = LineString.fromLngLats(route.points).toJson(), delivery = delivery, preferredVehicleBrand = option.preferredBrand,
-                        businessAdId = businessSnapshot?.id, businessAdUpdatedAt = businessSnapshot?.updatedAt
+                        businessAdId = businessSnapshot?.id, businessAdUpdatedAt = businessSnapshot?.updatedAt,
+                        passenger = passengerSnapshot
                     )
                 }
                 result.onSuccess { requestId ->
@@ -545,6 +574,8 @@ fun HomeScreen(
         allowedPayers = if (selectedBusiness != null) listOf(com.intu.taxi.models.DeliveryPayer.RECIPIENT) else com.intu.taxi.models.DeliveryPayer.entries,
         businessName = selectedBusiness?.name,
         businessItems = selectedBusinessItems,
+        sender = bookingContact.takeIf { selectedBusiness == null },
+        recipient = bookingContact.takeIf { selectedBusiness != null },
         onDismiss = { pendingDeliveryOrigin = null; pendingDeliveryRoute = null },
         onConfirm = { details ->
             deliveryDraft = details
@@ -561,12 +592,19 @@ fun HomeScreen(
         pickupLocation = ad.point
         selectedMotoOptionCode = com.intu.taxi.models.MotoOption.DELIVERY.code
         isDelivery = true
-        selectedDestination = userLocation
-        isSelectingDestination = true
+        pickupQuery = "${ad.name} · ${ad.address}"
+        hasPlannedPickup = true
+        planningField = PlanningField.DESTINATION
+        showPlanner = true
     }) }
 
     fun beginPickupSelection() {
         val initial = pickupLocation ?: userLocation ?: return
+        if (hasPlannedPickup && selectedBusiness == null) {
+            if (isDelivery) { pendingDeliveryOrigin = initial; pendingDeliveryRoute = null }
+            else requestRideFromPickup(initial)
+            return
+        }
         if (selectedBusiness != null) {
             pendingDeliveryOrigin = selectedBusiness!!.point
             pendingDeliveryRoute = null
@@ -599,6 +637,17 @@ fun HomeScreen(
     )
     
     if (showSavedPlaces && placesUid.isNotBlank()) SavedPlacesDialog(onDismiss = { showSavedPlaces = false })
+
+    if (showBookingContact) BookingContactDialog(bookingContact, isDelivery, selectedBusiness != null,
+        onDismiss = { showBookingContact = false }, onSelect = { contact ->
+            bookingContact = contact; showBookingContact = false; deliveryDraft = null
+            if (selectedBusiness == null) {
+                pickupLocation = if (contact == null) userLocation else null
+                hasPlannedPickup = pickupLocation != null
+                pickupQuery = if (contact == null) "Mi ubicación" else ""
+                planningField = if (contact == null) PlanningField.DESTINATION else PlanningField.PICKUP
+            }
+        })
 
     // Load saved payment method
     LaunchedEffect(Unit) {
@@ -698,10 +747,10 @@ fun HomeScreen(
             (permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true)
     }
 
-    val isPreparingTrip = isSelectingPoint || isRideOptionsVisible || isSearchingDriver || activeRide != null ||
+    val isPreparingTrip = showPlanner || isSelectingPoint || isRideOptionsVisible || isSearchingDriver || activeRide != null ||
         isCalculatingDestinationRoute || isCreatingRideRequest || currentRideRequestId != null
-    val searchActive = isSearchFocused || isKeyboardVisible || searchQuery.isNotBlank()
-    val showTripMap = isPreparingTrip || searchActive
+    // The planner owns search now; a closing keyboard must not reopen the old map overlay.
+    val showTripMap = isPreparingTrip
 
     Box(modifier = Modifier.fillMaxSize()) {
         val mapView = rememberMapViewWithLifecycle(accessToken = mapboxToken)
@@ -734,9 +783,12 @@ fun HomeScreen(
             if (locationProvider == null) testLocation else null, realLocationProvider = locationProvider) { point, first ->
             val replacingLocation = userLocation != null
             userLocation = point
+            if (showPlanner && bookingContact == null && selectedBusiness == null && pickupQuery == "Mi ubicación" && pickupLocation == null) {
+                pickupLocation = point; hasPlannedPickup = true
+            }
             if (first) {
                 if (activeRide == null && !isSearchingDriver) {
-                    if (replacingLocation && selectedBusiness == null) {
+                    if (replacingLocation && selectedBusiness == null && !hasPlannedPickup && !showPlanner) {
                         // A draft route must not retain a pickup from the previous test city.
                         pickupLocation = null
                         selectedDestination = null
@@ -1068,24 +1120,25 @@ fun HomeScreen(
         // Control centralizado de visibilidad del BottomNavbar:
         // oculto si está activo el modo pin, panel de opciones de viaje, búsqueda de conductor o un viaje.
         val hasActiveRide = activeRide != null
-        LaunchedEffect(isSelectingPoint, isRideOptionsVisible, isSearchingDriver, hasActiveRide) {
-            val visible = !(isSelectingPoint || isRideOptionsVisible || isSearchingDriver || hasActiveRide)
+        LaunchedEffect(showPlanner, isSelectingPoint, isRideOptionsVisible, isSearchingDriver, hasActiveRide) {
+            val visible = !(showPlanner || isSelectingPoint || isRideOptionsVisible || isSearchingDriver || hasActiveRide)
             onBottomBarVisibilityChanged(visible)
         }
 
-        // Local catalog results appear immediately, before the debounced Mapbox address results.
-        LaunchedEffect(searchQuery, isSelectingPoint, userLocation, catalog) {
-            suggestions = if (!isSelectingPoint) searchCatalog(searchQuery, catalog.places,
-                userLocation?.latitude(), userLocation?.longitude()) else emptyList()
+        val planningQuery = if (planningField == PlanningField.PICKUP) pickupQuery.takeUnless { it == "Mi ubicación" }.orEmpty() else searchQuery
+        // Local suggestions stay visible while the address provider refreshes.
+        LaunchedEffect(planningQuery, isSelectingPoint, userLocation, catalog) {
+            suggestions = if (isSelectingPoint) emptyList() else if (planningQuery.trim().length >= 2)
+                searchCatalog(planningQuery, catalog.places, userLocation?.latitude(), userLocation?.longitude())
+            else catalog.places.filter { it.status == "published" && it.pickupVerified }
+                .sortedBy { place -> userLocation?.let { (place.latitude - it.latitude()).pow(2) + (place.longitude - it.longitude()).pow(2) } ?: 0.0 }.take(6)
         }
         LaunchedEffect(pinSearchQuery, isSelectingPoint, userLocation, catalog) {
             pinSuggestions = if (isSelectingPoint) searchCatalog(pinSearchQuery, catalog.places,
                 userLocation?.latitude(), userLocation?.longitude()) else emptyList()
         }
         val searchProximity = userLocation?.let { it.latitude() to it.longitude() }
-        val addressSearch = rememberAddressSearch(searchQuery,
-            isSearchFocused && !isSelectingPoint && !isRideOptionsVisible && !isSearchingDriver && activeRide == null,
-            proximity = searchProximity) {
+        val addressSearch = rememberAddressSearch(planningQuery, showPlanner, proximity = searchProximity) {
             addressSearchRepository.search(it, userLocation?.latitude(), userLocation?.longitude())
         }
         val pinAddressSearch = rememberAddressSearch(pinSearchQuery,
@@ -1098,30 +1151,18 @@ fun HomeScreen(
             CommercialHome(
                 padding = padding,
                 greetingName = greetingName,
-                searchActive = searchActive,
+                searchActive = false,
                 businessFeed = businessFeed,
                 businessError = businessError,
                 onBusinessRetry = { businessRefresh++ },
                 onBusiness = { previewBusiness = it },
-                onTravel = {
-                    selectedBusiness = null; selectedBusinessItems = emptyList()
-                    pickupLocation = null
-                    selectedMotoOptionCode = com.intu.taxi.models.MotoOption.ANY.code
-                    isDelivery = false
-                    isSelectingDestination = true
-                },
-                onDelivery = {
-                    selectedBusiness = null; selectedBusinessItems = emptyList()
-                    pickupLocation = null
-                    selectedMotoOptionCode = com.intu.taxi.models.MotoOption.DELIVERY.code
-                    isDelivery = true
-                    isSelectingDestination = true
-                },
+                onTravel = { openPlanner() },
+                onDelivery = { openPlanner(delivery = true) },
                 searchContent = {
                     HeaderSearchBar(
                         value = searchQuery,
                         onValueChange = { searchQuery = it },
-                        onFocusChange = { focused -> isSearchFocused = focused },
+                        onFocusChange = { focused -> if (focused) openPlanner() },
                         placeholderText = "¿A dónde vamos?",
                         modifier = Modifier.testTag("home-destination-search"),
                         shape = RoundedCornerShape(20.dp),
@@ -1129,49 +1170,43 @@ fun HomeScreen(
                         showClearButton = true,
                         onClearClick = { searchQuery = "" }
                     )
-                    if (searchActive) {
-                        DestinationSearchPanel(
-                            query = searchQuery,
-                            savedPlaces = savedPlaces,
-                            results = mergePlaceSearchResults(suggestions, addressSearch.results),
-                            hasCatalog = catalog.places.isNotEmpty(),
-                            loading = catalogLoading,
-                            error = catalogError,
-                            addressLoading = addressSearch.loading,
-                            addressError = addressSearch.error,
-                            onSelect = { place ->
-                                focusManager.clearFocus()
-                                keyboard?.hide()
-                                val point = Point.fromLngLat(place.longitude, place.latitude)
-                                mapView.mapboxMap.setCamera(CameraOptions.Builder().center(point).zoom(16.0).build())
-                                selectedDestination = point
-                                searchQuery = place.name
-                                suggestions = emptyList()
-                                isSelectingDestination = true
-                            },
-                            onSavedPlaceClick = { place ->
-                                focusManager.clearFocus()
-                                keyboard?.hide()
-                                searchQuery = place.name
-                                suggestions = emptyList()
-                                confirmDestination(Point.fromLngLat(place.longitude, place.latitude))
-                            },
-                            onRefresh = { catalogRefresh++ },
-                            onPickMap = {
-                                focusManager.clearFocus()
-                                keyboard?.hide()
-                                searchQuery = ""
-                                isSelectingDestination = true
-                            },
-                            onManagePlaces = {
-                                keyboard?.hide()
-                                showSavedPlaces = true
-                            },
-                            modifier = Modifier.padding(top = 12.dp)
-                        )
-                    }
                 }
             )
+        } else if (showPlanner) {
+            fun choosePoint(point: Point, label: String) {
+                focusManager.clearFocus(force = true); keyboard?.hide()
+                if (planningField == PlanningField.PICKUP) {
+                    pickupLocation = point; hasPlannedPickup = true; pickupQuery = label
+                    planningField = PlanningField.DESTINATION
+                    selectedDestination?.let(::confirmDestination)
+                } else {
+                    selectedDestination = point; searchQuery = label
+                    if (pickupLocation != null && hasPlannedPickup) confirmDestination(point)
+                    else { planningField = PlanningField.PICKUP; errorMessage = "Elige primero el punto de recojo." }
+                }
+            }
+            TripPlanningPanel(pickup = pickupQuery, destination = searchQuery, field = planningField,
+                contact = bookingContact, delivery = isDelivery, business = selectedBusiness != null,
+                savedPlaces = savedPlaces, results = mergePlaceSearchResults(suggestions, addressSearch.results),
+                loading = catalogLoading, error = errorMessage ?: catalogError, addressLoading = addressSearch.loading,
+                addressError = addressSearch.error, hasCatalog = catalog.places.isNotEmpty(),
+                onBack = ::returnHomeFromPreparation, onPerson = { showBookingContact = true },
+                onField = { planningField = it },
+                onPickup = { pickupQuery = it; pickupLocation = null; hasPlannedPickup = false; errorMessage = null },
+                onDestination = { searchQuery = it; selectedDestination = null; errorMessage = null },
+                onSelect = { choosePoint(Point.fromLngLat(it.longitude, it.latitude), it.name) },
+                onSaved = { choosePoint(Point.fromLngLat(it.longitude, it.latitude), it.name) },
+                onRefresh = { catalogRefresh++ }, onManagePlaces = { keyboard?.hide(); showSavedPlaces = true },
+                onPickMap = {
+                    focusManager.clearFocus(force = true); keyboard?.hide()
+                    planningMapField = planningField; showPlanner = false
+                    pinSearchQuery = ""; hasUserInteractedWithPinSearch = false; isPinSearchFocused = false
+                    val point = if (planningField == PlanningField.PICKUP) pickupLocation ?: userLocation else selectedDestination ?: userLocation
+                    if (planningField == PlanningField.PICKUP) { selectedPickup = point; showPickupPicker = true }
+                    else { selectedDestination = point; isSelectingDestination = true }
+                    point?.let { mapView.mapboxMap.setCamera(CameraOptions.Builder().center(it).zoom(16.0)
+                        .padding(EdgeInsets(0.0, 0.0, 0.0, 0.0)).build()) }
+                }, modifier = Modifier.align(Alignment.BottomCenter))
         } else if (isSelectingPoint && !isSearchingDriver && activeRide == null) {
             // Modo pin: usar la misma animación global (25% de página)
             Box(
@@ -1228,7 +1263,7 @@ fun HomeScreen(
                                 .align(Alignment.Start)
                                 .padding(top = 16.dp, start = 16.dp)
                                 .size(40.dp)
-                                .clickable(enabled = !isCreatingRideRequest, onClick = ::returnHomeFromPreparation),
+                                .clickable(enabled = !isCreatingRideRequest) { if (planningMapField != null) returnToPlanner() else returnHomeFromPreparation() },
                             shape = RoundedCornerShape(12.dp),
                             colors = CardDefaults.cardColors(containerColor = AppearanceColors.surface.copy(alpha = 0.9f)),
                             elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
@@ -1304,8 +1339,8 @@ fun HomeScreen(
                 paymentMethod = selectedPaymentMethod,
                 confirmEnabled = !isCreatingRideRequest && selectedMotoOptionCode != null && (pickupLocation != null || userLocation != null) && confirmedDestination != null,
                 options = if (selectedBusiness != null) listOf(com.intu.taxi.models.MotoOption.DELIVERY) else com.intu.taxi.models.MotoOption.entries,
-                confirmLabel = if (selectedBusiness != null) "Continuar con pedido demo" else "Elegir recojo",
-                pickupLabel = selectedBusiness?.let { "${it.name} · ${it.address}" },
+                confirmLabel = if (selectedBusiness != null) "Continuar con pedido demo" else if (hasPlannedPickup) { if (isDelivery) "Continuar con envío" else "Solicitar viaje" } else "Elegir recojo",
+                pickupLabel = selectedBusiness?.let { "${it.name} · ${it.address}" } ?: pickupQuery.takeIf { it.isNotBlank() }?.let { label -> bookingContact?.let { "${it.name} · $label" } ?: label },
                 error = errorMessage,
                 onSelect = { selectedMotoOptionCode = it.code; isDelivery = it.delivery; errorMessage = null },
                 onChangePayment = {
@@ -1395,7 +1430,20 @@ fun HomeScreen(
                             focusManager.clearFocus(force = true)
                             keyboard?.hide()
                             val point = mapView.pointUnderCenterPin() ?: selectedPoint
-                            if (showPickupPicker && isDelivery) point?.let {
+                            if (planningMapField != null) point?.let {
+                                val field = planningMapField
+                                planningMapField = null; showPickupPicker = false; isSelectingDestination = false
+                                if (field == PlanningField.PICKUP) {
+                                    pickupLocation = it; hasPlannedPickup = true; pickupQuery = pinSearchQuery.ifBlank { "Recojo elegido en mapa" }
+                                    planningField = PlanningField.DESTINATION; showPlanner = true
+                                    selectedDestination?.let(::confirmDestination)
+                                } else {
+                                    selectedDestination = it; searchQuery = pinSearchQuery.ifBlank { "Destino elegido en mapa" }
+                                    if (pickupLocation != null && hasPlannedPickup) confirmDestination(it)
+                                    else { planningField = PlanningField.PICKUP; showPlanner = true }
+                                }
+                            }
+                            else if (showPickupPicker && isDelivery) point?.let {
                                 pendingDeliveryRoute = null
                                 pendingDeliveryOrigin = it
                             }
@@ -1422,6 +1470,7 @@ fun HomeScreen(
                     ) {
                         Text(when {
                             isCreatingRideRequest -> if (isDelivery) "Solicitando envío…" else "Solicitando viaje…"
+                            planningMapField == PlanningField.PICKUP -> "Confirmar recojo"
                             showPickupPicker -> if (isDelivery) "Continuar con envío" else "Solicitar viaje"
                             isCalculatingDestinationRoute -> "Calculando ruta…"
                             else -> "Confirmar destino"
@@ -1434,6 +1483,7 @@ fun HomeScreen(
 
         // Deja el mapa listo para pedir otro viaje
         fun resetRideState() {
+            showPlanner = false; bookingContact = null; planningMapField = null; hasPlannedPickup = false; pickupQuery = ""
             selectedBusiness = null; selectedBusinessItems = emptyList()
             isDelivery = false
             selectedMotoOptionCode = com.intu.taxi.models.MotoOption.ANY.code
@@ -1520,7 +1570,9 @@ fun HomeScreen(
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text("PIN de seguridad", fontWeight = FontWeight.SemiBold, color = AppearanceColors.highlight(Color(0xFF08817E)))
                                     Text(
-                                        if (ride.isDelivery) "Díselo al repartidor al entregar el paquete. No lo compartas antes."
+                                        if (ride.passenger != null) "Comparte el PIN con ${ride.passenger.name} para que se lo diga al conductor al subir."
+                                        else if (ride.delivery?.sender != null) "Comparte el PIN con ${ride.delivery.sender.name} para el recojo del paquete."
+                                        else if (ride.isDelivery) "Díselo al repartidor al entregar el paquete. No lo compartas antes."
                                         else "Díselo al conductor al subir. No lo compartas antes.",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = AppearanceColors.secondary(Color(0xFF5F6570))
@@ -1536,6 +1588,7 @@ fun HomeScreen(
                             }
                         }
                     }
+                    ride.passenger?.let { Text("Viaje para ${it.name}", fontWeight = FontWeight.SemiBold) }
                     ride.delivery?.let { DeliverySummary(it) }
                     if (ride.driverName.isNotBlank() || ride.vehiclePlate.isNotBlank()) {
                         // Foto del conductor para reconocerlo al llegar; tocarla la agranda

@@ -115,6 +115,13 @@ fun RideDetailsDialog(ride: RideHistoryItem, cache: MutableMap<String, List<Poin
                         }
                         Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(18.dp),
                             verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                            ride.passenger?.let { person ->
+                                DetailCard {
+                                    Text("Solicitado para otra persona", color = MaterialTheme.colorScheme.primary)
+                                    Text(person.name, fontWeight = FontWeight.SemiBold)
+                                    Text(person.phone, style = MaterialTheme.typography.bodyMedium)
+                                }
+                            }
                             ride.delivery?.takeIf { it.businessItems.isNotEmpty() }?.let { details ->
                                 DetailCard {
                                     Text("DEMO · ${details.businessName.orEmpty()}", color = MaterialTheme.colorScheme.primary)
@@ -123,6 +130,10 @@ fun RideDetailsDialog(ride: RideHistoryItem, cache: MutableMap<String, List<Poin
                                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
+                            ride.delivery?.let { details -> DetailCard {
+                                details.sender?.let { Text("Entregó el paquete: ${it.name} · ${it.phone}") }
+                                Text("Recibe: ${details.recipientName} · ${details.recipientPhone}")
+                            } }
                             DetailCard {
                                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.SpaceBetween) {

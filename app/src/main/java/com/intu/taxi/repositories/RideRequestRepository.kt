@@ -22,11 +22,13 @@ class RideRequestRepository {
         delivery: com.intu.taxi.models.DeliveryDetails? = null,
         preferredVehicleBrand: String? = null,
         businessAdId: String? = null,
-        businessAdUpdatedAt: String? = null
+        businessAdUpdatedAt: String? = null,
+        passenger: com.intu.taxi.models.BookingContact? = null
     ): Result<String> = runCatching {
         val vehicleType = com.intu.taxi.auth.DriverVehicleType.requireCode(rideType)
         check((vehicleType == "motorcycle") == (delivery != null)) { "Completa los datos del envío antes de solicitarlo." }
         require(businessAdId == null || delivery != null) { "Los negocios requieren envío en moto." }
+        require(passenger == null || vehicleType == "mototaxi") { "El contacto del pasajero corresponde al mototaxi." }
         require(businessAdId == null || !businessAdUpdatedAt.isNullOrBlank()) { "Actualiza el anuncio antes de solicitar el envío." }
         require(preferredVehicleBrand == null || (vehicleType == "mototaxi" && preferredVehicleBrand in setOf("honda", "bajaj"))) {
             "Selecciona una opción de moto válida."
@@ -42,6 +44,7 @@ class RideRequestRepository {
                 .put("p_route_polyline", routeGeometry ?: JSONObject.NULL)
                 .put("p_payment_method", if (paymentMethod == "yape_plin") "yape_plin" else "efectivo")
                 .put("p_details", JSONObject().put("recipient_name", details.recipientName).put("recipient_phone", details.recipientPhone)
+                    .put("sender_name", details.sender?.name ?: JSONObject.NULL).put("sender_phone", details.sender?.phone ?: JSONObject.NULL)
                     .put("description", details.description).put("pickup_reference", details.pickupReference)
                     .put("delivery_reference", details.deliveryReference).put("payer", details.payer.code)
                     .put("small_package_confirmed", details.smallPackageConfirmed)
@@ -52,7 +55,18 @@ class RideRequestRepository {
             // The business RPC owns the pickup; clients cannot substitute an address or point.
             if (businessAdId != null) body.put("p_ad_id", businessAdId)
             else body.put("p_origin_lat", originLatitude).put("p_origin_lng", originLongitude).put("p_origin_address", originAddress)
-            return@runCatching SupabaseApi.rpc(if (businessAdId != null) "create_business_delivery_request" else "create_delivery_request", body).getString("id")
+            return@runCatching SupabaseApi.rpc(if (businessAdId != null) "create_business_delivery_request"
+                else if (details.sender != null) "create_contact_delivery_request" else "create_delivery_request", body).getString("id")
+        }
+        if (passenger != null) {
+            val person = passenger.normalized()
+            return@runCatching SupabaseApi.rpc("create_guest_ride_request", JSONObject()
+                .put("p_origin_lat", originLatitude).put("p_origin_lng", originLongitude).put("p_origin_address", originAddress)
+                .put("p_destination_lat", destinationLatitude).put("p_destination_lng", destinationLongitude).put("p_destination_address", destinationAddress)
+                .put("p_distance_meters", distanceMeters.toInt()).put("p_duration_seconds", durationSeconds.toInt())
+                .put("p_route_polyline", routeGeometry ?: JSONObject.NULL).put("p_payment_method", if (paymentMethod == "yape_plin") "yape_plin" else "efectivo")
+                .put("p_preferred_brand", preferredVehicleBrand ?: JSONObject.NULL)
+                .put("p_contact", JSONObject().put("name", person.name).put("phone", person.phone))).getString("id")
         }
         val body = JSONObject()
             .put("vehicle_type", vehicleType)
