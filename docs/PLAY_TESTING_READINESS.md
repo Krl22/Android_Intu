@@ -1,6 +1,8 @@
 # Intu: preparación para pruebas privadas en Google Play
 
-Preparación del 1 de octubre de 2026. Aplicación `com.intu.taxi`, Android 1.14 / código 15.
+Preparación inicial del 1 de octubre de 2026. Aplicación `com.intu.taxi`, Android 1.14 / código 15.
+
+**Actualización del 5 de octubre:** Carlos confirmó que su cuenta de Play Console está verificada. Se regeneró y validó el AAB **1.31/código 32** con todos los cambios integrados en `main`; la entrega actual es `build/play/intu-1.31.aab`. Firma release, lint, bundletool, ELF ARM64 y APK universal con alineación de 16 KB: correctos. Ver `docs/RELEASE_1_31.md` para huellas y comprobaciones. Las referencias a 1.14/1.15 más abajo son el historial de preparación, no la entrega actual. No se ha publicado en Play Console: siguen pendientes su configuración, el certificado de Play en Firebase y la instalación de comprobación; también las decisiones legales documentadas aquí.
 
 La vía inicial es **Prueba interna**, con lista de correos Google y enlace de inscripción, hasta 100 testers. No aparece en búsquedas públicas mientras solo tenga versiones internas/cerradas. No se ha creado una app ni subido una versión a Play Console desde esta sesión.
 
