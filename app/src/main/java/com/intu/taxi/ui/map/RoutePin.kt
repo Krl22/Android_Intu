@@ -6,6 +6,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -40,4 +41,34 @@ internal fun RoutePin(description: String, modifier: Modifier = Modifier, pickup
         drawCircle(RoutePinStyle.headColor, radius * .68f, head)
         drawCircle(ink, radius * .26f, head)
     }
+}
+
+/** The same pin as a bitmap for a map layer; anchor it at the bottom so the foot marks the point. */
+fun routePinBitmap(context: android.content.Context, pickup: Boolean): android.graphics.Bitmap {
+    val dp = context.resources.displayMetrics.density
+    val size = 42 * dp
+    val bitmap = android.graphics.Bitmap.createBitmap(size.toInt(), size.toInt(), android.graphics.Bitmap.Config.ARGB_8888)
+    val canvas = android.graphics.Canvas(bitmap)
+    val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { strokeCap = android.graphics.Paint.Cap.ROUND }
+    val radius = size * .30f
+    val headX = size / 2
+    val headY = radius + 1 * dp
+    val footRadius = RoutePinStyle.anchorInset.value * dp
+    val footY = size - footRadius
+    val stemStartY = headY + radius - 1 * dp
+
+    paint.color = Color.Black.copy(alpha = .18f).toArgb()
+    paint.strokeWidth = 5 * dp
+    canvas.drawLine(headX, stemStartY + 1 * dp, headX, footY + 1 * dp, paint)
+    canvas.drawCircle(headX, headY + 1 * dp, radius + 1 * dp, paint)
+    paint.color = android.graphics.Color.WHITE
+    paint.strokeWidth = 3 * dp
+    canvas.drawLine(headX, stemStartY, headX, footY, paint)
+    canvas.drawCircle(headX, footY, footRadius, paint)
+    canvas.drawCircle(headX, headY, radius, paint)
+    paint.color = RoutePinStyle.headColor.toArgb()
+    canvas.drawCircle(headX, headY, radius * .68f, paint)
+    paint.color = (if (pickup) RoutePinStyle.pickupColor else RoutePinStyle.destinationColor).toArgb()
+    canvas.drawCircle(headX, headY, radius * .26f, paint)
+    return bitmap
 }

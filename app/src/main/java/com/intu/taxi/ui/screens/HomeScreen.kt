@@ -160,6 +160,13 @@ import com.mapbox.maps.plugin.annotation.generated.PointAnnotationOptions
 import com.mapbox.maps.plugin.annotation.generated.createPointAnnotationManager
 import com.mapbox.maps.plugin.annotation.generated.PointAnnotation
 import com.mapbox.maps.plugin.annotation.generated.PointAnnotationManager
+import com.mapbox.maps.plugin.annotation.generated.PolylineAnnotation
+import com.mapbox.maps.plugin.annotation.generated.PolylineAnnotationManager
+import com.mapbox.maps.plugin.annotation.generated.PolylineAnnotationOptions
+import com.mapbox.maps.plugin.annotation.generated.createPolylineAnnotationManager
+import com.mapbox.maps.extension.style.layers.properties.generated.IconAnchor
+import com.mapbox.maps.extension.style.layers.properties.generated.LineCap
+import com.mapbox.maps.extension.style.layers.properties.generated.LineJoin
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -334,6 +341,9 @@ fun HomeScreen(
     var showDriverIcon by remember { mutableStateOf(false) }
     var driverAnnotationManager by remember { mutableStateOf<PointAnnotationManager?>(null) }
     var driverAnnotation by remember { mutableStateOf<PointAnnotation?>(null) }
+    // Ruta del viaje en curso y su punto objetivo, dentro del mapa y por debajo del conductor
+    var tripRouteManager by remember { mutableStateOf<PolylineAnnotationManager?>(null) }
+    var tripTargetManager by remember { mutableStateOf<PointAnnotationManager?>(null) }
     // Alto de la tarjeta del viaje, para que la cámara no ponga la ruta detrás de ella
     var rideCardHeightPx by remember { mutableStateOf(0) }
     // Último gesto del pasajero sobre el mapa; mientras explora, la cámara no lo interrumpe
@@ -683,7 +693,10 @@ fun HomeScreen(
                     }
                     // Cancelado fuera de esta pantalla (p. ej. nadie aceptó en 5 minutos)
                     "cancelled" -> {
-                        if (isSearchingDriver && !isCancellingRide) {
+                        if (ride.cancelledBy == "driver" && ride.cancelReason == "rider_no_show") {
+                            Toast.makeText(context, if (ride.isDelivery) "Tu repartidor esperó en el punto de recojo y canceló el envío."
+                                else "Tu conductor esperó en el punto de recojo y canceló el viaje.", Toast.LENGTH_LONG).show()
+                        } else if (isSearchingDriver && !isCancellingRide && !showCancelRideDialog) {
                             Toast.makeText(context, "No encontramos un conductor disponible. Intenta de nuevo.", Toast.LENGTH_LONG).show()
                         }
                         activeRide = null
@@ -770,7 +783,18 @@ fun HomeScreen(
             if (view != null) {
                 view.mapboxMap.loadStyle(style(style = mapStyle) { }) {
                     isStyleLoaded = true
-                    if (driverAnnotationManager == null) driverAnnotationManager = view.annotations.createPointAnnotationManager()
+                    // Cada capa nueva queda encima: primero la ruta, luego el objetivo y arriba el conductor
+                    if (tripRouteManager == null) tripRouteManager = view.annotations.createPolylineAnnotationManager().apply {
+                        lineCap = LineCap.ROUND
+                    }
+                    if (tripTargetManager == null) tripTargetManager = view.annotations.createPointAnnotationManager().apply {
+                        iconAllowOverlap = true
+                        iconIgnorePlacement = true
+                    }
+                    if (driverAnnotationManager == null) driverAnnotationManager = view.annotations.createPointAnnotationManager().apply {
+                        iconAllowOverlap = true
+                        iconIgnorePlacement = true
+                    }
                 }
             }
         }
@@ -811,8 +835,8 @@ fun HomeScreen(
         }
 
         // Overlay para dibujar la ruta con efectos visuales mejorados
-        // Mostrar la ruta durante opciones de viaje, búsqueda y viaje activo
-        if (routeOffsets.isNotEmpty() && (showingRideOptions || isSearchingDriver || activeRide != null)) {
+        // Ruta de la vista previa (opciones y búsqueda); la del viaje en curso es una capa del mapa
+        if (routeOffsets.isNotEmpty() && (showingRideOptions || isSearchingDriver)) {
             androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
                 val path = androidx.compose.ui.graphics.Path()
                 val sizeMap = mapView.mapboxMap.getSize()
@@ -963,6 +987,10 @@ fun HomeScreen(
         // sigue, solo se recorta el tramo ya recorrido. Como mucho se procesa un cambio por segundo.
         LaunchedEffect(mapView) {
             var routeLeg: String? = null
+            var routeCasing: PolylineAnnotation? = null
+            var routeLine: PolylineAnnotation? = null
+            var targetPin: PointAnnotation? = null
+            var targetIsPickup: Boolean? = null
             snapshotFlow {
                 RiderTripMapInput(
                     rideId = activeRide?.rideId,
@@ -982,6 +1010,11 @@ fun HomeScreen(
                             routeOffsets = emptyList()
                             routeLeg = null
                         }
+                        if (routeLine != null || targetPin != null) {
+                            runCatching { tripRouteManager?.deleteAll() }
+                            runCatching { tripTargetManager?.deleteAll() }
+                            routeCasing = null; routeLine = null; targetPin = null; targetIsPickup = null
+                        }
                         return@collect
                     }
                     val driver = input.driver?.takeIf { isValidGeoPoint(it) }?.let { Point.fromLngLat(it.longitude, it.latitude) }
@@ -993,6 +1026,54 @@ fun HomeScreen(
                         if (route != null) {
                             routePoints = route
                             routeLeg = leg
+                        }
+                    }
+                    // Ruta y objetivo como capas del mapa: siguen la cámara en cada cuadro y quedan
+                    // debajo del conductor (un dibujo de Compose encima del mapa lo tapaba)
+                    val lines = tripRouteManager
+                    val casing = routeCasing
+                    val line = routeLine
+                    if (lines != null && routePoints.size > 1) {
+                        if (casing == null || line == null || lines.annotations.none { it.id == line.id }) {
+                            runCatching { lines.deleteAll() }
+                            routeCasing = lines.create(
+                                PolylineAnnotationOptions()
+                                    .withPoints(routePoints)
+                                    .withLineColor(com.intu.taxi.ui.map.TripRouteStyle.casingColorHex)
+                                    .withLineWidth(com.intu.taxi.ui.map.TripRouteStyle.casingWidth)
+                                    .withLineJoin(LineJoin.ROUND)
+                                    .withLineSortKey(0.0)
+                            )
+                            routeLine = lines.create(
+                                PolylineAnnotationOptions()
+                                    .withPoints(routePoints)
+                                    .withLineColor(com.intu.taxi.ui.map.TripRouteStyle.lineColorHex)
+                                    .withLineWidth(com.intu.taxi.ui.map.TripRouteStyle.lineWidth)
+                                    .withLineJoin(LineJoin.ROUND)
+                                    .withLineSortKey(1.0)
+                            )
+                        } else if (line.points != routePoints) {
+                            casing.points = routePoints
+                            line.points = routePoints
+                            runCatching { lines.update(listOf(casing, line)) }
+                        }
+                    }
+                    val targets = tripTargetManager
+                    val pin = targetPin
+                    val pickup = input.status != "in_progress"
+                    if (targets != null && target != null) {
+                        if (pin == null || targetIsPickup != pickup || targets.annotations.none { it.id == pin.id }) {
+                            runCatching { targets.deleteAll() }
+                            targetPin = targets.create(
+                                PointAnnotationOptions()
+                                    .withPoint(target)
+                                    .withIconImage(com.intu.taxi.ui.map.routePinBitmap(context, pickup))
+                                    .withIconAnchor(IconAnchor.BOTTOM)
+                            )
+                            targetIsPickup = pickup
+                        } else if (pin.point != target) {
+                            pin.point = target
+                            runCatching { targets.update(pin) }
                         }
                     }
                     if (input.styleLoaded && System.currentTimeMillis() - lastUserGestureMs >= 8_000) {
@@ -1007,18 +1088,13 @@ fun HomeScreen(
                             animate = lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
                         )
                     }
-                    // La ruta se dibuja sobre el mapa en píxeles; con la cámara quieta se recalculan aquí
-                    routeOffsets = routePoints.map { p ->
-                        val sc = mapView.mapboxMap.pixelForCoordinate(p)
-                        Offset(sc.x.toFloat(), sc.y.toFloat())
-                    }
                     delay(1_000)
                 }
         }
 
-        // Icono de conductor ahora se maneja con PointAnnotation en el mapa
-
-        DisposableEffect(activeRide) {
+        // Borra el marcador solo al cambiar de viaje: cada movimiento del conductor trae un ActiveRide
+        // nuevo, y con el objeto como clave el marcador se borraba justo después de crearse
+        DisposableEffect(activeRide?.rideId) {
             val pam = driverAnnotationManager
             onDispose {
                 try {
@@ -1042,11 +1118,11 @@ fun HomeScreen(
         }
 
         // Actualizar la ruta cuando el mapa se mueve (para que se "pegue" al mapa)
-        // Mantener la ruta anclada durante opciones de viaje, búsqueda y viaje activo
-        LaunchedEffect(showingRideOptions, isSearchingDriver, activeRide, routePoints) {
+        // Mantener la ruta anclada durante opciones de viaje y búsqueda
+        LaunchedEffect(showingRideOptions, isSearchingDriver, routePoints) {
             val gestures = mapView.gestures
             routeMoveListenerRef?.let { gestures.removeOnMoveListener(it) }
-            if ((showingRideOptions || isSearchingDriver || activeRide != null) && routePoints.isNotEmpty()) {
+            if ((showingRideOptions || isSearchingDriver) && routePoints.isNotEmpty()) {
                 val listener = object : OnMoveListener {
                     override fun onMoveBegin(detector: MoveGestureDetector) {}
                     override fun onMove(detector: MoveGestureDetector): Boolean {
@@ -1079,11 +1155,11 @@ fun HomeScreen(
         }
 
         // Recalcular offsets también en cambios de cámara (zoom/tilt), para evitar saltos abruptos
-        // Mantener la ruta anclada durante opciones de viaje, búsqueda y viaje activo
-        DisposableEffect(showingRideOptions, isSearchingDriver, activeRide, routePoints) {
+        // Mantener la ruta anclada durante opciones de viaje y búsqueda
+        DisposableEffect(showingRideOptions, isSearchingDriver, routePoints) {
             val map = mapView.mapboxMap
             val cameraListener: (com.mapbox.maps.extension.observable.eventdata.CameraChangedEventData) -> Unit = {
-                if ((showingRideOptions || isSearchingDriver || activeRide != null) && routePoints.isNotEmpty()) {
+                if ((showingRideOptions || isSearchingDriver) && routePoints.isNotEmpty()) {
                     routeOffsets = routePoints.map { p ->
                         val sc = map.pixelForCoordinate(p)
                         Offset(sc.x.toFloat(), sc.y.toFloat())
@@ -1511,23 +1587,10 @@ fun HomeScreen(
             suggestions = emptyList()
         }
 
-        // El pasajero puede cancelar mientras busca, o mientras el conductor viene o ya llegó
+        // El pasajero puede cancelar mientras busca, o mientras el conductor viene o ya llegó;
+        // primero elige el motivo
         fun cancelCurrentRide() {
-            val rideId = currentRideRequestId ?: return
-            if (isCancellingRide) return
-            isCancellingRide = true
-            scope.launch {
-                rideRequestRepository.cancelRideRequest(rideId)
-                    .onSuccess {
-                        com.intu.taxi.rider.RiderTrip.clear()
-                        resetRideState()
-                        Toast.makeText(context, "Viaje cancelado", Toast.LENGTH_SHORT).show()
-                    }
-                    .onFailure {
-                        Toast.makeText(context, "No se pudo cancelar. Revisa tu conexión e intenta de nuevo.", Toast.LENGTH_LONG).show()
-                    }
-                isCancellingRide = false
-            }
+            if (currentRideRequestId != null && !isCancellingRide) showCancelRideDialog = true
         }
 
         activeRide?.let { ride ->
@@ -1604,8 +1667,15 @@ fun HomeScreen(
                             )
                             Spacer(modifier = Modifier.width(12.dp))
                             Column {
-                                if (ride.driverName.isNotBlank()) {
-                                    Text(ride.driverName, fontWeight = FontWeight.SemiBold)
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    if (ride.driverName.isNotBlank()) {
+                                        Text(ride.driverName, fontWeight = FontWeight.SemiBold, maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                                    }
+                                    ride.driverRating?.let {
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        com.intu.taxi.ui.components.RatingBadge(it)
+                                    }
                                 }
                                 if (ride.vehiclePlate.isNotBlank()) {
                                     Text(
@@ -1616,6 +1686,15 @@ fun HomeScreen(
                                 }
                             }
                         }
+                    }
+                    if (ride.driverId.isNotBlank()) {
+                        RideChatButton(
+                            rideId = ride.rideId,
+                            rideStatus = ride.status,
+                            role = com.intu.taxi.data.CancelRole.RIDER,
+                            otherName = ride.driverName.ifBlank { if (ride.isDelivery) "tu repartidor" else "tu conductor" },
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
                     Text("Total: ${com.intu.taxi.ui.formatSoles(ride.fare)}")
                     val yapeNumber = com.intu.taxi.ui.peruLocalPhone(ride.driverPhone)
@@ -1691,19 +1770,22 @@ fun HomeScreen(
             }
         }
 
-        if (showCancelRideDialog) {
-            AlertDialog(
-                onDismissRequest = { showCancelRideDialog = false },
-                title = { Text(if (isDelivery) "¿Cancelar el envío?" else "¿Cancelar el viaje?") },
-                text = { Text(if (isDelivery) "Tu repartidor ya aceptó el envío." else "Tu conductor ya aceptó el viaje y va en camino.") },
-                confirmButton = {
-                    TextButton(onClick = {
-                        showCancelRideDialog = false
-                        cancelCurrentRide()
-                    }) { Text("Sí, cancelar", color = AppearanceColors.highlight(Color(0xFFB42318))) }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showCancelRideDialog = false }) { Text("No") }
+        val cancellingRideId = currentRideRequestId
+        if (showCancelRideDialog && cancellingRideId != null) {
+            CancelServiceDialog(
+                rideId = cancellingRideId,
+                role = com.intu.taxi.data.CancelRole.RIDER,
+                rideStatus = activeRide?.status ?: "searching",
+                isDelivery = isDelivery,
+                onDismiss = { showCancelRideDialog = false },
+                onCancelled = { _, _ ->
+                    val delivery = isDelivery
+                    isCancellingRide = true
+                    showCancelRideDialog = false
+                    com.intu.taxi.rider.RiderTrip.clear()
+                    resetRideState()
+                    isCancellingRide = false
+                    Toast.makeText(context, if (delivery) "Envío cancelado" else "Viaje cancelado", Toast.LENGTH_SHORT).show()
                 }
             )
         }
@@ -2026,29 +2108,28 @@ private fun RideOptionCard(
     }
 }
 
+/** Mototaxi sobre un disco blanco con borde turquesa: se distingue en el mapa claro y en el oscuro. */
 fun createDriverIcon(context: android.content.Context): Bitmap {
-    val drawable = ContextCompat.getDrawable(context, R.drawable.ic_driver_car)
-    if (drawable == null) {
-        val fallbackSize = 64
-        val bmp = Bitmap.createBitmap(fallbackSize, fallbackSize, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bmp)
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-        paint.color = AndroidColor.parseColor("#1C1C1E")
-        paint.style = Paint.Style.FILL
-        val path = Path()
-        path.moveTo(fallbackSize * 0.5f, fallbackSize * 0.12f)
-        path.lineTo(fallbackSize * 0.72f, fallbackSize * 0.72f)
-        path.lineTo(fallbackSize * 0.28f, fallbackSize * 0.72f)
-        path.close()
-        canvas.drawPath(path, paint)
-        return bmp
-    }
-    val width = if (drawable.intrinsicWidth > 0) drawable.intrinsicWidth else 64
-    val height = if (drawable.intrinsicHeight > 0) drawable.intrinsicHeight else 64
-    val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+    val density = context.resources.displayMetrics.density
+    val size = (46 * density).toInt()
+    val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bmp)
-    drawable.setBounds(0, 0, canvas.width, canvas.height)
-    drawable.draw(canvas)
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    val center = size / 2f
+    val radius = size / 2f - 3 * density
+    paint.color = 0x33000000
+    canvas.drawCircle(center, center + 1.5f * density, radius, paint)
+    paint.color = AndroidColor.WHITE
+    canvas.drawCircle(center, center, radius, paint)
+    paint.style = Paint.Style.STROKE
+    paint.strokeWidth = 2.5f * density
+    paint.color = AndroidColor.parseColor("#08817E")
+    canvas.drawCircle(center, center, radius - paint.strokeWidth / 2, paint)
+    ContextCompat.getDrawable(context, R.drawable.ic_ride_mototaxi)?.let { icon ->
+        val inset = (size * 0.2f).toInt()
+        icon.setBounds(inset, inset, size - inset, size - inset)
+        icon.draw(canvas)
+    }
     return bmp
 }
 private fun isValidGeoPoint(g: com.google.firebase.firestore.GeoPoint?): Boolean {

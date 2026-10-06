@@ -52,7 +52,11 @@ data class ActiveRide(
     val vehicleType: String = "mototaxi",
     val serviceKind: String = "passenger",
     val delivery: DeliveryDetails? = null,
-    val passenger: BookingContact? = null
+    val passenger: BookingContact? = null,
+    val riderRating: ParticipantRating? = null,
+    val driverRating: ParticipantRating? = null,
+    val cancelledBy: String = "",
+    val cancelReason: String = ""
 ) {
     val passengerName: String get() = passenger?.name ?: riderName
     val passengerPhone: String get() = passenger?.phone ?: riderPhone

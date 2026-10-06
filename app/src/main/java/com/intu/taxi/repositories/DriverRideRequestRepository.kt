@@ -5,6 +5,7 @@ import com.intu.taxi.data.SupabaseApi
 import com.intu.taxi.data.SupabaseRealtime
 import com.intu.taxi.data.str
 import com.intu.taxi.models.DriverRideRequest
+import com.intu.taxi.models.ParticipantRating
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
@@ -58,6 +59,7 @@ class DriverRideRequestRepository {
         rideType = str("vehicle_type"), paymentMethod = str("payment_method", "efectivo"), status = str("status"),
         createdAt = runCatching { Instant.parse(str("requested_at")).toEpochMilli() }.getOrDefault(0L),
         updatedAt = runCatching { Instant.parse(str("updated_at")).toEpochMilli() }.getOrDefault(0L),
-        serviceKind = str("service_kind", "passenger")
+        serviceKind = str("service_kind", "passenger"),
+        riderRating = ParticipantRating.from(this, "rider")
     )
 }

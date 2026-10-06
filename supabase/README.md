@@ -34,6 +34,7 @@ App Android ── login ──► Firebase Auth (teléfono, Google, MFA)
 | `driver_locations` | Última ubicación y disponibilidad de cada conductor (PostGIS) |
 | `rides` | Solicitudes y viajes: `searching → accepted → arrived → in_progress → completed` / `cancelled` |
 | `device_tokens` | Tokens de FCM para notificaciones push |
+| `ride_messages` | Chat del servicio; solo lo leen el pasajero y el conductor asignado (también por Realtime) |
 
 ### Funciones que llama la app (RPC)
 
@@ -48,7 +49,26 @@ App Android ── login ──► Firebase Auth (teléfono, Google, MFA)
 | `advance_ride(ride_id, status)` | conductor | `arrived` → `in_progress` → `completed` |
 | `ride_pin_requirement(ride_id)` | participantes | Consultar si su solicitud requiere PIN antes de iniciar |
 | `admin_get_ride_security_settings()` / `admin_set_ride_security_settings(pin_enabled)` | admin | Activar o desactivar el PIN para nuevas solicitudes de viajes y envíos |
-| `cancel_ride(ride_id, reason?)` | ambos | Pasajero: cancela. Conductor: la solicitud vuelve a `searching` |
+| `cancel_ride(ride_id, reason?)` | ambos | Versión anterior; llama a `cancel_ride_with_reason` y guarda el motivo como `other` |
+| `cancel_ride_with_reason(ride_id, reason, note?)` | ambos | Pasajero: cancela. Conductor: la solicitud vuelve a `searching`, salvo "no aparece" verificado (espera, distancia), que termina el viaje y da la falta al pasajero |
+| `cancellation_preview(ride_id, reason)` | ambos | Antes de confirmar: si la cancelación cuenta, faltas, si causaría una pausa o cuánto falta para "no aparece" |
+| `my_cancellation_status()` | ambos | Faltas y pausa activa como pasajero y como conductor |
+| `admin_get_trip_policy()` / `admin_set_trip_policy(settings)` | admin | Estrellas visibles (conductor/pasajero) y reglas de cancelación; todo empieza desactivado |
+| `admin_cancellation_overview(days?)` / `admin_lift_cancellation_block(user_id, role)` | admin | Quién cancela más, reportes contra la otra persona y quitar una pausa |
+| `send_ride_message(ride_id, body?, quick_reply?)` | ambos | Chat del servicio (aceptado, llegó, en curso). El conductor solo escribe texto detenido en el recojo |
+| `admin_recent_ride_chats(days?)` / `admin_ride_chat(ride_id)` | admin | Revisar chats de los últimos 30 días ante un reclamo |
+| `support_chat_status()` | ambos | Si el asistente de Ayuda está activo y cuántas preguntas quedan hoy |
+| `support_chat_begin()` / `support_chat_finish(usage_id, usage, failed?)` | Edge Function `support-chat` (con el token del usuario) | Reserva una pregunta del cupo diario y entrega el texto de ayuda; luego guarda los tokens usados |
+| `admin_get_support_chat()` / `admin_set_support_chat(settings)` | admin | Prender/apagar el asistente, límite diario, texto de ayuda y uso de 30 días |
+
+### Asistente de Ayuda (Edge Function `support-chat`)
+
+`supabase/functions/support-chat` responde con Claude Haiku 4.5 usando solo el texto de ayuda del admin
+(borrador en `docs/support/ayuda-intu-borrador.md`). La conversación vive en el teléfono; Intu solo guarda cuántas
+preguntas hizo cada cuenta y los tokens, para el límite diario y el costo estimado.
+
+- Secreto: `supabase secrets set ANTHROPIC_API_KEY=...` (clave de la consola de Anthropic; se cobra del saldo de la API, no de una suscripción de Claude).
+- Se despliega con `verify_jwt = false` porque los tokens son de Firebase: la función valida al usuario al llamar `support_chat_begin` con su propio token.
 | `rate_ride(ride_id, rating)` | ambos | Calificar 1–5 al otro, una vez |
 | `register_device_token(token, platform?)` | ambos | Guardar el token de FCM (se borra al cerrar sesión) |
 | `admin_set_admin(user_id, is_admin)` | admin | Dar o quitar admin; siempre queda al menos uno |
@@ -64,6 +84,7 @@ por FCM y borra los tokens vencidos con `prune_device_tokens`. Ambos lados compa
 
 Automático (pg_cron, cada minuto):
 - `expire-stale-ride-requests`: solicitudes sin conductor por más de 5 min se cancelan (`cancelled_by = 'system'`).
+- `purge-ride-messages` (diario): borra los mensajes del chat con más de 30 días.
 - `dev-simulate-test-drivers`: mueve a los conductores de prueba (solo desarrollo).
 
 ## Seguridad (resumen)

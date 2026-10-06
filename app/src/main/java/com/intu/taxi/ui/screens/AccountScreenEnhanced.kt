@@ -76,6 +76,8 @@ fun AccountScreenEnhanced(
     var refreshKey by remember { mutableIntStateOf(0) }
     var showSavedPlaces by remember { mutableStateOf(false) }
     var showBugReport by remember { mutableStateOf(false) }
+    var showSupportChat by remember { mutableStateOf(false) }
+    var supportChatEnabled by remember { mutableStateOf(false) }
     var showTerms by remember { mutableStateOf(false) }
     var showAccountDeletion by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -219,7 +221,15 @@ fun AccountScreenEnhanced(
     }
 
     if (showSavedPlaces) SavedPlacesDialog(onDismiss = { showSavedPlaces = false })
+    // El asistente de Ayuda solo aparece si un admin lo activó
+    LaunchedEffect(refreshKey) {
+        supportChatEnabled = runCatching { com.intu.taxi.repositories.SupportChatRepository().isEnabled() }.getOrDefault(false)
+    }
     if (showBugReport) BugReportDialog(onDismiss = { showBugReport = false })
+    if (showSupportChat) SupportChatDialog(
+        onDismiss = { showSupportChat = false },
+        onReportProblem = { showSupportChat = false; showBugReport = true }
+    )
     if (showTerms) TermsDialog(onDismiss = { showTerms = false })
     if (showAccountDeletion) AccountDeletionDialog(onDismiss = { showAccountDeletion = false })
 
@@ -376,6 +386,7 @@ fun AccountScreenEnhanced(
                         onRefreshDriverStatus = { refreshKey++ },
                         onSavedPlaces = { showSavedPlaces = true },
                         onBugReport = { showBugReport = true },
+                        onSupportChat = if (supportChatEnabled) ({ showSupportChat = true }) else null,
                         onTerms = { showTerms = true },
                         onAccountDeletion = { showAccountDeletion = true },
                         onCheckUpdates = onCheckUpdates
@@ -585,6 +596,7 @@ private fun SettingsSection(
     onRefreshDriverStatus: () -> Unit,
     onSavedPlaces: () -> Unit,
     onBugReport: () -> Unit,
+    onSupportChat: (() -> Unit)?,
     onTerms: () -> Unit,
     onAccountDeletion: () -> Unit,
     onCheckUpdates: () -> Unit
@@ -717,6 +729,13 @@ private fun SettingsSection(
             )
             
             // Support
+            if (onSupportChat != null) SettingsItemEnhanced(
+                icon = Icons.Outlined.QuestionAnswer,
+                title = "Ayuda con Intu",
+                subtitle = "Resuelve tus dudas al instante",
+                actionText = "Preguntar",
+                onClick = onSupportChat
+            )
             SettingsItemEnhanced(
                 icon = Icons.Default.Support,
                 title = "Reportar un error",

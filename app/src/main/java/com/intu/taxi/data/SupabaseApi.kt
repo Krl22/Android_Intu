@@ -75,7 +75,7 @@ object SupabaseApi {
             if (!it.isSuccessful) {
                 val json = runCatching { JSONObject(text) }.getOrNull()
                 throw IllegalStateException(
-                    spanishError(it.code, json?.str("code").orEmpty(), json?.str("message").orEmpty())
+                    spanishError(it.code, json?.str("code").orEmpty(), json?.str("message").orEmpty(), json?.str("details").orEmpty())
                 )
             }
             text
@@ -83,8 +83,25 @@ object SupabaseApi {
     }
 
     /** Traduce los errores de Supabase y de las funciones RPC a mensajes para el usuario. */
-    private fun spanishError(status: Int, code: String, message: String): String = when {
+    internal fun spanishError(status: Int, code: String, message: String, details: String = ""): String = when {
         status == 401 || code.startsWith("PGRST3") -> "Tu sesión no es válida. Cierra sesión y vuelve a entrar."
+        message == "cancellation_block" -> "Por cancelar varias veces, tu cuenta está en pausa " +
+            (formatBlockedUntil(details) ?: "por un tiempo") + "."
+        message == "too_many_requests" -> "Hiciste muchas solicitudes seguidas. Espera unos minutos e intenta de nuevo."
+        message == "no_show_not_allowed" -> when (details.substringBefore(':')) {
+            "no_show_wait" -> "Espera ${formatWait(details.substringAfter(':').toIntOrNull() ?: 0)} más en el punto de recojo."
+            "no_show_far" -> "Debes estar en el punto de recojo para cancelar por este motivo."
+            else -> "Primero marca que llegaste al punto de recojo."
+        }
+        message == "chat_closed" -> "El chat se cierra cuando termina el servicio."
+        message == "driver_quick_replies_only" -> "Mientras manejas solo puedes enviar respuestas rápidas."
+        message == "invalid_message" -> "Escribe un mensaje de hasta 500 caracteres."
+        message == "too_many_messages" -> "Estás enviando muchos mensajes. Espera un momento."
+        message == "invalid_preferences" -> "Revisa los valores e intenta de nuevo."
+        message == "support_chat_disabled" -> "El asistente de ayuda no está disponible por ahora."
+        message == "support_chat_limit" -> "Llegaste al límite de preguntas de hoy. Vuelve mañana o usa Reportar un error."
+        message == "support_chat_knowledge_required" -> "Escribe el texto de ayuda antes de activar el asistente."
+        message == "unavailable" -> "El asistente no pudo responder. Intenta de nuevo en un momento."
         "rides_one_open_per_rider" in message -> "Ya tienes un viaje en curso."
         "rides_one_pickup_per_driver" in message || message == "driver_busy" -> "Ya tienes un pasajero por recoger."
         "rides_one_trip_per_driver" in message || message == "finish_current_trip" ->
@@ -134,6 +151,28 @@ object SupabaseApi {
         return if (text.trimStart().startsWith("[")) JSONArray(text).optJSONObject(0) ?: JSONObject()
         else JSONObject(text)
     }
+
+    /** Llama a una Edge Function con la sesión actual. Sus errores llegan como {"error": "código"}. */
+    suspend fun invokeFunction(name: String, body: JSONObject, timeoutMillis: Long = 45_000): JSONObject =
+        withContext(Dispatchers.IO) {
+            val request = Request.Builder()
+                .url("${BuildConfig.SUPABASE_URL}/functions/v1/$name")
+                .header("apikey", BuildConfig.SUPABASE_PUBLISHABLE_KEY)
+                .header("Authorization", "Bearer ${token()}")
+                .post(body.toString().toRequestBody(jsonMediaType))
+                .build()
+            val client = http.newBuilder().callTimeout(timeoutMillis, java.util.concurrent.TimeUnit.MILLISECONDS).build()
+            val response = try {
+                client.newCall(request).execute()
+            } catch (e: java.io.IOException) {
+                throw IllegalStateException("Sin conexión. Revisa tu internet e intenta de nuevo.", e)
+            }
+            response.use {
+                val json = runCatching { JSONObject(it.body?.string().orEmpty()) }.getOrNull()
+                if (!it.isSuccessful) throw IllegalStateException(spanishError(it.code, "", json?.str("error").orEmpty()))
+                json ?: JSONObject()
+            }
+        }
 
     suspend fun rpcRows(name: String, body: JSONObject = JSONObject()): JSONArray {
         val text = request("POST", "rpc/$name", body)

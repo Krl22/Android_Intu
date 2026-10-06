@@ -21,7 +21,10 @@ data class DriverRideRequest(
     val createdAt: Long = 0L,
     val updatedAt: Long = 0L,
     val serviceKind: String = "passenger",
-    val delivery: DeliveryDetails? = null
+    val delivery: DeliveryDetails? = null,
+    val riderRating: ParticipantRating? = null,
+    // Viaje pedido para otra persona: el chat llega a la cuenta que lo pidió
+    val bookedForOther: Boolean = false
 ) {
     val isDelivery: Boolean get() = serviceKind == "delivery"
     // Función para calcular la distancia desde la ubicación actual del conductor

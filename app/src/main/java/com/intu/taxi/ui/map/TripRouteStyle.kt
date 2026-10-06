@@ -9,6 +9,8 @@ object TripRouteStyle {
     const val lineWidth = 5.0
     val lineColor = Color(0xFF08817E)
     val lineWidthDp = 5.dp
+    const val casingColorHex = "#D9EEEB"
+    const val casingWidth = 8.0
     val casingColor = Color(0xFFD9EEEB)
     val casingWidthDp = 8.dp
 }

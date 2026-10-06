@@ -46,12 +46,15 @@ internal fun AdminRideSecuritySettings(reloadKey: Int) {
             catch (e: Exception) { error = e.message ?: "No se pudo guardar. Intenta de nuevo." }
             finally { busy = false }
         }
+    }, extraContent = {
+        AdminTripPolicySection(reloadKey)
+        AdminSupportChatSection(reloadKey)
     })
 }
 
 @Composable
 internal fun AdminRideSecurityContent(settings: RideSecuritySettings?, busy: Boolean, error: String?,
-    onRetry: () -> Unit, onChange: (Boolean) -> Unit) {
+    onRetry: () -> Unit, onChange: (Boolean) -> Unit, extraContent: @Composable ColumnScope.() -> Unit = {}) {
     val colors = MaterialTheme.colorScheme
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         AdminSectionHeading("Seguridad de los servicios", "Controla el PIN de los viajes y envíos de Intu.")
@@ -84,5 +87,6 @@ internal fun AdminRideSecurityContent(settings: RideSecuritySettings?, busy: Boo
             if (busy) Text("Guardando…", color = colors.primary)
             error?.let { Text(it, color = colors.error) }
         }
+        extraContent()
     }
 }

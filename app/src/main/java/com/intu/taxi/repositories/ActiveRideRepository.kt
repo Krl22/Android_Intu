@@ -8,6 +8,7 @@ import com.intu.taxi.data.str
 import com.intu.taxi.data.ridePassenger
 import com.intu.taxi.data.deliveryDetails
 import com.intu.taxi.models.ActiveRide
+import com.intu.taxi.models.ParticipantRating
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -213,7 +214,9 @@ class ActiveRideRepository {
         driverOnOtherTrip = optBoolean("driver_on_other_trip", false),
         paymentConfirmed = !isNull("payment_confirmed_at"),
         vehicleType = str("vehicle_type", "mototaxi"), serviceKind = str("service_kind", "passenger"),
-        delivery = deliveryDetails(), passenger = ridePassenger()
+        delivery = deliveryDetails(), passenger = ridePassenger(),
+        riderRating = ParticipantRating.from(this, "rider"), driverRating = ParticipantRating.from(this, "driver"),
+        cancelledBy = str("cancelled_by"), cancelReason = str("cancel_reason")
         )
     }
 

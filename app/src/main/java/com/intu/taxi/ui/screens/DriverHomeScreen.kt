@@ -179,6 +179,8 @@ fun DriverHomeScreen(
     var activeRideStatus by remember { mutableStateOf("accepted") }
     // Viaje recién terminado, para que el conductor califique al pasajero
     var rideToRate by remember { mutableStateOf<Pair<String, DriverRideRequest>?>(null) }
+    // Viaje que el conductor está por cancelar; el diálogo pide el motivo
+    var cancelTarget by remember { mutableStateOf<CancelTarget?>(null) }
     // Siguiente viaje, aceptado mientras lleva a otro pasajero (como Uber)
     var queuedRideRequest by remember { mutableStateOf<DriverRideRequest?>(null) }
     var queuedRideId by remember { mutableStateOf<String?>(null) }
@@ -391,9 +393,11 @@ fun DriverHomeScreen(
         activeRideRepository.getActiveRide(rideId).collect { activeRide ->
             if (activeRide == null) return@collect
             if (activeRide.status == "cancelled") {
-                // El pasajero canceló: pasa al siguiente viaje o queda libre
+                // El pasajero canceló: pasa al siguiente viaje o queda libre. Si canceló el propio
+                // conductor (pasajero que no apareció), el diálogo ya lo avisa.
                 moveToNextRideOrClear()
-                Toast.makeText(context, if (activeRide.isDelivery) "Quien envía canceló el pedido" else "El pasajero canceló el viaje", Toast.LENGTH_LONG).show()
+                if (activeRide.cancelledBy != "driver") Toast.makeText(context,
+                    if (activeRide.isDelivery) "Quien envía canceló el pedido" else "El pasajero canceló el viaje", Toast.LENGTH_LONG).show()
                 return@collect
             }
             activeRideStatus = activeRide.status
@@ -737,7 +741,11 @@ fun DriverHomeScreen(
                                             askNotificationPermissionIfNeeded()
                                             isSearching = true
                                             onBottomBarVisibilityChanged(false) // OCULTAR BottomNavigationBar al buscar
-                                            Toast.makeText(context, "Buscando clientes cerca...", Toast.LENGTH_SHORT).show()
+                                            val pausedUntil = runCatching { com.intu.taxi.repositories.CancellationRepository().driverStanding() }
+                                                .getOrNull()?.blockedUntil
+                                            if (pausedUntil != null) Toast.makeText(context, "Por cancelar varias veces no podrás aceptar solicitudes " +
+                                                (com.intu.taxi.data.formatBlockedUntil(pausedUntil) ?: "por un tiempo") + ".", Toast.LENGTH_LONG).show()
+                                            else Toast.makeText(context, "Buscando clientes cerca...", Toast.LENGTH_SHORT).show()
                                         } ?: run {
                                             Toast.makeText(context, "Ubicación no disponible", Toast.LENGTH_SHORT).show()
                                         }
@@ -845,21 +853,7 @@ fun DriverHomeScreen(
                                 .onFailure { Toast.makeText(context, it.message ?: "No se pudo actualizar el viaje", Toast.LENGTH_LONG).show() }
                         }
                     },
-                    onCancel = {
-                        scope.launch {
-                            activeRideId?.let { rideId ->
-                                // cancelRide devuelve Result: solo se limpia la pantalla si el servidor aceptó
-                                activeRideRepository.cancelRide(rideId)
-                                    .onSuccess {
-                                        moveToNextRideOrClear()
-                                        Toast.makeText(context, "Viaje cancelado", Toast.LENGTH_SHORT).show()
-                                    }
-                                    .onFailure {
-                                        Toast.makeText(context, it.message ?: "No se pudo cancelar el viaje", Toast.LENGTH_LONG).show()
-                                    }
-                            }
-                        }
-                    }
+                    onCancel = { activeRideId?.let { cancelTarget = CancelTarget(it, activeRideStatus, request.isDelivery, queued = false) } }
                 )
             }
         }
@@ -901,17 +895,7 @@ fun DriverHomeScreen(
                         }
                         TextButton(onClick = {
                             val rideId = queuedRideId ?: return@TextButton
-                            scope.launch {
-                                activeRideRepository.cancelRide(rideId)
-                                    .onSuccess {
-                                        queuedRideRequest = null
-                                        queuedRideId = null
-                                        Toast.makeText(context, "Siguiente viaje cancelado", Toast.LENGTH_SHORT).show()
-                                    }
-                                    .onFailure {
-                                        Toast.makeText(context, it.message ?: "No se pudo cancelar", Toast.LENGTH_LONG).show()
-                                    }
-                            }
+                            cancelTarget = CancelTarget(rideId, "accepted", next.isDelivery, queued = true)
                         }) { Text("Cancelar", color = AppearanceColors.highlight(Color(0xFFB42318))) }
                     }
                 } else if (canReceiveRequests && incomingRideRequests.isNotEmpty()) {
@@ -934,6 +918,28 @@ fun DriverHomeScreen(
                     )
                 }
             }
+        }
+
+        cancelTarget?.let { target ->
+            CancelServiceDialog(
+                rideId = target.rideId,
+                role = com.intu.taxi.data.CancelRole.DRIVER,
+                rideStatus = target.status,
+                isDelivery = target.isDelivery,
+                onDismiss = { cancelTarget = null },
+                onCancelled = { _, reason ->
+                    cancelTarget = null
+                    if (target.queued) {
+                        queuedRideRequest = null
+                        queuedRideId = null
+                        Toast.makeText(context, "Siguiente viaje cancelado", Toast.LENGTH_SHORT).show()
+                    } else if (activeRideId == target.rideId) {
+                        moveToNextRideOrClear()
+                        Toast.makeText(context, if (reason == com.intu.taxi.data.CancelReasons.RIDER_NO_SHOW)
+                            "Servicio cancelado. No cuenta en tu contra." else "Servicio cancelado", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            )
         }
 
         // Al terminar un viaje: calificar al pasajero (se puede omitir y hacerlo luego en Viajes)
@@ -1188,6 +1194,8 @@ fun AnimatedGradientButton(
     }
 }
 
+private data class CancelTarget(val rideId: String, val status: String, val isDelivery: Boolean, val queued: Boolean)
+
 /** Datos de un viaje abierto en el formato de solicitud que usan las tarjetas del conductor. */
 private fun com.intu.taxi.models.ActiveRide.toDriverRequest() = DriverRideRequest(
     requestId = rideId,
@@ -1206,7 +1214,9 @@ private fun com.intu.taxi.models.ActiveRide.toDriverRequest() = DriverRideReques
     status = status,
     rideType = vehicleType,
     serviceKind = serviceKind,
-    delivery = delivery
+    delivery = delivery,
+    riderRating = riderRating,
+    bookedForOther = passenger != null
 )
 
 // Función para crear icono de pasajero con diseño moderno similar a HomeScreen
@@ -1327,11 +1337,20 @@ fun EnhancedActiveRideCard(
                         fontWeight = FontWeight.Bold,
                         color = AppearanceColors.foreground(Color(0xFF1E1F47))
                     )
-                    Text(
-                        text = request.userName.ifBlank { if (request.isDelivery) "Quien envía" else "Pasajero" },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = AppearanceColors.secondary(Color(0xFF5F6570))
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = request.userName.ifBlank { if (request.isDelivery) "Quien envía" else "Pasajero" },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = AppearanceColors.secondary(Color(0xFF5F6570)),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        request.riderRating?.let {
+                            Spacer(modifier = Modifier.width(6.dp))
+                            com.intu.taxi.ui.components.RatingBadge(it)
+                        }
+                    }
                     if (!isMinimized) {
                         Text(
                             text = when (status) {
@@ -1345,6 +1364,15 @@ fun EnhancedActiveRideCard(
                     }
                 }
                 
+                RideChatButton(
+                    rideId = request.requestId,
+                    rideStatus = status,
+                    role = com.intu.taxi.data.CancelRole.DRIVER,
+                    otherName = if (request.bookedForOther) "quien pidió el viaje"
+                        else request.userName.ifBlank { if (request.isDelivery) "quien envía" else "el pasajero" },
+                    compact = true
+                )
+
                 // Botón de minimizar/maximizar
                 Icon(
                     imageVector = if (isMinimized) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
@@ -1437,7 +1465,7 @@ fun EnhancedActiveRideCard(
                 // Dirección de destino
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF5F5F5)),
+                    colors = CardDefaults.cardColors(containerColor = AppearanceColors.tint(Color(0xFFF5F5F5))),
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Row(

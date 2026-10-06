@@ -77,12 +77,21 @@ fun IncomingRideRequestCard(
                     Spacer(modifier = Modifier.width(10.dp))
                     
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = request.userName.ifBlank { if (request.isDelivery) "Quien envía" else "Pasajero" },
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp,
-                            color = AppearanceColors.ink
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = request.userName.ifBlank { if (request.isDelivery) "Quien envía" else "Pasajero" },
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp,
+                                color = AppearanceColors.ink,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false)
+                            )
+                            request.riderRating?.let {
+                                Spacer(modifier = Modifier.width(6.dp))
+                                RatingBadge(it)
+                            }
+                        }
                         Text(
                             text = "${String.format(java.util.Locale.US, "%.1f", distanceInKm)} km de distancia",
                             fontSize = 12.sp,
