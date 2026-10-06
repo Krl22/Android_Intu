@@ -111,6 +111,9 @@ dependencies {
     implementation("com.google.firebase:firebase-messaging-ktx")
     // Cloud Functions: eliminar cuentas desde el panel de administración
     implementation("com.google.firebase:firebase-functions-ktx")
+    // App Check: Play Integrity en la versión de Play; proveedor de depuración en compilaciones de prueba
+    implementation("com.google.firebase:firebase-appcheck-playintegrity")
+    implementation("com.google.firebase:firebase-appcheck-debug")
     // Google Sign-In para proveedor Google
     implementation("com.google.android.gms:play-services-auth:21.2.0")
     // DataStore para preferencias
