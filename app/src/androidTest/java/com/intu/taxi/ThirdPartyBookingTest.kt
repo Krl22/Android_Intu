@@ -38,10 +38,10 @@ class ThirdPartyBookingTest {
         compose.waitUntil(60_000) { consumer.get() != null }
     }
     private fun person() {
+        com.intu.taxi.data.RecentContacts.forCurrentUser(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext)
+            .remember(com.intu.taxi.models.BookingContact("Ana QA", "987654321"))
         compose.onNodeWithTag("booking-person").performClick()
-        compose.onNodeWithTag("booking-contact-name").performTextInput("Ana QA")
-        compose.onNodeWithTag("booking-contact-phone").performTextInput("987654321")
-        compose.onNodeWithTag("booking-contact-confirm").performClick()
+        compose.onNodeWithTag("booking-recent-0").performClick()
     }
     private fun chooseMap(label: String) {
         closeSoftKeyboard()
@@ -203,10 +203,11 @@ class ThirdPartyBookingTest {
                 println("CONTACT PICKER: " + describe(automation.rootInActiveWindow))
             }
             assertTrue("System phone contact picker must show the fixture", selected)
-            compose.waitUntil(15_000) { compose.onAllNodesWithTag("booking-contact-name").fetchSemanticsNodes().isNotEmpty() }
-            compose.onNodeWithTag("booking-contact-name").assertTextContains("Contacto QA Intu")
-            compose.onNodeWithTag("booking-contact-phone").assertTextContains("+51987654321")
-            compose.onNodeWithTag("booking-contact-confirm").assertIsEnabled()
+            // Elegir de la agenda selecciona a la persona y la guarda en recientes
+            compose.waitUntil(15_000) { compose.onAllNodesWithText("Para Contacto").fetchSemanticsNodes().isNotEmpty() }
+            val recent = com.intu.taxi.data.RecentContacts.forCurrentUser(context).read().first()
+            assertEquals("Contacto QA Intu", recent.name)
+            assertEquals("+51987654321", recent.phone)
         } finally {
             automation.adoptShellPermissionIdentity(android.Manifest.permission.WRITE_CONTACTS)
             rawId?.let { resolver.delete(android.content.ContentUris.withAppendedId(android.provider.ContactsContract.RawContacts.CONTENT_URI, it), null, null) }

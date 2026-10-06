@@ -1,6 +1,7 @@
 package com.intu.taxi.ui.screens
 
-import android.widget.Toast
+import androidx.core.app.NotificationManagerCompat
+import com.intu.taxi.push.PushNotifications
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -37,6 +38,7 @@ import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -83,7 +85,6 @@ fun RideChatButton(
     compact: Boolean = false
 ) {
     if (rideStatus !in chatStatuses) return
-    val context = LocalContext.current
     val repository = remember { RideChatRepository() }
     val myUid = remember { FirebaseAuth.getInstance().currentUser?.uid.orEmpty() }
     var messages by remember(rideId) { mutableStateOf<List<RideMessage>?>(null) }
@@ -92,15 +93,13 @@ fun RideChatButton(
 
     LaunchedEffect(rideId) { repository.messages(rideId).collect { messages = it } }
     val fromOther = messages?.filter { it.senderId != myUid }.orEmpty()
+    // Los mensajes nuevos llegan como notificación; aquí solo se cuentan los no leídos
     LaunchedEffect(fromOther.size, open) {
         val loaded = messages ?: return@LaunchedEffect
         when {
             // Lo que ya había al abrir la tarjeta no cuenta como nuevo
             seenFromOther < 0 && !open -> seenFromOther = loaded.count { it.senderId != myUid }
             open -> seenFromOther = fromOther.size
-            fromOther.size > seenFromOther -> fromOther.lastOrNull()?.let {
-                Toast.makeText(context, "$otherName: ${it.body}", Toast.LENGTH_SHORT).show()
-            }
         }
     }
     val unread = if (open || seenFromOther < 0) 0 else (fromOther.size - seenFromOther).coerceAtLeast(0)
@@ -151,6 +150,13 @@ private fun RideChatSheet(
     val time = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
 
     LaunchedEffect(shown.size) { if (shown.isNotEmpty()) listState.animateScrollToItem(shown.lastIndex) }
+    // Con el chat en pantalla sus mensajes no se notifican, y se quita el aviso que ya estaba
+    val context = LocalContext.current
+    DisposableEffect(rideId) {
+        PushNotifications.openChatRideId = rideId
+        runCatching { NotificationManagerCompat.from(context).cancel("chat-$rideId", 0) }
+        onDispose { if (PushNotifications.openChatRideId == rideId) PushNotifications.openChatRideId = null }
+    }
 
     fun send(action: suspend () -> RideMessage) {
         if (sending) return

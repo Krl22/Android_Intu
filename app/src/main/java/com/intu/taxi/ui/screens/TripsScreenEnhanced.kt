@@ -110,8 +110,55 @@ fun TripsScreenEnhanced(padding: PaddingValues, isDriver: Boolean) {
         }
     }
 
+    // Viajes programados del pasajero (los conductores no programan)
+    val scheduledRepo = remember { com.intu.taxi.repositories.ScheduledRideRepository() }
+    var scheduled by remember { mutableStateOf<List<com.intu.taxi.repositories.ScheduledRide>>(emptyList()) }
+    LaunchedEffect(isDriver, reloadKey) {
+        scheduled = if (isDriver) emptyList() else runCatching { scheduledRepo.list() }.getOrDefault(scheduled)
+    }
+    fun cancelScheduled(ride: com.intu.taxi.repositories.ScheduledRide) {
+        scope.launch {
+            runCatching { scheduledRepo.cancel(ride.id) }
+                .onSuccess {
+                    scheduled = scheduled.filterNot { it.id == ride.id }
+                    if (ride.status == "scheduled") Toast.makeText(context, "Viaje programado cancelado", Toast.LENGTH_SHORT).show()
+                }
+                .onFailure { Toast.makeText(context, it.message ?: "No se pudo cancelar", Toast.LENGTH_LONG).show() }
+        }
+    }
+
     TripsContent(padding, isDriver, rides, loadError, driverRating,
-        onRefresh = { reloadKey++ }, onRate = ::rate, onDetails = { selectedRide = it })
+        onRefresh = { reloadKey++ }, onRate = ::rate, onDetails = { selectedRide = it },
+        scheduled = scheduled, onCancelScheduled = ::cancelScheduled)
+}
+
+/** Viaje programado: cuándo, a dónde y para quién; o por qué no se pudo iniciar. */
+@Composable
+private fun ScheduledRideCard(ride: com.intu.taxi.repositories.ScheduledRide, onCancel: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    val failed = ride.status == "failed"
+    Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = colors.surface),
+        modifier = Modifier.fillMaxWidth().testTag("scheduled-ride-${ride.id}")) {
+        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(com.intu.taxi.repositories.ScheduleWindow.label(ride.scheduledFor), style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold)
+                Text(ride.destinationAddress, style = MaterialTheme.typography.bodyMedium, maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                Text(listOfNotNull(ride.passengerName?.let { "Para $it" }, com.intu.taxi.ui.formatSoles(ride.fare)).joinToString(" · "),
+                    style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                Text(if (failed) when (ride.failureReason) {
+                        "open_ride" -> "No se inició: tenías otro viaje en curso."
+                        "cancellation_block" -> "No se inició: tu cuenta estaba en pausa."
+                        "expired" -> "No se inició a tiempo. Pide uno nuevo."
+                        else -> "No se pudo iniciar. Pide el viaje desde Inicio."
+                    } else "Buscaremos conductor ${com.intu.taxi.repositories.ScheduleWindow.DISPATCH_MINUTES_BEFORE} minutos antes.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (failed) colors.error else colors.onSurfaceVariant)
+            }
+            androidx.compose.material3.TextButton(onClick = onCancel) { Text(if (failed) "Ocultar" else "Cancelar") }
+        }
+    }
 }
 
 /** Presentation shared by the live screen and isolated UI verification. */
@@ -124,7 +171,9 @@ internal fun TripsContent(
     driverRating: Pair<Double, Int>?,
     onRefresh: () -> Unit,
     onRate: (RideHistoryItem, Int) -> Unit,
-    onDetails: (RideHistoryItem) -> Unit
+    onDetails: (RideHistoryItem) -> Unit,
+    scheduled: List<com.intu.taxi.repositories.ScheduledRide> = emptyList(),
+    onCancelScheduled: (com.intu.taxi.repositories.ScheduledRide) -> Unit = {}
 ) {
     val colors = MaterialTheme.colorScheme
     LazyColumn(
@@ -152,6 +201,13 @@ internal fun TripsContent(
 
         if (isDriver) {
             item { EarningsCard(rides.orEmpty(), driverRating) }
+        }
+
+        if (scheduled.isNotEmpty()) {
+            item { Text("Programados", style = MaterialTheme.typography.titleSmall, color = colors.onSurfaceVariant) }
+            items(scheduled, key = { "scheduled-${it.id}" }) { ride ->
+                ScheduledRideCard(ride, onCancel = { onCancelScheduled(ride) })
+            }
         }
 
         val list = rides

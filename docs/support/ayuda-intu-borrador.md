@@ -1,6 +1,6 @@
 # Ayuda de Intu — preguntas frecuentes (borrador)
 
-Este texto es lo que sabe el asistente de Ayuda. Se edita desde Admin → Seguridad → Asistente de ayuda.
+Este texto es lo que sabe el asistente de Ayuda. Se edita desde Admin → Asistente.
 Revisa cada respuesta antes de activarlo: el asistente solo repite lo que está aquí.
 
 ## Qué es Intu
@@ -12,7 +12,13 @@ Intu es una app para pedir mototaxis y envíos en moto lineal. Conecta pasajeros
 - Puedes preferir una marca de mototaxi. Elegir Honda cuesta 12 % más.
 - Si nadie acepta en 5 minutos, la solicitud se cancela sola y puedes intentarlo de nuevo.
 - Cuando un conductor acepta verás su nombre, su foto, la placa y su ubicación en el mapa mientras va hacia ti.
-- También puedes pedir un viaje para otra persona: eliges quién viaja y su recojo. Tú sigues el viaje desde tu teléfono.
+- También puedes pedir un viaje para otra persona: toca "Para mí" y elígela de los contactos de tu teléfono (debe tener un celular peruano). Las personas que eliges quedan en "Usados recientemente" para la próxima vez. Tú sigues el viaje desde tu teléfono.
+
+## Programar un viaje
+- En el planificador toca "Ahora" y elige el día y la hora. Puedes programar desde 20 minutos hasta 7 días antes.
+- Solo se pueden programar viajes en mototaxi, no envíos.
+- Unos 10 minutos antes de la hora buscaremos conductor y te avisaremos. Si no hay conductores disponibles o tienes otro viaje en curso, te avisaremos que no se pudo iniciar.
+- Puedes tener hasta 3 viajes programados. Los ves y los cancelas en la pestaña Viajes, en "Programados". Cancelar un viaje programado antes de que empiece la búsqueda no tiene penalidad.
 
 ## Precios
 - La app calcula el precio con la distancia y el tiempo estimados de la ruta, y lo muestra antes de confirmar.

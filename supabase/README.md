@@ -57,6 +57,7 @@ App Android ── login ──► Firebase Auth (teléfono, Google, MFA)
 | `admin_cancellation_overview(days?)` / `admin_lift_cancellation_block(user_id, role)` | admin | Quién cancela más, reportes contra la otra persona y quitar una pausa |
 | `send_ride_message(ride_id, body?, quick_reply?)` | ambos | Chat del servicio (aceptado, llegó, en curso). El conductor solo escribe texto detenido en el recojo |
 | `admin_recent_ride_chats(days?)` / `admin_ride_chat(ride_id)` | admin | Revisar chats de los últimos 30 días ante un reclamo |
+| `schedule_ride(scheduled_for, …, contact?)` / `my_scheduled_rides()` / `cancel_scheduled_ride(id)` | pasajero | Viajes en mototaxi programados de 20 min a 7 días antes (máx. 3). El cron `dispatch-scheduled-rides` los convierte en solicitud 10 min antes actuando como el pasajero |
 | `support_chat_status()` | ambos | Si el asistente de Ayuda está activo y cuántas preguntas quedan hoy |
 | `support_chat_begin()` / `support_chat_finish(usage_id, usage, failed?)` | Edge Function `support-chat` (con el token del usuario) | Reserva una pregunta del cupo diario y entrega el texto de ayuda; luego guarda los tokens usados |
 | `admin_get_support_chat()` / `admin_set_support_chat(settings)` | admin | Prender/apagar el asistente, límite diario, texto de ayuda y uso de 30 días |

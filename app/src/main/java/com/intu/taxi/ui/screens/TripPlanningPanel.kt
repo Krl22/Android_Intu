@@ -34,7 +34,8 @@ internal fun TripPlanningPanel(pickup: String, destination: String, field: Plann
     onBack: () -> Unit, onPerson: () -> Unit, onField: (PlanningField) -> Unit,
     onPickup: (String) -> Unit, onDestination: (String) -> Unit, onSelect: (PlaceSearchResult) -> Unit,
     onSaved: (SavedPlace) -> Unit, onPickMap: () -> Unit, onManagePlaces: () -> Unit,
-    onRefresh: () -> Unit, modifier: Modifier = Modifier) {
+    onRefresh: () -> Unit, modifier: Modifier = Modifier,
+    scheduledAt: java.time.Instant? = null, onSchedule: (() -> Unit)? = null) {
     val pickupFocus = remember { FocusRequester() }
     val destinationFocus = remember { FocusRequester() }
     LaunchedEffect(field) {
@@ -51,7 +52,12 @@ internal fun TripPlanningPanel(pickup: String, destination: String, field: Plann
                     style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             }
             Row(Modifier.padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                AssistChip(onClick = {}, label = { Text("Ahora") }, leadingIcon = { Icon(Icons.Outlined.Schedule, null, Modifier.size(18.dp)) })
+                // Programar solo aplica a viajes en mototaxi; envíos y pedidos salen ahora
+                AssistChip(onClick = { onSchedule?.invoke() }, enabled = onSchedule != null,
+                    label = { Text(scheduledAt?.let { com.intu.taxi.repositories.ScheduleWindow.label(it) } ?: "Ahora") },
+                    leadingIcon = { Icon(Icons.Outlined.Schedule, null, Modifier.size(18.dp)) },
+                    trailingIcon = if (onSchedule != null) ({ Icon(Icons.Outlined.ExpandMore, null, Modifier.size(18.dp)) }) else null,
+                    modifier = Modifier.testTag("booking-when"))
                 AssistChip(onClick = onPerson, label = { Text(contact?.let { "Para ${it.name.substringBefore(' ')}" } ?: "Para mí") },
                     leadingIcon = { Icon(Icons.Outlined.PersonOutline, null, Modifier.size(18.dp)) },
                     trailingIcon = { Icon(Icons.Outlined.ExpandMore, null, Modifier.size(18.dp)) }, modifier = Modifier.testTag("booking-person"))

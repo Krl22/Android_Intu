@@ -252,6 +252,11 @@ fun HomeScreen(
     var hasPlannedPickup by remember { mutableStateOf(false) }
     var bookingContact by remember { mutableStateOf<com.intu.taxi.models.BookingContact?>(null) }
     var showBookingContact by remember { mutableStateOf(false) }
+    // Viaje programado: la hora elegida en el planificador y los ya programados (para detectar cuándo empiezan)
+    var scheduledAt by remember { mutableStateOf<java.time.Instant?>(null) }
+    var showSchedule by remember { mutableStateOf(false) }
+    val scheduledRideRepository = remember { com.intu.taxi.repositories.ScheduledRideRepository() }
+    var upcomingScheduled by remember { mutableStateOf<List<com.intu.taxi.repositories.ScheduledRide>>(emptyList()) }
     val placesUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
     val savedPlacesStore = remember(placesUid) {
         placesUid.takeIf { it.isNotBlank() }?.let { com.intu.taxi.data.SavedPlaces(context, it) }
@@ -375,6 +380,34 @@ fun HomeScreen(
             }
     }
 
+    // Viajes programados: el servidor crea la solicitud unos minutos antes. Con la app abierta se
+    // vigila desde poco antes de esa hora para mostrar la búsqueda sin que el pasajero haga nada.
+    LaunchedEffect(Unit) {
+        if (FirebaseAuth.getInstance().currentUser == null) return@LaunchedEffect
+        upcomingScheduled = runCatching { scheduledRideRepository.list() }.getOrDefault(emptyList())
+    }
+    LaunchedEffect(currentRideRequestId, upcomingScheduled) {
+        if (currentRideRequestId != null) return@LaunchedEffect
+        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return@LaunchedEffect
+        val next = upcomingScheduled.filter { it.status == "scheduled" }.minByOrNull { it.scheduledFor } ?: return@LaunchedEffect
+        val watchFrom = next.scheduledFor.minusSeconds((com.intu.taxi.repositories.ScheduleWindow.DISPATCH_MINUTES_BEFORE + 2) * 60)
+        val wait = java.time.Duration.between(java.time.Instant.now(), watchFrom).toMillis()
+        if (wait > 0) delay(wait)
+        val until = next.scheduledFor.plusSeconds(20 * 60)
+        while (java.time.Instant.now().isBefore(until)) {
+            val ride = runCatching { activeRideRepository.findOpenRideForRider(uid) }.getOrNull()
+            if (ride != null) {
+                currentRideRequestId = ride.rideId
+                isDelivery = ride.isDelivery
+                isSearchingDriver = ride.status == "searching"
+                activeRide = if (ride.status == "searching") null else ride
+                break
+            }
+            delay(20_000)
+        }
+        upcomingScheduled = runCatching { scheduledRideRepository.list() }.getOrDefault(emptyList())
+    }
+
     // Payment preferences
     val paymentPreferences = remember { PaymentPreferences(context) }
     var selectedPaymentMethod by remember { mutableStateOf("efectivo") }
@@ -384,6 +417,7 @@ fun HomeScreen(
     // Descarta solo la preparación del viaje; nunca cancela una solicitud ya enviada.
     fun returnHomeFromPreparation() {
         showPlanner = false; planningMapField = null; pickupQuery = ""; hasPlannedPickup = false
+        scheduledAt = null; showSchedule = false
         bookingContact = null; showBookingContact = false
         selectedBusiness = null; selectedBusinessItems = emptyList()
         previewBusiness = null
@@ -528,6 +562,20 @@ fun HomeScreen(
                 routeDistanceMeters = route.distanceMeters
                 routeDurationSeconds = route.durationSeconds
                 estimatedPrice = booking.estimatedPrice
+                val scheduleSnapshot = scheduledAt.takeIf { delivery == null && businessSnapshot == null }
+                if (scheduleSnapshot != null && rideRequestSender == null) {
+                    // Programado: el servidor lo guarda y lo convierte en solicitud 10 minutos antes
+                    val from = readableAddress(context, httpClient, mapboxToken, origin) ?: "Punto de recojo en el mapa"
+                    val to = readableAddress(context, httpClient, mapboxToken, destination) ?: "Destino en el mapa"
+                    scheduledRideRepository.schedule(scheduleSnapshot, origin.latitude(), origin.longitude(), from,
+                        destination.latitude(), destination.longitude(), to, route.distanceMeters, route.durationSeconds,
+                        LineString.fromLngLats(route.points).toJson(), booking.paymentMethod, option.preferredBrand, passengerSnapshot)
+                    Toast.makeText(context, "Viaje programado: ${com.intu.taxi.repositories.ScheduleWindow.label(scheduleSnapshot)}. " +
+                        "Buscaremos conductor 10 minutos antes.", Toast.LENGTH_LONG).show()
+                    returnHomeFromPreparation()
+                    upcomingScheduled = runCatching { scheduledRideRepository.list() }.getOrDefault(upcomingScheduled)
+                    return@launch
+                }
                 val result = if (rideRequestSender != null) rideRequestSender(booking) else {
                     check(FirebaseAuth.getInstance().currentUser != null) { "Inicia sesión para solicitar el viaje." }
                     originAddress = businessSnapshot?.let { "[DEMO] ${it.name} · ${it.address}" }
@@ -648,6 +696,10 @@ fun HomeScreen(
     
     if (showSavedPlaces && placesUid.isNotBlank()) SavedPlacesDialog(onDismiss = { showSavedPlaces = false })
 
+    if (showSchedule) ScheduleRideDialog(scheduledAt,
+        onDismiss = { showSchedule = false },
+        onNow = { scheduledAt = null; showSchedule = false },
+        onSchedule = { scheduledAt = it; showSchedule = false })
     if (showBookingContact) BookingContactDialog(bookingContact, isDelivery, selectedBusiness != null,
         onDismiss = { showBookingContact = false }, onSelect = { contact ->
             bookingContact = contact; showBookingContact = false; deliveryDraft = null
@@ -1284,7 +1336,9 @@ fun HomeScreen(
                     else { selectedDestination = point; isSelectingDestination = true }
                     point?.let { mapView.mapboxMap.setCamera(CameraOptions.Builder().center(it).zoom(16.0)
                         .padding(EdgeInsets(0.0, 0.0, 0.0, 0.0)).build()) }
-                }, modifier = Modifier.align(Alignment.BottomCenter))
+                }, modifier = Modifier.align(Alignment.BottomCenter),
+                scheduledAt = scheduledAt,
+                onSchedule = if (!isDelivery && selectedBusiness == null) ({ showSchedule = true }) else null)
         } else if (isSelectingPoint && !isSearchingDriver && activeRide == null) {
             // Modo pin: usar la misma animación global (25% de página)
             Box(
@@ -1417,7 +1471,7 @@ fun HomeScreen(
                 paymentMethod = selectedPaymentMethod,
                 confirmEnabled = !isCreatingRideRequest && selectedMotoOptionCode != null && (pickupLocation != null || userLocation != null) && confirmedDestination != null,
                 options = if (selectedBusiness != null) listOf(com.intu.taxi.models.MotoOption.DELIVERY) else com.intu.taxi.models.MotoOption.entries,
-                confirmLabel = if (selectedBusiness != null) "Continuar con pedido demo" else if (hasPlannedPickup) { if (isDelivery) "Continuar con envío" else "Solicitar viaje" } else "Elegir recojo",
+                confirmLabel = if (selectedBusiness != null) "Continuar con pedido demo" else if (hasPlannedPickup) { if (isDelivery) "Continuar con envío" else if (scheduledAt != null) "Programar viaje" else "Solicitar viaje" } else "Elegir recojo",
                 pickupLabel = selectedBusiness?.let { "${it.name} · ${it.address}" } ?: pickupQuery.takeIf { it.isNotBlank() }?.let { label -> bookingContact?.let { "${it.name} · $label" } ?: label },
                 error = errorMessage,
                 onSelect = { selectedMotoOptionCode = it.code; isDelivery = it.delivery; errorMessage = null },
@@ -1550,7 +1604,7 @@ fun HomeScreen(
                         Text(when {
                             isCreatingRideRequest -> if (isDelivery) "Solicitando envío…" else "Solicitando viaje…"
                             planningMapField == PlanningField.PICKUP -> "Confirmar recojo"
-                            showPickupPicker -> if (isDelivery) "Continuar con envío" else "Solicitar viaje"
+                            showPickupPicker -> if (isDelivery) "Continuar con envío" else if (scheduledAt != null) "Programar viaje" else "Solicitar viaje"
                             isCalculatingDestinationRoute -> "Calculando ruta…"
                             else -> "Confirmar destino"
                         })
@@ -1563,6 +1617,7 @@ fun HomeScreen(
         // Deja el mapa listo para pedir otro viaje
         fun resetRideState() {
             showPlanner = false; bookingContact = null; planningMapField = null; hasPlannedPickup = false; pickupQuery = ""
+            scheduledAt = null
             selectedBusiness = null; selectedBusinessItems = emptyList()
             isDelivery = false
             selectedMotoOptionCode = com.intu.taxi.models.MotoOption.ANY.code

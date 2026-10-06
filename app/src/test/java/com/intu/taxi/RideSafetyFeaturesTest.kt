@@ -86,6 +86,31 @@ class RideSafetyFeaturesTest {
             SupabaseApi.spanishError(429, "", "support_chat_limit"))
     }
 
+    @Test fun scheduledRidesNeedTwentyMinutesToSevenDays() {
+        val now = java.time.Instant.parse("2026-10-06T15:00:00Z")
+        assertNotNull(com.intu.taxi.repositories.ScheduleWindow.problem(now.plusSeconds(19 * 60), now))
+        assertNull(com.intu.taxi.repositories.ScheduleWindow.problem(now.plusSeconds(20 * 60), now))
+        assertNull(com.intu.taxi.repositories.ScheduleWindow.problem(now.plusSeconds(7 * 86_400), now))
+        assertNotNull(com.intu.taxi.repositories.ScheduleWindow.problem(now.plusSeconds(7 * 86_400 + 60), now))
+        val lima = ZoneId.of("America/Lima")
+        val base = java.time.ZonedDateTime.of(2026, 10, 6, 10, 0, 0, 0, lima)
+        assertEquals("Hoy 18:30", com.intu.taxi.repositories.ScheduleWindow.label(base.withHour(18).withMinute(30).toInstant(), lima, base))
+        assertEquals("Mañana 07:15", com.intu.taxi.repositories.ScheduleWindow.label(base.plusDays(1).withHour(7).withMinute(15).toInstant(), lima, base))
+        assertTrue(com.intu.taxi.repositories.ScheduleWindow.label(base.plusDays(2).toInstant(), lima, base).endsWith(", 10:00"))
+    }
+
+    @Test fun recentContactsKeepNewestFirstWithoutDuplicates() {
+        val ana = com.intu.taxi.models.BookingContact("Ana", "+51987654321")
+        val luis = com.intu.taxi.models.BookingContact("Luis", "+51912345678")
+        val list = com.intu.taxi.data.RecentContacts.withRecent(listOf(ana, luis), luis.copy(name = "Luis P."))
+        assertEquals(listOf("Luis P.", "Ana"), list.map { it.name })
+        val many = (1..8).fold(emptyList<com.intu.taxi.models.BookingContact>()) { acc, i ->
+            com.intu.taxi.data.RecentContacts.withRecent(acc, com.intu.taxi.models.BookingContact("P$i", "+5198765432$i"))
+        }
+        assertEquals(com.intu.taxi.data.RecentContacts.MAX, many.size)
+        assertEquals("P8", many.first().name)
+    }
+
     @Test fun driverTypesOnlyWhenStoppedAtPickup() {
         assertFalse(canTypeInRideChat(CancelRole.DRIVER, "accepted"))
         assertTrue(canTypeInRideChat(CancelRole.DRIVER, "arrived"))

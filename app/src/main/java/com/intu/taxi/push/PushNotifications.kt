@@ -36,6 +36,9 @@ object PushNotifications {
     /** Mismo id que usa la Cloud Function ridePush y el manifest. */
     const val RIDE_CHANNEL = "ride_updates"
     const val ADMIN_CHANNEL = "admin_activity"
+    const val CHAT_CHANNEL = "ride_chat"
+    /** Chat que el usuario tiene abierto en pantalla: sus mensajes no se notifican. */
+    @Volatile var openChatRideId: String? = null
     const val ADMIN_TYPE_EXTRA = "intu_admin_type"
     const val ADMIN_UID_EXTRA = "intu_admin_uid"
 
@@ -46,6 +49,13 @@ object PushNotifications {
             NotificationChannel(RIDE_CHANNEL, "Estado del viaje", NotificationManager.IMPORTANCE_HIGH).apply {
                 description = "Cuando tu conductor acepta, llega, inicia o termina el viaje, o si se cancela"
                 enableVibration(true)
+            }
+        )
+        manager.createNotificationChannel(
+            NotificationChannel(CHAT_CHANNEL, "Mensajes del viaje", NotificationManager.IMPORTANCE_HIGH).apply {
+                description = "Mensajes de tu conductor o pasajero durante el servicio"
+                enableVibration(true)
+                lockscreenVisibility = NotificationCompat.VISIBILITY_PRIVATE
             }
         )
         manager.createNotificationChannel(NotificationChannel(ADMIN_CHANNEL, "Actividad de Intu", NotificationManager.IMPORTANCE_HIGH).apply {
@@ -105,7 +115,11 @@ class IntuMessagingService : FirebaseMessagingService() {
             if (allowed) showAdminActivity(activity)
             return
         }
-        if (DriverSession.appInForeground) return
+        // Los mensajes del chat se avisan también con la app abierta, salvo si ese chat está en pantalla
+        val isChat = message.data["status"] == "chat"
+        val chatRideId = message.data["rideId"]?.removePrefix("chat-")
+        if (isChat && chatRideId != null && chatRideId == PushNotifications.openChatRideId) return
+        if (!isChat && DriverSession.appInForeground) return
         val notification = message.notification ?: return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
@@ -114,7 +128,7 @@ class IntuMessagingService : FirebaseMessagingService() {
         val openApp = packageManager.getLaunchIntentForPackage(packageName)
             ?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
             ?: Intent()
-        val built = NotificationCompat.Builder(this, PushNotifications.RIDE_CHANNEL)
+        val built = NotificationCompat.Builder(this, if (isChat) PushNotifications.CHAT_CHANNEL else PushNotifications.RIDE_CHANNEL)
             .setSmallIcon(R.drawable.ic_stat_intu)
             .setColor(ContextCompat.getColor(this, R.color.intu_teal))
             .setContentTitle(notification.title)
