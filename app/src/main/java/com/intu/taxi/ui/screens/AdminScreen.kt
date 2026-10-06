@@ -142,7 +142,8 @@ fun AdminScreen(
                 3 -> AdminPlacesTab(reloadKey)
                 4 -> AdminNotificationSettings(reloadKey)
                 5 -> AdminRideSecuritySettings(reloadKey)
-                else -> AdminBusinesses(reloadKey)
+                6 -> AdminBusinesses(reloadKey)
+                else -> AdminSupportChatTab(reloadKey)
             }
         }
     }

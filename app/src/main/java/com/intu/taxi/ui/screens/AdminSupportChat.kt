@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -38,6 +40,15 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.util.Locale
+
+/** Pestaña "Asistente" del panel admin. */
+@Composable
+internal fun AdminSupportChatTab(reloadKey: Int) {
+    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        AdminSupportChatSection(reloadKey)
+    }
+}
 
 @Composable
 internal fun ColumnScope.AdminSupportChatSection(reloadKey: Int) {
@@ -74,7 +85,7 @@ internal fun ColumnScope.AdminSupportChatSection(reloadKey: Int) {
         }
     }
 
-    AdminSectionHeading("Asistente de ayuda", "Responde dudas de los usuarios en Cuenta → Ayuda con Intu, usando solo este texto.")
+    AdminSectionHeading("Asistente de ayuda", "Responde dudas en Cuenta → Ayuda con Intu usando solo este texto. La opción aparece cuando lo prendes.")
     val current = state
     if (current == null) {
         if (error == null) CircularProgressIndicator()
