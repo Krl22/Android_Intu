@@ -32,6 +32,14 @@ class AppUpdatesTest {
         invalid.forEach { assertThrows(Exception::class.java) { parsePublishedRelease(it.toString(), "com.intu.taxi", 36) } }
     }
 
+    @Test fun backgroundNotificationOnlyAnnouncesANewUnseenVersion() {
+        assertTrue(shouldNotifyAppUpdate(release, installedCode = 29, notifiedCode = 0))
+        assertFalse(shouldNotifyAppUpdate(release, installedCode = 30, notifiedCode = 0))
+        assertFalse(shouldNotifyAppUpdate(release, installedCode = 31, notifiedCode = 0))
+        assertFalse(shouldNotifyAppUpdate(release, installedCode = 29, notifiedCode = 30))
+        assertTrue(shouldNotifyAppUpdate(release.copy(versionCode = 31), installedCode = 29, notifiedCode = 30))
+    }
+
     @Test fun automaticChecksAreThrottledButManualCheckFindsTheNextVersion() = runBlocking {
         var requests = 0
         var time = 0L
@@ -43,7 +51,10 @@ class AppUpdatesTest {
         controller.check(force = true)
         assertEquals(2, requests)
         assertEquals(31, controller.state.value.release?.versionCode)
-        time += 6 * 60 * 60 * 1000L
+        time += 15 * 60 * 1000L - 1
+        controller.check()
+        assertEquals(2, requests)
+        time += 1
         controller.check()
         assertEquals(3, requests)
     }

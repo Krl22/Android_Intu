@@ -14,6 +14,7 @@ import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderF
 class IntuApp : Application() {
     override fun onCreate() {
         super.onCreate()
+        com.intu.taxi.updates.AppUpdateWorker.schedule(this)
         FirebaseApp.initializeApp(this)
         FirebaseAppCheck.getInstance().installAppCheckProviderFactory(
             if (BuildConfig.DEBUG) DebugAppCheckProviderFactory.getInstance()

@@ -27,6 +27,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -55,8 +57,12 @@ import androidx.compose.ui.Alignment
 
 class MainActivity : ComponentActivity() {
     private var adminNotificationUid by mutableStateOf<String?>(null)
+    private var updateNotificationRequested by mutableStateOf(false)
 
-    private fun readAdminNotification(intent: android.content.Intent?) {
+    private fun readNotificationIntent(intent: android.content.Intent?) {
+        if (intent?.getBooleanExtra(com.intu.taxi.updates.AppUpdateNotifications.OPEN_UPDATE_EXTRA, false) == true) {
+            updateNotificationRequested = true
+        }
         if (com.intu.taxi.push.AdminActivityType.fromKey(intent?.getStringExtra(
                 com.intu.taxi.push.PushNotifications.ADMIN_TYPE_EXTRA)) != null) {
             adminNotificationUid = intent?.getStringExtra(com.intu.taxi.push.PushNotifications.ADMIN_UID_EXTRA)
@@ -66,12 +72,13 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        readAdminNotification(intent)
+        readNotificationIntent(intent)
     }
     // Con la app visible, las solicitudes se ven en pantalla y el servicio no las notifica
     override fun onStart() {
         super.onStart()
         com.intu.taxi.driver.DriverSession.appInForeground = true
+        com.intu.taxi.updates.AppUpdateNotifications(this).clearInstalled(BuildConfig.VERSION_CODE)
     }
 
     override fun onStop() {
@@ -83,20 +90,33 @@ class MainActivity : ComponentActivity() {
         // El tema de arranque (turquesa, sin ícono) solo cubre el instante antes del splash animado
         setTheme(R.style.Theme_Intu)
         super.onCreate(savedInstanceState)
-        readAdminNotification(intent)
+        readNotificationIntent(intent)
         AdminLocationSimulation.initialize()
         com.intu.taxi.push.PushNotifications.createChannel(this)
         enableEdgeToEdge()
         setContent {
             com.intu.taxi.ui.theme.IntuAppearanceHost {
-                IntuApp(adminNotificationUid) { adminNotificationUid = null }
+                IntuApp(
+                    adminNotificationUid = adminNotificationUid,
+                    onAdminNotificationConsumed = { adminNotificationUid = null },
+                    updateNotificationRequested = updateNotificationRequested,
+                    onUpdateNotificationConsumed = {
+                        updateNotificationRequested = false
+                        intent?.removeExtra(com.intu.taxi.updates.AppUpdateNotifications.OPEN_UPDATE_EXTRA)
+                    },
+                )
             }
         }
     }
 }
 
 @Composable
-fun IntuApp(adminNotificationUid: String? = null, onAdminNotificationConsumed: () -> Unit = {}) {
+fun IntuApp(
+    adminNotificationUid: String? = null,
+    onAdminNotificationConsumed: () -> Unit = {},
+    updateNotificationRequested: Boolean = false,
+    onUpdateNotificationConsumed: () -> Unit = {},
+) {
     val activity = checkNotNull(LocalActivity.current)
     val navController = rememberNavController()
     val items = listOf(NavItem.Home, NavItem.Trips, NavItem.Account)
@@ -123,44 +143,45 @@ fun IntuApp(adminNotificationUid: String? = null, onAdminNotificationConsumed: (
     }
     val updateState by updater.state.collectAsState()
     var updateDialogRequested by rememberSaveable { mutableStateOf(false) }
-    var postponedUpdateCode by rememberSaveable { mutableStateOf(0) }
     val riderNotice by com.intu.taxi.rider.RiderTrip.notice.collectAsState()
-    val tripActive = riderNotice != null || com.intu.taxi.driver.DriverSession.activeRideId != null
+    val driverRideId by com.intu.taxi.driver.DriverSession.activeRide.collectAsState()
+    val tripActive = riderNotice != null || driverRideId != null
     val newerRelease = updateState.newerThan(BuildConfig.VERSION_CODE)
     val mayShowUpdate = !showTerms && !tripActive && (
         currentRoute == "login" || currentRoute == NavItem.Account.route ||
-            (currentRoute == NavItem.Home.route && homeBarVisible && !isDriverMode))
-    LaunchedEffect(updater) { updater.check() }
-    DisposableEffect(activity, updater) {
+            (currentRoute == NavItem.Home.route && homeBarVisible))
+    LaunchedEffect(updateNotificationRequested) {
+        if (updateNotificationRequested) updater.check(force = true)
+    }
+    LaunchedEffect(activity, updater) {
         val lifecycle = (activity as androidx.lifecycle.LifecycleOwner).lifecycle
-        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
-            if (event == androidx.lifecycle.Lifecycle.Event.ON_START) scope.launch { updater.check() }
+        lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
+            while (true) {
+                updater.check()
+                delay(60_000)
+            }
         }
-        lifecycle.addObserver(observer)
-        onDispose { lifecycle.removeObserver(observer) }
     }
-    if (updateDialogRequested || (mayShowUpdate && newerRelease != null && newerRelease.versionCode > postponedUpdateCode)) {
-        com.intu.taxi.ui.screens.AppUpdateDialog(
-            updateState, BuildConfig.VERSION_CODE, BuildConfig.VERSION_NAME, tripActive,
-            onCheck = { scope.launch { updater.check(force = true) } },
-            onDownload = { release ->
-                // Recheck at the tap: a ride may have started since the dialog was composed.
-                if (com.intu.taxi.rider.RiderTrip.notice.value == null &&
-                    com.intu.taxi.driver.DriverSession.activeRideId == null) {
-                    if (com.intu.taxi.updates.openPublishedUpdate(updateContext, release)) {
-                        postponedUpdateCode = release.versionCode
-                        updateDialogRequested = false
-                    } else android.widget.Toast.makeText(updateContext,
-                        "No se pudo abrir la descarga. Revisa que tengas un navegador instalado.",
-                        android.widget.Toast.LENGTH_LONG).show()
-                }
-            },
-            onDismiss = {
-                postponedUpdateCode = maxOf(postponedUpdateCode, newerRelease?.versionCode ?: 0)
-                updateDialogRequested = false
-            },
-        )
-    }
+    com.intu.taxi.ui.screens.AppUpdateNotice(
+        updateState, BuildConfig.VERSION_CODE, BuildConfig.VERSION_NAME,
+        canPrompt = mayShowUpdate, tripActive = tripActive,
+        requested = updateDialogRequested || (updateNotificationRequested && mayShowUpdate),
+        onCheck = { scope.launch { updater.check(force = true) } },
+        onDownload = { release ->
+            // Recheck at the tap: a ride may have started since the dialog was composed.
+            if (com.intu.taxi.rider.RiderTrip.notice.value != null ||
+                com.intu.taxi.driver.DriverSession.activeRideId != null) false
+            else com.intu.taxi.updates.openPublishedUpdate(updateContext, release).also { opened ->
+                if (!opened) android.widget.Toast.makeText(updateContext,
+                    "No se pudo abrir la descarga. Revisa que tengas un navegador instalado.",
+                    android.widget.Toast.LENGTH_LONG).show()
+            }
+        },
+        onRequestConsumed = {
+            updateDialogRequested = false
+            onUpdateNotificationConsumed()
+        },
+    )
 
     // Top-level tabs return to Home instead of exiting or visiting another tab.
     BackHandler(enabled = auth.currentUser != null && !showTerms &&
@@ -565,7 +586,8 @@ fun IntuApp(adminNotificationUid: String? = null, onAdminNotificationConsumed: (
                     onCheckUpdates = {
                         updateDialogRequested = true
                         scope.launch { updater.check(force = true) }
-                    }
+                    },
+                    availableUpdate = newerRelease,
                 )
             }
             // Panel de administración (el servidor rechaza todo si la cuenta no es admin)

@@ -48,7 +48,11 @@ object DriverSession {
     @Volatile var appInForeground = false
 
     /** Viaje actual según la pantalla; el servicio también lo consulta al servidor cada 10 s. */
-    @Volatile var activeRideId: String? = null
+    private val mutableActiveRide = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+    val activeRide: kotlinx.coroutines.flow.StateFlow<String?> = mutableActiveRide
+    var activeRideId: String?
+        get() = mutableActiveRide.value
+        set(value) { mutableActiveRide.value = value }
 
     /** Solicitudes que el conductor rechazó: no se notifican. */
     val declinedRequestIds: MutableSet<String> = ConcurrentHashMap.newKeySet()

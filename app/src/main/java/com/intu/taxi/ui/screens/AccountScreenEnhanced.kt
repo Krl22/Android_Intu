@@ -54,7 +54,8 @@ fun AccountScreenEnhanced(
     onLogout: (() -> Unit)? = null,
     onNavigateToDriverDataCollection: (() -> Unit)? = null,
     onOpenAdmin: (() -> Unit)? = null,
-    onCheckUpdates: () -> Unit = {}
+    onCheckUpdates: () -> Unit = {},
+    availableUpdate: com.intu.taxi.updates.PublishedAppRelease? = null,
 ) {
     val repo = remember { AuthRepository() }
     val auth = FirebaseAuth.getInstance()
@@ -389,7 +390,8 @@ fun AccountScreenEnhanced(
                         onSupportChat = if (supportChatEnabled) ({ showSupportChat = true }) else null,
                         onTerms = { showTerms = true },
                         onAccountDeletion = { showAccountDeletion = true },
-                        onCheckUpdates = onCheckUpdates
+                        onCheckUpdates = onCheckUpdates,
+                        availableUpdate = availableUpdate,
                     )
                 }
             }
@@ -599,7 +601,8 @@ private fun SettingsSection(
     onSupportChat: (() -> Unit)?,
     onTerms: () -> Unit,
     onAccountDeletion: () -> Unit,
-    onCheckUpdates: () -> Unit
+    onCheckUpdates: () -> Unit,
+    availableUpdate: com.intu.taxi.updates.PublishedAppRelease?,
 ) {
     Card(
         modifier = Modifier
@@ -745,14 +748,7 @@ private fun SettingsSection(
             )
             
             // Terms and privacy
-            SettingsItemEnhanced(
-                icon = Icons.Outlined.SystemUpdate,
-                title = "Actualizaciones",
-                subtitle = "Intu ${com.intu.taxi.BuildConfig.VERSION_NAME} · Buscar una nueva versión",
-                actionText = "Comprobar",
-                actionColor = Color(0xFF08817E),
-                onClick = onCheckUpdates
-            )
+            AppUpdateSettingsItem(availableUpdate, onCheckUpdates)
 
             SettingsItemEnhanced(
                 icon = Icons.Default.Description,
@@ -790,7 +786,7 @@ private fun SettingsSection(
 }
 
 @Composable
-private fun SettingsItemEnhanced(
+internal fun SettingsItemEnhanced(
     icon: ImageVector,
     title: String,
     subtitle: String? = null,

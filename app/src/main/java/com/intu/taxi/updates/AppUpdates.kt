@@ -73,7 +73,7 @@ data class AppUpdateState(
     fun newerThan(installedCode: Int): PublishedAppRelease? = release?.takeIf { it.versionCode > installedCode }
 }
 
-/** Foreground checks only; manual checks bypass the six-hour successful-check interval. */
+/** Foreground checks only; manual checks bypass the fifteen-minute successful-check interval. */
 class AppUpdateController(
     private val fetch: suspend () -> PublishedAppRelease,
     private val clock: () -> Long = SystemClock::elapsedRealtime,
@@ -94,7 +94,7 @@ class AppUpdateController(
             try {
                 val release = fetch()
                 mutableState.value = AppUpdateState(release = release, checked = true)
-                retryAfter = TimeUnit.HOURS.toMillis(6)
+                retryAfter = TimeUnit.MINUTES.toMillis(15)
             } catch (cancelled: CancellationException) {
                 mutableState.value = previous
                 throw cancelled
