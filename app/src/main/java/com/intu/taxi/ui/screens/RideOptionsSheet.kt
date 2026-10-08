@@ -56,7 +56,8 @@ internal fun RideOptionsSheet(
     scrollState: ScrollState = rememberScrollState(),
     options: List<MotoOption> = MotoOption.entries,
     confirmLabel: String = "Elegir recojo",
-    pickupLabel: String? = null
+    pickupLabel: String? = null,
+    fareSettings: com.intu.taxi.models.FareSettings = com.intu.taxi.models.FareSettings.Default
 ) {
     val ink = AppearanceColors.foreground(Color(0xFF202538))
     val muted = AppearanceColors.secondary(Color(0xFF667175))
@@ -90,7 +91,7 @@ internal fun RideOptionsSheet(
                 if (compact) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     Text(selectedOption?.label ?: "Selecciona tu moto", modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold, color = ink)
-                    selectedOption?.let { Text(formatSoles(it.fare(fare, deliveryFare)), color = teal, fontWeight = FontWeight.Bold) }
+                    selectedOption?.let { Text(formatSoles(it.fare(fare, deliveryFare, fareSettings)), color = teal, fontWeight = FontWeight.Bold) }
                 }
                 if (!compact) options.forEach { option ->
                     val selected = selectedOption == option
@@ -104,10 +105,10 @@ internal fun RideOptionsSheet(
                             Text(option.label, fontWeight = FontWeight.SemiBold, color = ink,
                                 style = MaterialTheme.typography.bodyMedium)
                             Text(option.description, style = MaterialTheme.typography.bodySmall, color = muted)
-                            if (LocalDensity.current.fontScale > 1.3f) Text(formatSoles(option.fare(fare, deliveryFare)),
+                            if (LocalDensity.current.fontScale > 1.3f) Text(formatSoles(option.fare(fare, deliveryFare, fareSettings)),
                                 color = teal, fontWeight = FontWeight.Bold)
                         }
-                        if (LocalDensity.current.fontScale <= 1.3f) Text(formatSoles(option.fare(fare, deliveryFare)),
+                        if (LocalDensity.current.fontScale <= 1.3f) Text(formatSoles(option.fare(fare, deliveryFare, fareSettings)),
                             fontWeight = FontWeight.Bold, color = teal, style = MaterialTheme.typography.titleMedium)
                         if (selected) Icon(Icons.Default.CheckCircle, "Seleccionado", tint = teal, modifier = Modifier.size(18.dp))
                     }

@@ -5,6 +5,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import com.intu.taxi.location.AdminLocationSimulation
 import androidx.compose.ui.platform.LocalContext
 import com.intu.taxi.location.TestLocationPreset
 import com.intu.taxi.location.TestLocation
@@ -71,15 +74,18 @@ fun MapLocationBinding(
     val context = LocalContext.current
     val realProvider = remember(mapView, realLocationProvider) { realLocationProvider ?: DefaultLocationProvider(context) }
     val callback = rememberUpdatedState(onLocation)
+    // Moving simulated points belong to the same source; preserve camera/first-fix behavior.
+    val moving by AdminLocationSimulation.isMoving.collectAsState()
+    val sourceKey = if (moving && preset != null) "moving-test-location" else preset
+    val delivered = remember(mapView, styleLoaded, hasPermission, sourceKey, realLocationProvider) { booleanArrayOf(false) }
     DisposableEffect(mapView, styleLoaded, hasPermission, preset) {
         if (!styleLoaded) return@DisposableEffect onDispose {}
-        var first = true
         val fixed = preset?.let { Point.fromLngLat(it.longitude, it.latitude) }
         fun deliver(point: Point) {
             if (point.latitude() !in -90.0..90.0 || point.longitude() !in -180.0..180.0 ||
                 (fixed == null && point.latitude() == 0.0 && point.longitude() == 0.0)) return
-            callback.value(point, first)
-            first = false
+            callback.value(point, !delivered[0])
+            delivered[0] = true
         }
         val provider = ReportingLocationProvider(fixed?.let { FixedLocationProvider(it) } ?: realProvider) { point -> deliver(point) }
         mapView.location.setLocationProvider(provider)

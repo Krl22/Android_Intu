@@ -33,19 +33,23 @@ data class DeliveryDetails(
 }
 
 object ServiceFare {
-    /** Same rounding as Supabase: discount applies to all coefficients and the minimum. */
-    fun estimate(distanceMeters: Double, durationSeconds: Double, delivery: Boolean = false): Double {
-        val factor = if (delivery) java.math.BigDecimal("0.8") else java.math.BigDecimal.ONE
+    /** Settings come from the server. Delivery keeps its independent existing coefficients. */
+    fun estimate(distanceMeters: Double, durationSeconds: Double, delivery: Boolean = false,
+        settings: FareSettings = FareSettings.Default): Double {
+        val rates = if (delivery) FareSettings(2.0, 0.8, 0.08, 3.2, 0.0, 0.1) else settings
         val distance = java.math.BigDecimal.valueOf(distanceMeters.toInt().toLong()).divide(java.math.BigDecimal("1000"))
         val minutes = java.math.BigDecimal.valueOf(durationSeconds.toInt().toLong())
             .divide(java.math.BigDecimal("60"), 12, java.math.RoundingMode.HALF_UP)
-        val fare = (java.math.BigDecimal("2.5") + distance + java.math.BigDecimal("0.1") * minutes) * factor
-        return fare.max(java.math.BigDecimal("4") * factor).setScale(1, java.math.RoundingMode.HALF_UP).toDouble()
+        val fare = java.math.BigDecimal.valueOf(rates.baseFare) + java.math.BigDecimal.valueOf(rates.perKm) * distance +
+            java.math.BigDecimal.valueOf(rates.perMinute) * minutes
+        val step = java.math.BigDecimal.valueOf(rates.roundingStep)
+        val minimum = java.math.BigDecimal.valueOf(rates.minimumFare).divide(step, 0, java.math.RoundingMode.CEILING) * step
+        return rates.round(fare).max(minimum).toDouble()
     }
 
-    /** Honda mototaxis carry luggage: 12% over the already rounded fare, rounded again like Supabase. */
-    fun withBrandPremium(fare: Double, preferredBrand: String?): Double =
+    /** Premium applies after the base fare is rounded, matching the server. */
+    fun withBrandPremium(fare: Double, preferredBrand: String?, settings: FareSettings = FareSettings.Default): Double =
         if (preferredBrand != "honda") fare
-        else java.math.BigDecimal.valueOf(fare).multiply(java.math.BigDecimal("1.12"))
-            .setScale(1, java.math.RoundingMode.HALF_UP).toDouble()
+        else settings.round(java.math.BigDecimal.valueOf(fare).multiply(java.math.BigDecimal.ONE +
+            java.math.BigDecimal.valueOf(settings.hondaPremiumPercent).movePointLeft(2))).toDouble()
 }

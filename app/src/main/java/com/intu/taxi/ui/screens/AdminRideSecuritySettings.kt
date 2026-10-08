@@ -46,7 +46,10 @@ internal fun AdminRideSecuritySettings(reloadKey: Int) {
             catch (e: Exception) { error = e.message ?: "No se pudo guardar. Intenta de nuevo." }
             finally { busy = false }
         }
-    }, extraContent = { AdminTripPolicySection(reloadKey) })
+    }, extraContent = {
+        AdminLocationSimulationSettingsSection(reloadKey)
+        AdminTripPolicySection(reloadKey)
+    })
 }
 
 @Composable

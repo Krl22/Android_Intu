@@ -195,6 +195,25 @@ fun IntuApp(
 
     // Cuenta con sesión; cambia al cerrar sesión, al entrar con otra cuenta o si un admin la elimina
     var currentUid by androidx.compose.runtime.remember { mutableStateOf(auth.currentUser?.uid) }
+    var simulationControlsVisible by remember(currentUid) { mutableStateOf(false) }
+    val simulationSettingsRevision by com.intu.taxi.repositories.LocationSimulationRepository.changes.collectAsState()
+    val simulationLifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    LaunchedEffect(currentUid, simulationLifecycleOwner, simulationSettingsRevision) {
+        val uid = currentUid
+        if (uid == null) { simulationControlsVisible = false; AdminLocationSimulation.clear(); return@LaunchedEffect }
+        simulationLifecycleOwner.lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
+            while (true) {
+                val visible = try { com.intu.taxi.repositories.LocationSimulationRepository().get().showControls }
+                catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                catch (e: Exception) { false }
+                if (auth.currentUser?.uid == uid) {
+                    simulationControlsVisible = visible
+                    if (!visible) AdminLocationSimulation.clear()
+                }
+                delay(15_000)
+            }
+        }
+    }
     LaunchedEffect(adminNotificationUid, currentUid, currentRoute) {
         val target = adminNotificationUid ?: return@LaunchedEffect
         if (target != currentUid) { onAdminNotificationConsumed(); return@LaunchedEffect }
@@ -243,10 +262,8 @@ fun IntuApp(
         modifier = Modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            testLocation?.let { preset ->
-                com.intu.taxi.ui.screens.TestLocationBanner(
-                    preset, onRealGps = { AdminLocationSimulation.clear() }, modifier = Modifier.statusBarsPadding()
-                )
+            if (simulationControlsVisible) {
+                com.intu.taxi.ui.screens.TestLocationTools(currentUid, modifier = Modifier.statusBarsPadding())
             }
         },
         bottomBar = {
@@ -257,13 +274,13 @@ fun IntuApp(
         }
     ) { scaffoldPadding ->
         val innerPadding = PaddingValues(
-            top = if (testLocation == null) scaffoldPadding.calculateTopPadding() else 0.dp,
+            top = if (!simulationControlsVisible) scaffoldPadding.calculateTopPadding() else 0.dp,
             bottom = scaffoldPadding.calculateBottomPadding()
         )
         val startDest = "splash"
         NavHost(
             navController = navController,
-            modifier = Modifier.padding(top = if (testLocation != null) scaffoldPadding.calculateTopPadding() else 0.dp),
+            modifier = Modifier.padding(top = if (simulationControlsVisible) scaffoldPadding.calculateTopPadding() else 0.dp),
             startDestination = startDest
         ) {
             // Splash: decide destino inicial según autenticación y perfil completo

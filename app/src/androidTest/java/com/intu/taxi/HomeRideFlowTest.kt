@@ -139,7 +139,7 @@ class HomeRideFlowTest {
         assertEquals(pickup, booking.route.points.first())
         assertEquals(2100.0, booking.route.distanceMeters, 0.0)
         assertEquals(420.0, booking.route.durationSeconds, 0.0)
-        assertEquals(5.9, booking.estimatedPrice, 0.0001) // Honda: 5.3 + 12% luggage premium
+        assertEquals(4.8, booking.estimatedPrice, 0.0001) // Honda: 4.3 + 12% luggage premium
         compose.onNodeWithText("Solicitando viaje").assertIsDisplayed()
         compose.onNodeWithText("Solicitar viaje").assertDoesNotExist()
         compose.onNodeWithText("Solicitando viaje…").assertIsNotEnabled()

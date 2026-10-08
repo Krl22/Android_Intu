@@ -33,7 +33,9 @@ fun IncomingRideRequestCard(
     currentLongitude: Double,
     onAccept: () -> Unit,
     onDecline: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onOfferPrice: (() -> Unit)? = null,
+    offerStatus: String? = null
 ) {
     var isVisible by remember { mutableStateOf(false) }
     
@@ -197,6 +199,13 @@ fun IncomingRideRequestCard(
                 }
                 
                 Spacer(modifier = Modifier.height(16.dp))
+                if (offerStatus != null) Text(offerStatus, style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(bottom = 8.dp))
+                onOfferPrice?.let { propose ->
+                    OutlinedButton(onClick = propose, modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+                        Text("Proponer otro precio")
+                    }
+                }
                 
                 // Botones de acción
                 Row(
@@ -209,7 +218,8 @@ fun IncomingRideRequestCard(
                             isVisible = false
                             onDecline()
                         },
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color(0xFF757575),
                             contentColor = Color.White
@@ -219,8 +229,7 @@ fun IncomingRideRequestCard(
                     ) {
                         Text(
                             text = "Rechazar",
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(vertical = 4.dp)
+                            fontWeight = FontWeight.Bold
                         )
                     }
                     
@@ -230,7 +239,8 @@ fun IncomingRideRequestCard(
                             isVisible = false
                             onAccept()
                         },
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color(0xFF08817E),
                             contentColor = Color.White
@@ -240,8 +250,7 @@ fun IncomingRideRequestCard(
                     ) {
                         Text(
                             text = "Aceptar",
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(vertical = 4.dp)
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }

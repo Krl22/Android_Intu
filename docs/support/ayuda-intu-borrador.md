@@ -9,7 +9,7 @@ Intu es una app para pedir mototaxis y envíos en moto lineal. Conecta pasajeros
 ## Pedir un viaje
 - En Inicio toca el buscador, elige tu destino (por dirección, en el mapa o desde tus direcciones guardadas) y confirma el punto de recojo.
 - Antes de confirmar verás el precio estimado y podrás elegir el método de pago (efectivo o Yape/Plin).
-- Puedes preferir una marca de mototaxi. Elegir Honda cuesta 12 % más.
+- Puedes preferir una marca de mototaxi. Honda puede tener un recargo configurable; consulta el precio en la app.
 - Si nadie acepta en 5 minutos, la solicitud se cancela sola y puedes intentarlo de nuevo.
 - Cuando un conductor acepta verás su nombre, su foto, la placa y su ubicación en el mapa mientras va hacia ti.
 - También puedes pedir un viaje para otra persona: toca "Para mí" y elígela de los contactos de tu teléfono (debe tener un celular peruano). Las personas que eliges quedan en "Usados recientemente" para la próxima vez. Tú sigues el viaje desde tu teléfono.
@@ -22,9 +22,9 @@ Intu es una app para pedir mototaxis y envíos en moto lineal. Conecta pasajeros
 
 ## Precios
 - La app calcula el precio con la distancia y el tiempo estimados de la ruta, y lo muestra antes de confirmar.
-- Mototaxi: S/ 2.50 de base, S/ 1.00 por km y S/ 0.10 por minuto, con un mínimo de S/ 4.00.
+- Mototaxi: la base, el precio por km/minuto, el mínimo, el recargo Honda y el redondeo los configura el administrador. Consulta el importe vigente en la app antes de confirmar.
 - Envío en moto lineal: S/ 2.00 de base, S/ 0.80 por km y S/ 0.08 por minuto, con un mínimo de S/ 3.20.
-- El precio que ves al confirmar es el que pagas; no cambia durante el viaje.
+- El precio se conserva durante el viaje. Si el administrador habilita propuestas de precio, un conductor puede ofrecer otro importe durante la búsqueda. Solo cambia si tú aceptas y confirmas esa propuesta antes de asignar el viaje.
 
 ## Pagos
 - Pagas directamente al conductor, en efectivo o por Yape/Plin. Intu no cobra con tarjeta ni guarda datos bancarios.

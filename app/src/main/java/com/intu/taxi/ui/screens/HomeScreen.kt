@@ -226,11 +226,19 @@ fun HomeScreen(
     rideRequestSender: (suspend (RideBooking) -> Result<String>)? = null,
     locationProvider: com.mapbox.maps.plugin.locationcomponent.LocationProvider? = null,
     businessFeedLoader: (suspend () -> com.intu.taxi.models.BusinessFeed)? = null,
+    fareSettingsLoader: (suspend () -> com.intu.taxi.models.FareSettings)? = null,
     onBottomBarVisibilityChanged: (Boolean) -> Unit = {}
 ) {
     val mapboxToken = stringResource(id = com.intu.taxi.R.string.mapbox_access_token)
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val fareRepository = remember { com.intu.taxi.repositories.FareSettingsRepository() }
+    var fareSettings by remember { mutableStateOf(com.intu.taxi.models.FareSettings.Default) }
+    suspend fun refreshFareSettings(): com.intu.taxi.models.FareSettings {
+        val loaded = fareSettingsLoader?.invoke() ?: if (rideRequestSender != null) com.intu.taxi.models.FareSettings.Default else fareRepository.get()
+        fareSettings = loaded
+        return loaded
+    }
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
 
@@ -281,6 +289,7 @@ fun HomeScreen(
     var showSavedPlaces by remember { mutableStateOf(false) }
     var pinSearchQuery by rememberSaveable { mutableStateOf("") }
     val testLocation by AdminLocationSimulation.preset.collectAsState()
+    val testLocationPicking by com.intu.taxi.location.TestLocationMapSelection.picking.collectAsState()
     var userLocation by remember { mutableStateOf<Point?>(null) }
     var suggestions by remember { mutableStateOf(listOf<CatalogPlace>()) }
     var pinSuggestions by remember { mutableStateOf(listOf<CatalogPlace>()) }
@@ -300,7 +309,7 @@ fun HomeScreen(
     // No persistir el panel de opciones de viaje para que el BottomBar se muestre al entrar
     var isRideOptionsVisible by remember { mutableStateOf(false) }
     val showingRideOptions = isRideOptionsVisible && !showPickupPicker
-    val isSelectingPoint = isSelectingDestination || showPickupPicker
+    val isSelectingPoint = (isSelectingDestination || showPickupPicker) && !testLocationPicking
     val selectedPoint = if (showPickupPicker) selectedPickup else selectedDestination
     var routeDistanceMeters by remember { mutableStateOf<Double?>(null) }
     var routeDurationSeconds by remember { mutableStateOf<Double?>(null) }
@@ -501,6 +510,7 @@ fun HomeScreen(
         val destination = pendingDestination ?: return@LaunchedEffect
         val origin = pickupLocation ?: userLocation ?: return@LaunchedEffect
         try {
+            refreshFareSettings()
             val route = loadBookingRoute(origin, destination)
                 ?: throw IllegalStateException("No se pudo calcular la ruta. Revisa tu conexión e intenta de nuevo.")
             // A route that finishes after Back must not reopen the discarded draft.
@@ -553,10 +563,16 @@ fun HomeScreen(
         errorMessage = null
         scope.launch {
             try {
+                val reviewedSettings = fareSettings
+                val latestSettings = refreshFareSettings()
+                if (!option.delivery && latestSettings.copy(driverPriceOffersEnabled = false) != reviewedSettings.copy(driverPriceOffersEnabled = false)) {
+                    showPickupPicker = false
+                    throw IllegalStateException("Las tarifas se actualizaron. Revisa el nuevo precio y confirma de nuevo.")
+                }
                 val route = routeSnapshot ?: loadBookingRoute(origin, destination)
                     ?: throw IllegalStateException("No se pudo calcular la ruta desde el punto de recojo. Intenta de nuevo.")
                 val booking = RideBooking(origin, destination, route, rideType, selectedPaymentMethod, delivery, option.preferredBrand,
-                    businessSnapshot?.id, businessSnapshot?.updatedAt, passengerSnapshot)
+                    businessSnapshot?.id, businessSnapshot?.updatedAt, passengerSnapshot, latestSettings)
                 pickupLocation = origin
                 routePoints = route.points
                 routeDistanceMeters = route.distanceMeters
@@ -1128,7 +1144,8 @@ fun HomeScreen(
                             runCatching { targets.update(pin) }
                         }
                     }
-                    if (input.styleLoaded && System.currentTimeMillis() - lastUserGestureMs >= 8_000) {
+                    if (input.styleLoaded && !com.intu.taxi.location.TestLocationMapSelection.picking.value &&
+                        System.currentTimeMillis() - lastUserGestureMs >= 8_000) {
                         fun px(dp: Dp) = with(density) { dp.toPx().toDouble() }
                         val mapHeight = mapView.height.toDouble()
                         val bottom = (input.cardHeightPx + px(padding.calculateBottomPadding() + 40.dp))
@@ -1276,7 +1293,7 @@ fun HomeScreen(
             addressSearchRepository.search(it, userLocation?.latitude(), userLocation?.longitude())
         }
 
-        if (!isPreparingTrip) {
+        if (!isPreparingTrip && !testLocationPicking) {
             CommercialHome(
                 padding = padding,
                 greetingName = greetingName,
@@ -1302,7 +1319,7 @@ fun HomeScreen(
                     )
                 }
             )
-        } else if (showPlanner) {
+        } else if (showPlanner && !testLocationPicking) {
             fun choosePoint(point: Point, label: String) {
                 focusManager.clearFocus(force = true); keyboard?.hide()
                 if (planningField == PlanningField.PICKUP) {
@@ -1464,11 +1481,12 @@ fun HomeScreen(
             val km = (routeDistanceMeters ?: 0.0) / 1000.0
             val minutes = (routeDurationSeconds ?: 0.0) / 60.0
             RideOptionsDrawer(
-                fare = com.intu.taxi.models.ServiceFare.estimate(km * 1000.0, minutes * 60.0),
+                fare = com.intu.taxi.models.ServiceFare.estimate(km * 1000.0, minutes * 60.0, settings = fareSettings),
                 deliveryFare = com.intu.taxi.models.ServiceFare.estimate(km * 1000.0, minutes * 60.0, true),
                 distanceKm = km, durationMinutes = minutes,
                 selectedOption = com.intu.taxi.models.MotoOption.fromCode(selectedMotoOptionCode),
                 paymentMethod = selectedPaymentMethod,
+                fareSettings = fareSettings,
                 confirmEnabled = !isCreatingRideRequest && selectedMotoOptionCode != null && (pickupLocation != null || userLocation != null) && confirmedDestination != null,
                 options = if (selectedBusiness != null) listOf(com.intu.taxi.models.MotoOption.DELIVERY) else com.intu.taxi.models.MotoOption.entries,
                 confirmLabel = if (selectedBusiness != null) "Continuar con pedido demo" else if (hasPlannedPickup) { if (isDelivery) "Continuar con envío" else if (scheduledAt != null) "Programar viaje" else "Solicitar viaje" } else "Elegir recojo",
@@ -1527,7 +1545,7 @@ fun HomeScreen(
                     16.0,
                     null
                 )
-                if (activeRide == null) {
+                if (activeRide == null && !com.intu.taxi.location.TestLocationMapSelection.picking.value) {
                     map.setCamera(cam)
                 }
             }
@@ -1852,6 +1870,10 @@ fun HomeScreen(
             isCancelling = isCancellingRide,
             onCancel = { cancelCurrentRide() }
         )
+        if (isSearchingDriver && !isDelivery) currentRideRequestId?.let { requestId ->
+            PassengerPriceOffers(requestId, onCancelRide = { cancelCurrentRide() }, onAccepted = {})
+        }
+        TestLocationMapOverlay(mapView, isStyleLoaded)
     }
 }
 

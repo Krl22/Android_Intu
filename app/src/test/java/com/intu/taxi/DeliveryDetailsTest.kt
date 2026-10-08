@@ -21,8 +21,8 @@ class DeliveryDetailsTest {
         assertThrows(IllegalArgumentException::class.java) { DeliveryDetails("Ana", "987654321", "").normalized() }
     }
     @Test fun hondaPremiumIsTwelvePercentOverTheRoundedFare() {
-        assertEquals(5.9, ServiceFare.withBrandPremium(ServiceFare.estimate(1950.0, 480.0), "honda"), 0.0)
-        assertEquals(4.5, ServiceFare.withBrandPremium(ServiceFare.estimate(0.0, 0.0), "honda"), 0.0)
+        assertEquals(4.8, ServiceFare.withBrandPremium(ServiceFare.estimate(1950.0, 480.0), "honda"), 0.0)
+        assertEquals(3.4, ServiceFare.withBrandPremium(ServiceFare.estimate(0.0, 0.0), "honda"), 0.0)
         assertEquals(4.7, MotoOption.HONDA.fare(4.2, 3.3), 0.0)
         assertEquals(4.2, MotoOption.BAJAJ.fare(4.2, 3.3), 0.0)
         assertEquals(4.2, MotoOption.ANY.fare(4.2, 3.3), 0.0)
@@ -31,8 +31,8 @@ class DeliveryDetailsTest {
     @Test fun discountedDeliveryFareKeepsMinimumAndServerRounding() {
         assertEquals(3.2, ServiceFare.estimate(0.0, 0.0, true), 0.0)
         assertEquals(4.2, ServiceFare.estimate(2100.0, 420.0, true), 0.0)
-        assertEquals(5.3, ServiceFare.estimate(2100.0, 420.0), 0.0)
-        assertEquals(5.3, ServiceFare.estimate(1950.0, 480.0), 0.0)
+        assertEquals(4.3, ServiceFare.estimate(2100.0, 420.0), 0.0)
+        assertEquals(4.3, ServiceFare.estimate(1950.0, 480.0), 0.0)
         assertEquals(ServiceFare.estimate(1950.0, 480.0), ServiceFare.estimate(1950.9, 480.9), 0.0)
     }
     @Test fun parcelScopeRequiresExplicitAcknowledgement() {

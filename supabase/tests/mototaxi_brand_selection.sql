@@ -1,4 +1,7 @@
 begin;
+-- Keep these historical rounding fixtures independent of the admin's current rates.
+update public.vehicle_types set base_fare=2.50, per_km=1.00, per_minute=0.10, min_fare=4.00 where code='mototaxi';
+update private.fare_settings set honda_premium_percent=12, rounding_step=0.10 where singleton;
 do $$ begin
   if exists(select 1 from public.profiles where id like 'intu-qa-brand-20261002-%') then raise exception 'Fixture collision'; end if;
   if has_column_privilege('authenticated','public.rides','preferred_vehicle_brand','UPDATE') then raise exception 'Client can change a sent brand preference'; end if;

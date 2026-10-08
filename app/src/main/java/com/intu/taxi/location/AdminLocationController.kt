@@ -26,11 +26,15 @@ enum class TestLocationPreset(override val label: String, override val latitude:
 }
 
 /** In-memory override, bound to one authenticated session; never saved to device preferences. */
-class AdminLocationController(private val checkAdmin: suspend () -> Boolean) {
+class AdminLocationController(private val checkPermission: suspend () -> Boolean) {
     private val active = MutableStateFlow<TestLocation?>(null)
     val preset = active.asStateFlow()
+    private val moving = MutableStateFlow(false)
+    val isMoving = moving.asStateFlow()
     private var accountUid: String? = null
     private var generation = 0L
+
+    @Synchronized fun movementRevision(): Long = generation
 
     fun effectiveLocation(real: GeoPoint?): GeoPoint? = active.value?.let {
         GeoPoint(it.latitude, it.longitude)
@@ -41,6 +45,7 @@ class AdminLocationController(private val checkAdmin: suspend () -> Boolean) {
             accountUid = uid
             generation++
             active.value = null
+            moving.value = false
         }
     }
 
@@ -49,16 +54,48 @@ class AdminLocationController(private val checkAdmin: suspend () -> Boolean) {
             check(accountUid != null) { "Inicia sesión para simular tu ubicación." }
             generation
         }
-        check(checkAdmin()) { "Esta función solo está disponible para administradores." }
+        check(checkPermission()) { "Activa la barra de simulación en Admin → Seguridad. Los usuarios necesitan permiso del administrador." }
         synchronized(this) {
             check(generation == session && accountUid != null) { "Tu sesión cambió. Intenta de nuevo." }
+            generation++
+            moving.value = false
             active.value = preset
         }
     }
 
+    /** A movement permit cannot survive manual relocation, pause, logout or permission revocation. */
+    suspend fun beginMovement(): Long {
+        val session = synchronized(this) {
+            check(accountUid != null && active.value != null) { "Primero elige una ubicación de prueba." }
+            generation
+        }
+        check(checkPermission()) { "No tienes permiso para simular la ubicación." }
+        return synchronized(this) {
+            check(generation == session && accountUid != null && active.value != null) { "Tu ubicación o sesión cambió. Intenta de nuevo." }
+            generation++
+            moving.value = true
+            generation
+        }
+    }
+
+    @Synchronized fun move(permit: Long, point: MapTestLocation): Boolean {
+        if (generation != permit || !moving.value || accountUid == null) return false
+        active.value = point
+        return true
+    }
+
+    @Synchronized fun finishMovement(permit: Long) {
+        if (generation == permit) moving.value = false
+    }
+
+    @Synchronized fun pauseMovement() {
+        generation++
+        moving.value = false
+    }
+
     suspend fun recheckPermission() {
         val session = synchronized(this) { if (active.value == null) return else generation }
-        val allowed = checkAdmin()
+        val allowed = checkPermission()
         synchronized(this) { if (generation == session && !allowed) clear() }
     }
 
@@ -66,5 +103,6 @@ class AdminLocationController(private val checkAdmin: suspend () -> Boolean) {
         // Also invalidate any activation still waiting for a server response.
         generation++
         active.value = null
+        moving.value = false
     }
 }

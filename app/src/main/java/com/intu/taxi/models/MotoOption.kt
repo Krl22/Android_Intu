@@ -9,8 +9,8 @@ enum class MotoOption(val code: String, val label: String, val description: Stri
     DELIVERY("delivery", "Moto para envíos", "Paquetes pequeños", "motorcycle", delivery = true);
 
     /** Price shown for this option; the Honda premium matches Supabase's rides_before_insert. */
-    fun fare(mototaxiFare: Double, deliveryFare: Double): Double =
-        if (delivery) deliveryFare else ServiceFare.withBrandPremium(mototaxiFare, preferredBrand)
+    fun fare(mototaxiFare: Double, deliveryFare: Double, settings: FareSettings = FareSettings.Default): Double =
+        if (delivery) deliveryFare else ServiceFare.withBrandPremium(mototaxiFare, preferredBrand, settings)
 
     companion object { fun fromCode(code: String?): MotoOption? = entries.firstOrNull { it.code == code } }
 }

@@ -31,7 +31,8 @@ internal fun RideOptionsDrawer(
     onVisibleHeightChanged: (Int) -> Unit, modifier: Modifier = Modifier,
     options: List<MotoOption> = MotoOption.entries,
     confirmLabel: String = "Elegir recojo",
-    pickupLabel: String? = null
+    pickupLabel: String? = null,
+    fareSettings: com.intu.taxi.models.FareSettings = com.intu.taxi.models.FareSettings.Default
 ) {
     val density = LocalDensity.current
     val scroll = rememberScrollState()
@@ -97,6 +98,6 @@ internal fun RideOptionsDrawer(
                     onDragStopped = { settle.value(it) }),
             compact = !expanded && !dragging,
             onToggleExpansion = { dragging = false; expanded = !expanded }, scrollState = scroll,
-            options = options, confirmLabel = confirmLabel, pickupLabel = pickupLabel)
+            options = options, confirmLabel = confirmLabel, pickupLabel = pickupLabel, fareSettings = fareSettings)
     }
 }

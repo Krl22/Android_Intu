@@ -16,6 +16,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.isActive
+import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.runtime.DisposableEffect
@@ -110,6 +112,7 @@ import com.intu.taxi.repositories.DriverAvailabilityRepository
 import com.intu.taxi.repositories.DriverRideRequestRepository
 import com.intu.taxi.repositories.ActiveRideRepository
 import com.intu.taxi.ui.components.IncomingRideRequestCard
+import com.intu.taxi.ui.components.DriverHeaderContent
 import com.intu.taxi.models.DriverRideRequest
 import com.mapbox.geojson.Point
 import com.mapbox.maps.CameraOptions
@@ -163,6 +166,11 @@ fun DriverHomeScreen(
     val driverAvailabilityRepository = remember { DriverAvailabilityRepository() }
     val driverRideRequestRepository = remember { DriverRideRequestRepository() }
     val activeRideRepository = remember { ActiveRideRepository() }
+    val fareSettingsRepository = remember { com.intu.taxi.repositories.FareSettingsRepository() }
+    val priceOfferRepository = remember { com.intu.taxi.repositories.RidePriceOfferRepository() }
+    var priceOffersEnabled by remember { mutableStateOf(false) }
+    var ownPriceOffers by remember { mutableStateOf(emptyList<com.intu.taxi.models.RidePriceOffer>()) }
+    var priceOfferRequest by remember { mutableStateOf<DriverRideRequest?>(null) }
 
     var hasLocationPermission by rememberSaveable { mutableStateOf(false) }
     // "En línea": se mantiene entre viajes y al reabrir la app, hasta que el conductor pulse "Parar"
@@ -262,6 +270,57 @@ fun DriverHomeScreen(
     fun setTripTarget(target: GeoPoint) {
         clientLocationMarker = target
     }
+
+    val offersLifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(isSearching, offersLifecycleOwner) {
+        if (!isSearching) { priceOffersEnabled = false; return@LaunchedEffect }
+        offersLifecycleOwner.lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
+            while (kotlinx.coroutines.currentCoroutineContext().isActive) {
+                try {
+                    priceOffersEnabled = fareSettingsRepository.get().driverPriceOffersEnabled
+                    ownPriceOffers = priceOfferRepository.list()
+                    val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                    if (uid != null) {
+                        val assigned = activeRideRepository.findOpenRidesForDriver(uid)
+                        assigned.firstOrNull { ride -> ownPriceOffers.any { it.rideId == ride.rideId && it.status == "accepted" }
+                            && ride.rideId != activeRideId && ride.rideId != queuedRideId }?.let { ride ->
+                            val request = ride.toDriverRequest()
+                            if (activeRideId == null) {
+                                activeRideId = ride.rideId; activeRideStatus = ride.status; activeRideRequest = request
+                                setTripTarget(GeoPoint(request.originLatitude, request.originLongitude))
+                            } else { queuedRideId = ride.rideId; queuedRideRequest = request }
+                            incomingRideRequests = incomingRideRequests.filter { it.requestId != ride.rideId }
+                            Toast.makeText(context, "El pasajero aceptó tu precio: ${com.intu.taxi.ui.formatSoles(ride.fare)}", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                catch (e: Exception) { priceOffersEnabled = false }
+                delay(3000)
+            }
+        }
+    }
+    fun ownOfferStatus(request: DriverRideRequest): String? = ownPriceOffers.firstOrNull { it.rideId == request.requestId }?.let {
+        when (it.status) {
+            "pending" -> "Propuesta de ${com.intu.taxi.ui.formatSoles(it.amount)} enviada. Esperando al pasajero."
+            "rejected" -> "El pasajero rechazó tu propuesta. Puedes aceptar el precio de la app."
+            "withdrawn" -> "El administrador desactivó las propuestas. Puedes aceptar el precio de la app."
+            else -> null
+        }
+    }
+    fun offerAction(request: DriverRideRequest): (() -> Unit)? =
+        if (priceOffersEnabled && !request.isDelivery && ownPriceOffers.none { it.rideId == request.requestId })
+            ({ priceOfferRequest = request }) else null
+
+    priceOfferRequest?.let { request -> DriverPriceOfferDialog(request,
+        onDismiss = { priceOfferRequest = null }, onSent = {
+            priceOfferRequest = null
+            scope.launch {
+                try { ownPriceOffers = priceOfferRepository.list() }
+                catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                catch (e: Exception) { priceOffersEnabled = false }
+            }
+            Toast.makeText(context, "Propuesta enviada. Esperando al pasajero.", Toast.LENGTH_SHORT).show()
+        }) }
 
     // Funciones para manejar solicitudes
     // Sin viaje: el aceptado pasa a ser el actual. Con un pasajero a bordo: queda como siguiente viaje.
@@ -595,7 +654,8 @@ fun DriverHomeScreen(
                         runCatching { markers.update(marker) }
                     }
 
-                    if (System.currentTimeMillis() - lastUserGestureMs[0] >= 8_000) {
+                    if (!com.intu.taxi.location.TestLocationMapSelection.picking.value &&
+                        System.currentTimeMillis() - lastUserGestureMs[0] >= 8_000) {
                         val density = context.resources.displayMetrics.density.toDouble()
                         val mapHeight = mapView.height.toDouble()
                         TripMap.fitCamera(
@@ -619,60 +679,60 @@ fun DriverHomeScreen(
             visible = headerVisible,
             enter = fadeIn() + slideInVertically { -it / 2 }
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .fillMaxHeight(if (activeRideRequest != null) 0.2f else 0.5f)
-                    .drawBehind {
-                        val teal = Color(0xFF08817E)
-                        val indigo = Color(0xFF1E1F47)
-                        // Translate el dibujo hacia arriba en función de la animación
-                        val shiftY = size.height * headerShiftFraction
-                        withTransform({ translate(left = 0f, top = -shiftY) }) {
-                            drawRect(
-                                brush = Brush.radialGradient(
-                                    colors = listOf(teal, indigo),
-                                    center = Offset(0.1f, 0.1f),
-                                    radius = size.height * 0.9f
-                                ),
-                                size = Size(width = size.width, height = size.height)
-                            )
-                            withTransform({
-                                scale(scaleX = 1.6f, scaleY = 1.0f, pivot = Offset.Zero)
-                            }) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight(if (activeRideRequest != null) 0.2f else 0.5f)
+                        .drawBehind {
+                            val teal = Color(0xFF08817E)
+                            val indigo = Color(0xFF1E1F47)
+                            // Translate el dibujo hacia arriba en función de la animación
+                            val shiftY = size.height * headerShiftFraction
+                            withTransform({ translate(left = 0f, top = -shiftY) }) {
                                 drawRect(
                                     brush = Brush.radialGradient(
-                                        colorStops = arrayOf(
-                                            0.00f to Color.White.copy(alpha = 1.0f),
-                                            0.70f to Color.White.copy(alpha = 1.0f),
-                                            0.75f to Color.White.copy(alpha = 0.95f),
-                                            0.80f to Color.White.copy(alpha = 0.85f),
-                                            0.85f to Color.White.copy(alpha = 0.70f),
-                                            0.90f to Color.White.copy(alpha = 0.45f),
-                                            0.95f to Color.White.copy(alpha = 0.25f),
-                                            1.00f to Color.Transparent
-                                        ),
-                                        center = Offset(0f, 0f),
-                                        radius = max(size.width, size.height)
+                                        colors = listOf(teal, indigo),
+                                        center = Offset(0.1f, 0.1f),
+                                        radius = size.height * 0.9f
                                     ),
-                                    size = Size(width = size.width, height = size.height),
-                                    blendMode = BlendMode.DstIn
+                                    size = Size(width = size.width, height = size.height)
                                 )
+                                withTransform({
+                                    scale(scaleX = 1.6f, scaleY = 1.0f, pivot = Offset.Zero)
+                                }) {
+                                    drawRect(
+                                        brush = Brush.radialGradient(
+                                            colorStops = arrayOf(
+                                                0.00f to Color.White.copy(alpha = 1.0f),
+                                                0.70f to Color.White.copy(alpha = 1.0f),
+                                                0.75f to Color.White.copy(alpha = 0.95f),
+                                                0.80f to Color.White.copy(alpha = 0.85f),
+                                                0.85f to Color.White.copy(alpha = 0.70f),
+                                                0.90f to Color.White.copy(alpha = 0.45f),
+                                                0.95f to Color.White.copy(alpha = 0.25f),
+                                                1.00f to Color.Transparent
+                                            ),
+                                            center = Offset(0f, 0f),
+                                            radius = max(size.width, size.height)
+                                        ),
+                                        size = Size(width = size.width, height = size.height),
+                                        blendMode = BlendMode.DstIn
+                                    )
+                                }
                             }
-                        }
-                    },
-                contentAlignment = Alignment.TopCenter
-            ) {
+                        },
+                    contentAlignment = Alignment.TopCenter
+                ) {}
                 AnimatedVisibility(
                     visible = contentVisible,
+                    // The stop button starts 228 dp above the bottom; requests can scroll above it.
+                    modifier = Modifier.fillMaxSize().padding(
+                        bottom = if (isSearching && activeRideRequest == null) 228.dp else 0.dp),
                     enter = fadeIn() + slideInVertically { -it / 4 }
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 50.dp, start = 16.dp, end = 16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
+                    DriverHeaderContent(scrollable = canReceiveRequests && incomingRideRequests.isNotEmpty()
+                        && activeRideRequest == null) {
                         Text(
                             text = when {
                                 activeRideRequest != null -> "Viaje en curso"
@@ -682,6 +742,16 @@ fun DriverHomeScreen(
                             style = MaterialTheme.typography.titleLarge,
                             color = Color.White
                         )
+                        val simulationTarget = activeRideRequest?.let { request ->
+                            if (activeRideStatus == "in_progress") GeoPoint(request.destinationLatitude, request.destinationLongitude)
+                            else GeoPoint(request.originLatitude, request.originLongitude)
+                        }
+                        TestDriveControls(activeRideId, activeRideStatus, simulationTarget) { origin, target ->
+                            TripMap.fetchRoute(mapboxToken, Point.fromLngLat(origin.longitude, origin.latitude),
+                                Point.fromLngLat(target.longitude, target.latitude))?.points?.map {
+                                com.intu.taxi.location.MapTestLocation(it.latitude(), it.longitude())
+                            }
+                        }
                         
                         // Mostrar solicitudes entrantes cuando esté buscando (ahora arriba)
                         if (canReceiveRequests && incomingRideRequests.isNotEmpty() && activeRideRequest == null) {
@@ -702,7 +772,8 @@ fun DriverHomeScreen(
                                         },
                                         onDecline = { 
                                             handleDeclineRideRequest(request)
-                                        }
+                                        },
+                                        onOfferPrice = offerAction(request), offerStatus = ownOfferStatus(request)
                                     )
                                 }
                             }
@@ -914,7 +985,8 @@ fun DriverHomeScreen(
                         currentLatitude = currentLocation?.latitude ?: 0.0,
                         currentLongitude = currentLocation?.longitude ?: 0.0,
                         onAccept = { handleAcceptRideRequest(request) },
-                        onDecline = { handleDeclineRideRequest(request) }
+                        onDecline = { handleDeclineRideRequest(request) },
+                        onOfferPrice = offerAction(request), offerStatus = ownOfferStatus(request)
                     )
                 }
             }
@@ -1079,6 +1151,7 @@ fun DriverHomeScreen(
                 }
             )
         }
+        TestLocationMapOverlay(mapView, isStyleLoaded)
     }
 }
 

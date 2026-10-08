@@ -10,6 +10,23 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class AdminLocationTest {
+    @Test fun userCanSimulateOnlyWhileAdminHasEnabledUsersAndRevocationStopsMovement() = runBlocking {
+        var usersEnabled = false
+        val controller = AdminLocationController { usersEnabled }
+        controller.updateAccount("regular-user")
+        assertTrue(runCatching { controller.activate(TestLocationPreset.SATIPO) }.isFailure)
+        usersEnabled = true
+        controller.activate(TestLocationPreset.SATIPO)
+        val permit = controller.beginMovement()
+        assertTrue(controller.isMoving.value)
+        usersEnabled = false
+        controller.recheckPermission()
+        assertNull(controller.preset.value)
+        assertFalse(controller.isMoving.value)
+        assertFalse(controller.move(permit, MapTestLocation(-11.25, -74.63)))
+        assertTrue(runCatching { controller.activate(TestLocationPreset.SATIPO) }.isFailure)
+    }
+
     @Test fun signedOutAndNonAdminCannotSimulate() = runBlocking {
         val controller = AdminLocationController { false }
         assertTrue(runCatching { controller.activate(TestLocationPreset.SATIPO) }.isFailure)

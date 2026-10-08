@@ -1,5 +1,7 @@
 -- Run as postgres against the development project. All fixtures roll back.
 begin;
+update public.vehicle_types set base_fare=2.50, per_km=1.00, per_minute=0.10, min_fare=4.00 where code='mototaxi';
+update private.fare_settings set honda_premium_percent=12, rounding_step=0.10 where singleton;
 do $$ begin
   if exists(select 1 from public.profiles where id like 'intu-qa-sched-20261006-%') then raise exception 'Fixture collision'; end if;
   if has_function_privilege('anon','public.my_scheduled_rides()','execute')

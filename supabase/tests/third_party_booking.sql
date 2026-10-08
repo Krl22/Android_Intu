@@ -1,5 +1,7 @@
 -- Real authorization and lifecycle checks, with every fixture rolled back.
 begin;
+update public.vehicle_types set base_fare=2.50, per_km=1.00, per_minute=0.10, min_fare=4.00 where code='mototaxi';
+update private.fare_settings set honda_premium_percent=12, rounding_step=0.10 where singleton;
 do $$ begin
   if exists(select 1 from public.profiles where id like 'intu-qa-contact-20261005-%') then raise exception 'Fixture collision'; end if;
   if has_table_privilege('anon','public.ride_passengers','select') or has_table_privilege('authenticated','public.ride_passengers','insert') then raise exception 'Guest contact grants'; end if;

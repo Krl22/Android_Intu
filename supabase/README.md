@@ -30,7 +30,7 @@ App Android ── login ──► Firebase Auth (teléfono, Google, MFA)
 | `profiles` | Un perfil por usuario de Firebase (`id` = uid de Firebase, **texto**) |
 | `drivers` | Datos de conductor: DNI/CE, brevete, `status` (`pending` → `approved`), rating |
 | `vehicles` | Vehículo del conductor (placa, marca, SOAT). Uno activo por conductor |
-| `vehicle_types` | Tipos de vehículo y tarifas. Hoy solo `mototaxi` |
+| `vehicle_types` | Tipos de vehículo y tarifas independientes de mototaxi y envío en moto |
 | `driver_locations` | Última ubicación y disponibilidad de cada conductor (PostGIS) |
 | `rides` | Solicitudes y viajes: `searching → accepted → arrived → in_progress → completed` / `cancelled` |
 | `device_tokens` | Tokens de FCM para notificaciones push |
@@ -49,6 +49,11 @@ App Android ── login ──► Firebase Auth (teléfono, Google, MFA)
 | `advance_ride(ride_id, status)` | conductor | `arrived` → `in_progress` → `completed` |
 | `ride_pin_requirement(ride_id)` | participantes | Consultar si su solicitud requiere PIN antes de iniciar |
 | `admin_get_ride_security_settings()` / `admin_set_ride_security_settings(pin_enabled)` | admin | Activar o desactivar el PIN para nuevas solicitudes de viajes y envíos |
+| `location_simulation_access()` / `admin_set_location_simulation(users_enabled)` | sesión / admin | Simulación solo para admins por defecto; un admin puede habilitarla para pasajeros y conductores sin darles permisos de admin |
+| `admin_set_simulation_bar(enabled)` | admin | Mostrar u ocultar la barra de pruebas en su propia cuenta (oculta por defecto); se sincroniza entre dispositivos y no cambia el permiso global de usuarios |
+| `get_fare_settings()` / `admin_set_fare_settings(settings)` | sesión / admin | Consultar tarifas vigentes; editar base, km, minuto, mínimo, recargo Honda, redondeo y permiso de propuestas |
+| `propose_ride_price(ride_id, amount)` / `my_ride_price_offers(ride_id?)` | participantes | Conductor disponible propone otro precio si está habilitado; cada participante consulta solo sus ofertas |
+| `respond_ride_price_offer(offer_id, accept)` | solicitante | Rechazar conserva la búsqueda; aceptar asigna atómicamente al conductor con el precio acordado |
 | `cancel_ride(ride_id, reason?)` | ambos | Versión anterior; llama a `cancel_ride_with_reason` y guarda el motivo como `other` |
 | `cancel_ride_with_reason(ride_id, reason, note?)` | ambos | Pasajero: cancela. Conductor: la solicitud vuelve a `searching`, salvo "no aparece" verificado (espera, distancia), que termina el viaje y da la falta al pasajero |
 | `cancellation_preview(ride_id, reason)` | ambos | Antes de confirmar: si la cancelación cuenta, faltas, si causaría una pausa o cuánto falta para "no aparece" |
