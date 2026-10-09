@@ -58,8 +58,12 @@ import androidx.compose.ui.Alignment
 class MainActivity : ComponentActivity() {
     private var adminNotificationUid by mutableStateOf<String?>(null)
     private var updateNotificationRequested by mutableStateOf(false)
+    private var serviceReportNotification by mutableStateOf<com.intu.taxi.push.ServiceReportNotification?>(null)
 
     private fun readNotificationIntent(intent: android.content.Intent?) {
+        com.intu.taxi.push.ServiceReportNotification.parse(mapOf(
+            "status" to intent?.getStringExtra("status").orEmpty(), "rideId" to intent?.getStringExtra("rideId").orEmpty()))
+            ?.let { serviceReportNotification = it }
         if (intent?.getBooleanExtra(com.intu.taxi.updates.AppUpdateNotifications.OPEN_UPDATE_EXTRA, false) == true) {
             updateNotificationRequested = true
         }
@@ -99,6 +103,12 @@ class MainActivity : ComponentActivity() {
                 IntuApp(
                     adminNotificationUid = adminNotificationUid,
                     onAdminNotificationConsumed = { adminNotificationUid = null },
+                    serviceReportNotification = serviceReportNotification,
+                    onServiceReportNotificationConsumed = {
+                        serviceReportNotification = null
+                        intent?.removeExtra("status")
+                        intent?.removeExtra("rideId")
+                    },
                     updateNotificationRequested = updateNotificationRequested,
                     onUpdateNotificationConsumed = {
                         updateNotificationRequested = false
@@ -112,6 +122,8 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun IntuApp(
+    serviceReportNotification: com.intu.taxi.push.ServiceReportNotification? = null,
+    onServiceReportNotificationConsumed: () -> Unit = {},
     adminNotificationUid: String? = null,
     onAdminNotificationConsumed: () -> Unit = {},
     updateNotificationRequested: Boolean = false,
@@ -195,6 +207,10 @@ fun IntuApp(
 
     // Cuenta con sesión; cambia al cerrar sesión, al entrar con otra cuenta o si un admin la elimina
     var currentUid by androidx.compose.runtime.remember { mutableStateOf(auth.currentUser?.uid) }
+    if (currentUid != null && !showTerms && serviceReportNotification != null) {
+        com.intu.taxi.ui.screens.ServiceReportsDialog(admin = serviceReportNotification.admin,
+            onDismiss = onServiceReportNotificationConsumed)
+    }
     var simulationControlsVisible by remember(currentUid) { mutableStateOf(false) }
     val simulationSettingsRevision by com.intu.taxi.repositories.LocationSimulationRepository.changes.collectAsState()
     val simulationLifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current

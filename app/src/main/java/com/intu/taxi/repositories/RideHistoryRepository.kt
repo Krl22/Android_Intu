@@ -37,7 +37,9 @@ data class RideHistoryItem(
     val vehicleType: String = "mototaxi",
     val serviceKind: String = "passenger",
     val delivery: com.intu.taxi.models.DeliveryDetails? = null,
-    val passenger: com.intu.taxi.models.BookingContact? = null
+    val passenger: com.intu.taxi.models.BookingContact? = null,
+    val reportable: Boolean = false,
+    val startedAt: String? = null
 )
 
 /** Ganancias de un período (solo viajes completados). */
@@ -96,7 +98,8 @@ class RideHistoryRepository {
         routeGeometry = str("route_polyline").ifBlank { null },
         distanceMeters = optInt("distance_meters"),
         durationSeconds = optInt("duration_seconds"),
-        vehicleType = str("vehicle_type", "mototaxi"), serviceKind = str("service_kind", "passenger"), delivery = deliveryDetails(), passenger = ridePassenger()
+        vehicleType = str("vehicle_type", "mototaxi"), serviceKind = str("service_kind", "passenger"), delivery = deliveryDetails(), passenger = ridePassenger(),
+        reportable = str("driver_id").isNotBlank() && str("rider_id").isNotBlank(), startedAt = str("started_at").ifBlank { null }
     )
 
     companion object {

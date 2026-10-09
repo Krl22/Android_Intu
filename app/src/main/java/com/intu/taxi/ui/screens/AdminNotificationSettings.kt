@@ -150,7 +150,7 @@ fun AdminNotificationSettingsContent(settings: AdminNotificationPreferences?, bu
                             onChange(settings.copy(driverApplications = it))
                         }
                         HorizontalDivider()
-                        NotificationToggle("Reportes de errores", "Cuando un usuario envía un reporte desde su cuenta.", settings.bugReports, enabled) {
+                        NotificationToggle("Reportes de errores y servicios", "Cuando un usuario reporta un error, un problema del servicio o un objeto perdido.", settings.bugReports, enabled) {
                             onChange(settings.copy(bugReports = it))
                         }
                     }

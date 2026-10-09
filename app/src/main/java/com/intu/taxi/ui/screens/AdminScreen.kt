@@ -138,7 +138,7 @@ fun AdminScreen(
             when (tab) {
                 0 -> DriversTab(reloadKey)
                 1 -> UsersTab(reloadKey, onOwnAccountDeleted)
-                2 -> BugReportsTab(reloadKey)
+                2 -> AdminReportsTab(reloadKey)
                 3 -> AdminPlacesTab(reloadKey)
                 4 -> AdminNotificationSettings(reloadKey)
                 5 -> AdminRideSecuritySettings(reloadKey)

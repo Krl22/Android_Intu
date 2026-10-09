@@ -88,6 +88,13 @@ object SupabaseApi {
         message == "cancellation_block" -> "Por cancelar varias veces, tu cuenta está en pausa " +
             (formatBlockedUntil(details) ?: "por un tiempo") + "."
         message == "too_many_requests" -> "Hiciste muchas solicitudes seguidas. Espera unos minutos e intenta de nuevo."
+        message == "invalid_service_report" -> "Elige un motivo válido y describe lo ocurrido entre 10 y 2000 caracteres."
+        message == "service_report_exists" -> "Ya tienes un reporte abierto con ese motivo para este servicio. Consúltalo en Reportes y objetos perdidos."
+        message == "too_many_reports" -> "Llegaste al límite de reportes de hoy. Intenta mañana."
+        message == "lost_item_after_trip" -> "Puedes reportar un objeto olvidado después de terminar el viaje."
+        message == "service_report_closed" -> "El equipo ya cerró este caso. Actualiza la lista para consultar su respuesta."
+        message == "invalid_lost_item_state" -> "La respuesta ya cambió o no está disponible. Actualiza el caso."
+        message == "report_request_conflict" -> "Este envío ya se procesó con otros datos. Cierra el formulario y abre uno nuevo."
         message == "no_show_not_allowed" -> when (details.substringBefore(':')) {
             "no_show_wait" -> "Espera ${formatWait(details.substringAfter(':').toIntOrNull() ?: 0)} más en el punto de recojo."
             "no_show_far" -> "Debes estar en el punto de recojo para cancelar por este motivo."

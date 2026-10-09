@@ -1761,6 +1761,8 @@ fun HomeScreen(
                         }
                     }
                     if (ride.driverId.isNotBlank()) {
+                        ServiceReportButton(ride.rideId, isDriver = false, delivery = ride.isDelivery,
+                            finished = ride.status == "completed", modifier = Modifier.fillMaxWidth())
                         RideChatButton(
                             rideId = ride.rideId,
                             rideStatus = ride.status,

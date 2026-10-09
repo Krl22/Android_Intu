@@ -1459,6 +1459,8 @@ fun EnhancedActiveRideCard(
             
             // Contenido expandido
             if (!isMinimized) {
+                ServiceReportButton(request.requestId, isDriver = true, delivery = request.isDelivery,
+                    finished = status == "completed", modifier = Modifier.fillMaxWidth())
                 Spacer(modifier = Modifier.height(16.dp))
                 
                 // Información de la ruta

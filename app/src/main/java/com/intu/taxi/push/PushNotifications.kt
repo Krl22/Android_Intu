@@ -117,9 +117,10 @@ class IntuMessagingService : FirebaseMessagingService() {
         }
         // Los mensajes del chat se avisan también con la app abierta, salvo si ese chat está en pantalla
         val isChat = message.data["status"] == "chat"
+        val report = ServiceReportNotification.parse(message.data)
         val chatRideId = message.data["rideId"]?.removePrefix("chat-")
         if (isChat && chatRideId != null && chatRideId == PushNotifications.openChatRideId) return
-        if (!isChat && DriverSession.appInForeground) return
+        if (!isChat && report == null && DriverSession.appInForeground) return
         val notification = message.notification ?: return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
@@ -128,6 +129,12 @@ class IntuMessagingService : FirebaseMessagingService() {
         val openApp = packageManager.getLaunchIntentForPackage(packageName)
             ?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
             ?: Intent()
+        if (report != null) {
+            openApp.putExtra("status", message.data["status"])
+                .putExtra("rideId", message.data["rideId"])
+                .setData(android.net.Uri.Builder().scheme("intu").authority("service-report")
+                    .appendPath(message.data["rideId"]).build())
+        }
         val built = NotificationCompat.Builder(this, if (isChat) PushNotifications.CHAT_CHANNEL else PushNotifications.RIDE_CHANNEL)
             .setSmallIcon(R.drawable.ic_stat_intu)
             .setColor(ContextCompat.getColor(this, R.color.intu_teal))
@@ -135,6 +142,7 @@ class IntuMessagingService : FirebaseMessagingService() {
             .setContentText(notification.body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(notification.body))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setAutoCancel(true)
             .setContentIntent(PendingIntent.getActivity(this, 0, openApp, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
             .build()

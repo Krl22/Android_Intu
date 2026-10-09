@@ -199,6 +199,8 @@ internal fun TripsContent(
             }
         }
 
+        item { ServiceReportsInboxButton(Modifier.fillMaxWidth()) }
+
         if (isDriver) {
             item { EarningsCard(rides.orEmpty(), driverRating) }
         }
@@ -403,6 +405,8 @@ private fun RideHistoryCard(ride: RideHistoryItem, isDriver: Boolean, onRate: (I
                     )
                 }
             }
+            if (ride.reportable) ServiceReportButton(ride.id, isDriver, ride.serviceKind == "delivery",
+                finished = completed || ride.startedAt != null, modifier = Modifier.fillMaxWidth())
         }
     }
 }

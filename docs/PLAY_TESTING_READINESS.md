@@ -1,5 +1,7 @@
 # Intu: preparación para pruebas privadas en Google Play
 
+**Actualización del 8 de octubre de 2026:** se publicó **1.34/código 35** en Prueba interna y Console confirma que está disponible para testers. Incluye reportes y objetos perdidos; ver `RELEASE_1_34.md`. Se mantuvieron las dos listas de correos seleccionadas y el [enlace de inscripción](https://play.google.com/apps/internaltest/4701402864699537874). La firma de subida coincide con Console. Falta acceso al proyecto Firebase con su cuenta administradora para revisar la firma final de Play y probar Google/SMS en una instalación desde la tienda. La web aún ofrece 1.32/código 33. Las referencias a entregas sin publicar que siguen abajo son históricas; la ficha y declaraciones para producción continúan pendientes.
+
 Preparación inicial del 1 de octubre de 2026. Aplicación `com.intu.taxi`, Android 1.14 / código 15.
 
 **Actualización del 5 de octubre:** Carlos confirmó que su cuenta de Play Console está verificada. Se regeneró y validó el AAB **1.31/código 32** con todos los cambios integrados en `main`; la entrega actual es `build/play/intu-1.31.aab`. Firma release, lint, bundletool, ELF ARM64 y APK universal con alineación de 16 KB: correctos. Ver `docs/RELEASE_1_31.md` para huellas y comprobaciones. Las referencias a 1.14/1.15 más abajo son el historial de preparación, no la entrega actual. No se ha publicado en Play Console: siguen pendientes su configuración, el certificado de Play en Firebase y la instalación de comprobación; también las decisiones legales documentadas aquí.
