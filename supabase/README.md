@@ -52,6 +52,7 @@ App Android ── login ──► Firebase Auth (teléfono, Google, MFA)
 | `location_simulation_access()` / `admin_set_location_simulation(users_enabled)` | sesión / admin | Simulación solo para admins por defecto; un admin puede habilitarla para pasajeros y conductores sin darles permisos de admin |
 | `admin_set_simulation_bar(enabled)` | admin | Mostrar u ocultar la barra de pruebas en su propia cuenta (oculta por defecto); se sincroniza entre dispositivos y no cambia el permiso global de usuarios |
 | `get_fare_settings()` / `admin_set_fare_settings(settings)` | sesión / admin | Consultar tarifas vigentes; editar base, km, minuto, mínimo, recargo Honda, redondeo y permiso de propuestas |
+| `get_driver_request_settings()` / `admin_set_driver_request_settings(request_order, timeout_seconds)` | sesión / admin | Pila de solicitudes del conductor: qué va al frente (`fare` = paga más, `distance` = más cercana) y segundos para decidir (10–120); al vencer se pasa sola solo para ese conductor |
 | `propose_ride_price(ride_id, amount)` / `my_ride_price_offers(ride_id?)` | participantes | Conductor disponible propone otro precio si está habilitado; cada participante consulta solo sus ofertas |
 | `respond_ride_price_offer(offer_id, accept)` | solicitante | Rechazar conserva la búsqueda; aceptar asigna atómicamente al conductor con el precio acordado |
 | `cancel_ride(ride_id, reason?)` | ambos | Versión anterior; llama a `cancel_ride_with_reason` y guarda el motivo como `other` |

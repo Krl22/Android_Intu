@@ -47,6 +47,7 @@ internal fun AdminRideSecuritySettings(reloadKey: Int) {
             finally { busy = false }
         }
     }, extraContent = {
+        AdminDriverRequestSection(reloadKey)
         AdminLocationSimulationSettingsSection(reloadKey)
         AdminTripPolicySection(reloadKey)
     })

@@ -57,6 +57,9 @@ object DriverSession {
     /** Solicitudes que el conductor rechazó: no se notifican. */
     val declinedRequestIds: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
+    /** Cuándo vio el conductor cada solicitud: su tiempo para decidir corre desde ahí. */
+    val requestFirstSeenMs: MutableMap<String, Long> = ConcurrentHashMap()
+
     /**
      * Última ubicación del GPS según el servicio. La pantalla la usa para la ruta y la cámara del viaje
      * aunque el mapa esté pausado (app minimizada), así al volver ya está al día.

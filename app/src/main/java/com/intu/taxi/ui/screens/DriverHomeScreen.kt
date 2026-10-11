@@ -113,6 +113,8 @@ import com.intu.taxi.repositories.DriverRideRequestRepository
 import com.intu.taxi.repositories.ActiveRideRepository
 import com.intu.taxi.ui.components.IncomingRideRequestCard
 import com.intu.taxi.ui.components.DriverHeaderContent
+import com.intu.taxi.ui.components.DriverRequestStack
+import androidx.compose.ui.platform.testTag
 import com.intu.taxi.models.DriverRideRequest
 import com.mapbox.geojson.Point
 import com.mapbox.maps.CameraOptions
@@ -171,6 +173,14 @@ fun DriverHomeScreen(
     var priceOffersEnabled by remember { mutableStateOf(false) }
     var ownPriceOffers by remember { mutableStateOf(emptyList<com.intu.taxi.models.RidePriceOffer>()) }
     var priceOfferRequest by remember { mutableStateOf<DriverRideRequest?>(null) }
+    // Pila de solicitudes: orden y tiempo para decidir (los elige un admin), la que el conductor
+    // trajo al frente tocando su lomo y el reloj que descuenta los segundos
+    val requestSettingsRepository = remember { com.intu.taxi.repositories.DriverRequestSettingsRepository() }
+    var requestSettings by remember { mutableStateOf(com.intu.taxi.models.DriverRequestSettings()) }
+    var pinnedFrontRequestId by remember { mutableStateOf<String?>(null) }
+    var nowMs by remember { mutableStateOf(System.currentTimeMillis()) }
+    // Ganancias de hoy para la pantalla de inicio (null mientras cargan o si no hay conexión)
+    var todayEarnings by remember { mutableStateOf<com.intu.taxi.repositories.EarningsSummary?>(null) }
 
     var hasLocationPermission by rememberSaveable { mutableStateOf(false) }
     // "En línea": se mantiene entre viajes y al reabrir la app, hasta que el conductor pulse "Parar"
@@ -348,11 +358,15 @@ fun DriverHomeScreen(
         }
     }
 
-    fun handleDeclineRideRequest(request: DriverRideRequest) {
-        declinedRequestIds = declinedRequestIds + request.requestId
-        com.intu.taxi.driver.DriverSession.declinedRequestIds += request.requestId
-        incomingRideRequests = incomingRideRequests.filter { it.requestId != request.requestId }
+    // Pasar una solicitud o dejar que se le acabe el tiempo: no se le vuelve a mostrar ni a notificar
+    fun dismissRequests(ids: Collection<String>) {
+        if (ids.isEmpty()) return
+        declinedRequestIds = declinedRequestIds + ids
+        com.intu.taxi.driver.DriverSession.declinedRequestIds += ids
+        incomingRideRequests = incomingRideRequests.filter { it.requestId !in ids }
     }
+
+    fun handleDeclineRideRequest(request: DriverRideRequest) = dismissRequests(listOf(request.requestId))
 
     // Termina el viaje actual en pantalla: pasa al siguiente en espera o queda libre (y en línea)
     fun moveToNextRideOrClear() {
@@ -374,24 +388,9 @@ fun DriverHomeScreen(
         }
     }
 
-    // Estados de animación para el header
+    // Estados de animación para el header del viaje en curso
     var headerVisible by remember { mutableStateOf(false) }
     var contentVisible by remember { mutableStateOf(false) }
-
-    // Animación del fondo del header: cuando se está buscando, sube 25% de pantalla.
-    // Como el header ocupa 50% de la pantalla, 25% de pantalla equivale a 0.5 del alto del header.
-    val headerShiftFraction by animateFloatAsState(
-        targetValue = if (isSearching) 0.5f else if (activeRideRequest != null) 0.3f else 0f,
-        animationSpec = tween(durationMillis = 700, easing = FastOutSlowInEasing),
-        label = "headerShiftFraction"
-    )
-
-    // Animación de posición del botón: desde el header hacia el fondo.
-    val buttonTravelFraction by animateFloatAsState(
-        targetValue = if (isSearching) 0.95f else 0f,
-        animationSpec = tween(durationMillis = 700, easing = FastOutSlowInEasing),
-        label = "buttonTravelFraction"
-    )
 
     LaunchedEffect(Unit) {
         val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
@@ -427,8 +426,50 @@ fun DriverHomeScreen(
             return@LaunchedEffect
         }
         driverRideRequestRepository.getActiveRideRequests().collect { requests ->
+            val seenAt = System.currentTimeMillis()
+            requests.forEach { com.intu.taxi.driver.DriverSession.requestFirstSeenMs.putIfAbsent(it.requestId, seenAt) }
             incomingRideRequests = requests.filter { it.requestId !in declinedRequestIds }
         }
+    }
+
+    // Orden y tiempo de la pila: se leen al conectarse y cada minuto, así un cambio del admin llega pronto
+    LaunchedEffect(isSearching) {
+        if (!isSearching) return@LaunchedEffect
+        while (isActive) {
+            try { requestSettings = requestSettingsRepository.get() }
+            catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (e: Exception) { /* Sin conexión: se mantiene el último orden y tiempo conocidos */ }
+            delay(60_000)
+        }
+    }
+    val hasIncomingRequests = canReceiveRequests && incomingRideRequests.isNotEmpty()
+    LaunchedEffect(hasIncomingRequests) {
+        while (hasIncomingRequests) {
+            nowMs = System.currentTimeMillis()
+            delay(1_000)
+        }
+    }
+    // Con una propuesta de precio pendiente la solicitud no vence: el conductor espera la respuesta
+    val pendingOfferRideIds = ownPriceOffers.filter { it.status == "pending" }.map { it.rideId }.toSet()
+    val arrangedRequests = remember(incomingRideRequests, requestSettings, nowMs, currentLocation, pendingOfferRideIds) {
+        com.intu.taxi.models.DriverRequestQueue.arrange(incomingRideRequests, com.intu.taxi.driver.DriverSession.requestFirstSeenMs,
+            requestSettings, nowMs, currentLocation?.latitude, currentLocation?.longitude, pendingOfferRideIds)
+    }
+    LaunchedEffect(arrangedRequests.expiredIds) { dismissRequests(arrangedRequests.expiredIds) }
+    // La que el conductor trajo al frente tocando su lomo se queda ahí aunque llegue otra que pague más
+    val requestStack = arrangedRequests.visible.let { visible ->
+        val pinned = visible.firstOrNull { it.request.requestId == pinnedFrontRequestId }
+        if (pinned == null) visible else listOf(pinned) + (visible - pinned)
+    }
+
+    // Ganancias de hoy para la pantalla de inicio; se actualizan cada vez que vuelve a quedar fuera de línea
+    LaunchedEffect(isSearching, hasActiveRide) {
+        if (isSearching || hasActiveRide) return@LaunchedEffect
+        try {
+            val history = com.intu.taxi.repositories.RideHistoryRepository()
+            todayEarnings = com.intu.taxi.repositories.RideHistoryRepository.earnings(history.driverHistory()).first
+        } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+        catch (e: Exception) { /* Sin conexión: la tarjeta muestra un guion */ }
     }
 
     // El siguiente viaje en espera: si el pasajero cancela, se quita
@@ -490,6 +531,39 @@ fun DriverHomeScreen(
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) {
             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
+    fun goOnline() {
+        scope.launch {
+            try {
+                currentLocation?.let { location ->
+                    driverAvailabilityRepository.createAvailableDriver(location)
+                    askNotificationPermissionIfNeeded()
+                    isSearching = true
+                    onBottomBarVisibilityChanged(false)
+                    val pausedUntil = runCatching { com.intu.taxi.repositories.CancellationRepository().driverStanding() }
+                        .getOrNull()?.blockedUntil
+                    if (pausedUntil != null) Toast.makeText(context, "Por cancelar varias veces no podrás aceptar solicitudes " +
+                        (com.intu.taxi.data.formatBlockedUntil(pausedUntil) ?: "por un tiempo") + ".", Toast.LENGTH_LONG).show()
+                    else Toast.makeText(context, "Buscando clientes cerca…", Toast.LENGTH_SHORT).show()
+                } ?: Toast.makeText(context, "Ubicación no disponible", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    fun goOffline() {
+        scope.launch {
+            try {
+                driverAvailabilityRepository.removeAvailableDriver()
+                isSearching = false
+                onBottomBarVisibilityChanged(true)
+                Toast.makeText(context, "A descansar. Ya no recibirás solicitudes.", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
@@ -674,21 +748,22 @@ fun DriverHomeScreen(
                 }
         }
 
-        // Header superior con el mismo fondo de gradiente + transparencia de HomeScreen
+        // Durante un viaje: header superior con el mismo fondo de gradiente + transparencia de HomeScreen
         AnimatedVisibility(
-            visible = headerVisible,
-            enter = fadeIn() + slideInVertically { -it / 2 }
+            visible = headerVisible && activeRideRequest != null,
+            enter = fadeIn() + slideInVertically { -it / 2 },
+            exit = fadeOut()
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .fillMaxHeight(if (activeRideRequest != null) 0.2f else 0.5f)
+                        .fillMaxHeight(0.2f)
                         .drawBehind {
                             val teal = Color(0xFF08817E)
                             val indigo = Color(0xFF1E1F47)
-                            // Translate el dibujo hacia arriba en función de la animación
-                            val shiftY = size.height * headerShiftFraction
+                            // El degradado se recorta hacia arriba para dejar más mapa visible
+                            val shiftY = size.height * 0.3f
                             withTransform({ translate(left = 0f, top = -shiftY) }) {
                                 drawRect(
                                     brush = Brush.radialGradient(
@@ -726,19 +801,12 @@ fun DriverHomeScreen(
                 ) {}
                 AnimatedVisibility(
                     visible = contentVisible,
-                    // The stop button starts 228 dp above the bottom; requests can scroll above it.
-                    modifier = Modifier.fillMaxSize().padding(
-                        bottom = if (isSearching && activeRideRequest == null) 228.dp else 0.dp),
+                    modifier = Modifier.fillMaxSize(),
                     enter = fadeIn() + slideInVertically { -it / 4 }
                 ) {
-                    DriverHeaderContent(scrollable = canReceiveRequests && incomingRideRequests.isNotEmpty()
-                        && activeRideRequest == null) {
+                    DriverHeaderContent {
                         Text(
-                            text = when {
-                                activeRideRequest != null -> "Viaje en curso"
-                                isSearching -> "Buscando clientes cerca…"
-                                else -> "Modo conductor"
-                            },
+                            text = "Viaje en curso",
                             style = MaterialTheme.typography.titleLarge,
                             color = Color.White
                         )
@@ -752,86 +820,40 @@ fun DriverHomeScreen(
                                 com.intu.taxi.location.MapTestLocation(it.latitude(), it.longitude())
                             }
                         }
-                        
-                        // Mostrar solicitudes entrantes cuando esté buscando (ahora arriba)
-                        if (canReceiveRequests && incomingRideRequests.isNotEmpty() && activeRideRequest == null) {
-                            Spacer(modifier = Modifier.height(16.dp))
-                            
-                            // Mostrar todas las solicitudes disponibles, apiladas verticalmente
-                            Column(
-                                verticalArrangement = Arrangement.spacedBy(12.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                incomingRideRequests.forEach { request ->
-                                    IncomingRideRequestCard(
-                                        request = request,
-                                        currentLatitude = currentLocation?.latitude ?: 0.0,
-                                        currentLongitude = currentLocation?.longitude ?: 0.0,
-                                        onAccept = { 
-                                            handleAcceptRideRequest(request)
-                                        },
-                                        onDecline = { 
-                                            handleDeclineRideRequest(request)
-                                        },
-                                        onOfferPrice = offerAction(request), offerStatus = ownOfferStatus(request)
-                                    )
-                                }
-                            }
-                        }
                     }
                 }
             }
         }
 
-        // Botón principal: aparece inicialmente en el header y viaja hacia el fondo al iniciar búsqueda
-        AnimatedVisibility(
-            visible = activeRideRequest == null,
-            enter = fadeIn(),
-            exit = fadeOut()
-        ) {
-            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                val headerHeight = maxHeight * 0.5f
-                val initialY = headerHeight * 0.35f
-                val finalY = maxHeight - 172.dp - 56.dp
-                val animatedY = lerp(initialY, finalY, buttonTravelFraction)
-
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .offset(y = animatedY)
-                ) {
-                    AnimatedGradientButton(
-                        isSearching = isSearching,
-                        onClick = {
-                            scope.launch {
-                                try {
-                                    if (!isSearching) {
-                                        // El conductor quiere empezar a buscar
-                                        currentLocation?.let { location ->
-                                            driverAvailabilityRepository.createAvailableDriver(location)
-                                            askNotificationPermissionIfNeeded()
-                                            isSearching = true
-                                            onBottomBarVisibilityChanged(false) // OCULTAR BottomNavigationBar al buscar
-                                            val pausedUntil = runCatching { com.intu.taxi.repositories.CancellationRepository().driverStanding() }
-                                                .getOrNull()?.blockedUntil
-                                            if (pausedUntil != null) Toast.makeText(context, "Por cancelar varias veces no podrás aceptar solicitudes " +
-                                                (com.intu.taxi.data.formatBlockedUntil(pausedUntil) ?: "por un tiempo") + ".", Toast.LENGTH_LONG).show()
-                                            else Toast.makeText(context, "Buscando clientes cerca...", Toast.LENGTH_SHORT).show()
-                                        } ?: run {
-                                            Toast.makeText(context, "Ubicación no disponible", Toast.LENGTH_SHORT).show()
-                                        }
-                                    } else {
-                                        // El conductor quiere dejar de buscar
-                                        driverAvailabilityRepository.removeAvailableDriver()
-                                        isSearching = false
-                                        onBottomBarVisibilityChanged(true) // MOSTRAR BottomNavigationBar al detener búsqueda
-                                        Toast.makeText(context, "Búsqueda detenida", Toast.LENGTH_SHORT).show()
-                                    }
-                                } catch (e: Exception) {
-                                    Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
-                                }
-                            }
-                        }
+        // Sin viaje: arriba las ganancias de hoy (fuera de línea) o el estado y "Descansar" (en línea);
+        // abajo el botón "A chambear" o la pila de solicitudes
+        if (activeRideRequest == null) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .padding(top = padding.calculateTopPadding() + 12.dp, start = 16.dp, end = 16.dp)
+            ) {
+                if (isSearching) DriverOnlineBar(onRest = ::goOffline) else DriverTodayCard(todayEarnings)
+            }
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .padding(bottom = padding.calculateBottomPadding() + if (isSearching) 16.dp else 28.dp),
+                contentAlignment = Alignment.BottomCenter
+            ) {
+                when {
+                    !isSearching -> ChambearButton(onClick = ::goOnline)
+                    requestStack.isEmpty() -> DriverSearchingCard()
+                    else -> DriverRequestStack(
+                        requests = requestStack,
+                        timeoutSeconds = requestSettings.timeoutSeconds,
+                        onSelect = { pinnedFrontRequestId = it },
+                        onAccept = ::handleAcceptRideRequest,
+                        onPass = ::handleDeclineRideRequest,
+                        offerAction = ::offerAction,
+                        offerStatus = ::ownOfferStatus
                     )
                 }
             }
@@ -969,7 +991,7 @@ fun DriverHomeScreen(
                             cancelTarget = CancelTarget(rideId, "accepted", next.isDelivery, queued = true)
                         }) { Text("Cancelar", color = AppearanceColors.highlight(Color(0xFFB42318))) }
                     }
-                } else if (canReceiveRequests && incomingRideRequests.isNotEmpty()) {
+                } else if (canReceiveRequests && requestStack.isNotEmpty()) {
                     Text(
                         "Solicitud para tu siguiente viaje",
                         color = Color.White,
@@ -979,7 +1001,7 @@ fun DriverHomeScreen(
                             .background(Color(0xFF1E1F47).copy(alpha = 0.85f), RoundedCornerShape(50))
                             .padding(horizontal = 12.dp, vertical = 4.dp)
                     )
-                    val request = incomingRideRequests.first()
+                    val request = requestStack.first().request
                     IncomingRideRequestCard(
                         request = request,
                         currentLatitude = currentLocation?.latitude ?: 0.0,
@@ -1155,115 +1177,122 @@ fun DriverHomeScreen(
     }
 }
 
+private val DriverTeal = Color(0xFF0F6E56)
+private val DriverTealLight = Color(0xFF9FE1CB)
+
+/** Botón para conectarse: un círculo verde con aro claro que solo dice "A chambear". */
 @Composable
-fun AnimatedGradientButton(
-    isSearching: Boolean,
-    onClick: () -> Unit
-) {
-    // Animamos el ángulo del gradiente
-    val infiniteTransition = rememberInfiniteTransition(label = "")
-    val gradientShift by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(
-                durationMillis = if (isSearching) 6000 else 8000,
-                easing = LinearEasing
-            )
-        ),
-        label = "gradientShift"
-    )
-
-    // Progreso del radar (0..1), repetitivo
-    val radarProgress by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1600, easing = LinearEasing)
-        ),
-        label = "radarProgress"
-    )
-
-    val gradientColors = if (isSearching) {
-        listOf(Color(0xFFFF5A5A), Color(0xFFD32F2F), Color(0xFFFF8A80))
-    } else {
-        listOf(Color(0xFF00E5C3), Color(0xFF00BFA5), Color(0xFF00695C))
-    }
-
-    val angleInRad = gradientShift * PI.toFloat() / 180f
-    val startOffset = Offset(
-        x = cos(angleInRad) * 300f,
-        y = sin(angleInRad) * 300f
-    )
-    val endOffset = Offset(
-        x = -cos(angleInRad) * 300f,
-        y = -sin(angleInRad) * 300f
-    )
-
-    val pulseScale by animateFloatAsState(
-        targetValue = if (isSearching) 1.1f else 1f,
-        animationSpec = tween(1000, easing = FastOutSlowInEasing),
-        label = "pulseScale"
-    )
-
-    // Contenedor externo para dibujar el radar por fuera del botón
+internal fun ChambearButton(onClick: () -> Unit) {
     Box(
         modifier = Modifier
-            .size(140.dp)
-            .drawBehind {
-                if (isSearching) {
-                    val center = this.center
-                    val maxR = size.minDimension / 2f
-                    val ringColor = Color(0xFFFF5A5A).copy(alpha = 0.45f)
-
-                    // Tres anillos con desfase de fase para efecto radar
-                    val phases = listOf(0f, 0.33f, 0.66f)
-                    phases.forEach { phase ->
-                        val p = ((radarProgress + phase) % 1f)
-                        val radius = 6f + p * maxR
-                        val alpha = (1f - p).coerceIn(0f, 1f) * 0.45f
-                        drawCircle(
-                            color = ringColor.copy(alpha = alpha),
-                            radius = radius,
-                            center = center,
-                            style = Stroke(width = 4f)
-                        )
-                    }
-                }
-            },
+            .size(132.dp)
+            .graphicsLayer { shadowElevation = 16f; shape = CircleShape; clip = true }
+            .background(DriverTealLight, CircleShape)
+            .padding(9.dp)
+            .background(DriverTeal, CircleShape)
+            .clickable(onClickLabel = "Conectarme y buscar clientes", onClick = onClick)
+            .testTag("driver-go-online"),
         contentAlignment = Alignment.Center
     ) {
-        // Botón circular
-        Box(
-            modifier = Modifier
-                .size(90.dp)
-                .graphicsLayer {
-                    scaleX = pulseScale
-                    scaleY = pulseScale
-                    shadowElevation = 12f
-                    shape = CircleShape
-                    clip = true
-                }
-                .background(
-                    brush = Brush.linearGradient(
-                        colors = gradientColors,
-                        start = startOffset,
-                        end = endOffset
-                    ),
-                    shape = CircleShape
-                )
-                .clickable { onClick() },
-            contentAlignment = Alignment.Center
-        ) {
-            // Dos líneas para que "Empezar ahora" quepa dentro del círculo de 90 dp
+        Text(
+            text = "A\nchambear",
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
+            fontSize = 20.sp,
+            lineHeight = 23.sp,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+/** Fuera de línea: lo ganado hoy, arriba del mapa. */
+@Composable
+internal fun DriverTodayCard(today: com.intu.taxi.repositories.EarningsSummary?) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(AppearanceColors.surface, RoundedCornerShape(16.dp))
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text("Hoy", style = MaterialTheme.typography.labelMedium, color = AppearanceColors.muted)
             Text(
-                text = if (isSearching) "Parar" else "Empezar\nahora",
-                color = Color.White,
-                style = MaterialTheme.typography.titleMedium,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                lineHeight = 18.sp
+                today?.let { com.intu.taxi.ui.formatSoles(it.total) } ?: "—",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = AppearanceColors.ink
             )
         }
+        Text(
+            today?.let { if (it.rides == 1) "1 viaje" else "${it.rides} viajes" } ?: "",
+            style = MaterialTheme.typography.bodyMedium,
+            color = AppearanceColors.muted
+        )
+    }
+}
+
+/** En línea: estado con un punto que late y el botón para desconectarse. */
+@Composable
+internal fun DriverOnlineBar(onRest: () -> Unit) {
+    val pulse by rememberInfiniteTransition(label = "onlinePulse").animateFloat(
+        initialValue = 0.35f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(900, easing = LinearEasing), androidx.compose.animation.core.RepeatMode.Reverse),
+        label = "onlineDot"
+    )
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            modifier = Modifier
+                .background(AppearanceColors.surface, RoundedCornerShape(50))
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                Modifier
+                    .size(10.dp)
+                    .graphicsLayer { alpha = pulse }
+                    .background(Color(0xFF1D9E75), CircleShape)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("En línea", fontWeight = FontWeight.SemiBold, color = AppearanceColors.ink)
+        }
+        Spacer(modifier = Modifier.weight(1f))
+        Button(
+            onClick = onRest,
+            colors = ButtonDefaults.buttonColors(containerColor = AppearanceColors.surface, contentColor = AppearanceColors.ink),
+            shape = RoundedCornerShape(50),
+            modifier = Modifier.testTag("driver-go-offline")
+        ) {
+            Text("Descansar", fontWeight = FontWeight.SemiBold)
+        }
+    }
+}
+
+/** En línea y sin solicitudes todavía. */
+@Composable
+internal fun DriverSearchingCard() {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .background(AppearanceColors.surface, RoundedCornerShape(20.dp))
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text("Buscando clientes cerca…", fontWeight = FontWeight.SemiBold, color = AppearanceColors.ink)
+        Spacer(modifier = Modifier.height(10.dp))
+        LinearProgressIndicator(
+            color = DriverTeal,
+            trackColor = AppearanceColors.outline,
+            modifier = Modifier.fillMaxWidth().height(4.dp)
+        )
+        Spacer(modifier = Modifier.height(10.dp))
+        Text(
+            "Te avisamos apenas llegue una solicitud, aunque tengas la app minimizada.",
+            style = MaterialTheme.typography.bodySmall,
+            color = AppearanceColors.muted,
+            textAlign = TextAlign.Center
+        )
     }
 }
 
@@ -1368,7 +1397,13 @@ fun EnhancedActiveRideCard(
         "in_progress" -> if (request.isDelivery) "Confirmar entrega" else "Confirmar pago y finalizar"
         else -> "Llegué"
     }
-    
+    // A dónde navegar con Google Maps o Waze: al recojo y, ya en viaje, al destino. Esperando al pasajero, a ningún lado.
+    val navigationTarget = when (status) {
+        "accepted" -> request.originLatitude to request.originLongitude
+        "in_progress" -> request.destinationLatitude to request.destinationLongitude
+        else -> null
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -1595,36 +1630,49 @@ fun EnhancedActiveRideCard(
             
             // Botones de acción (siempre visibles)
             if (isMinimized) {
-                // Solo botón de llegar cuando está minimizado - diseño más compacto
-                Button(
-                    onClick = onArrived,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF08817E),
-                        contentColor = Color.White
-                    ),
-                    shape = RoundedCornerShape(12.dp),
+                // Minimizado: navegar y la acción principal, en un diseño compacto
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    contentPadding = PaddingValues(vertical = 8.dp, horizontal = 16.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
+                    navigationTarget?.let { (latitude, longitude) ->
+                        com.intu.taxi.ui.components.NavigateButton(latitude, longitude, compact = true, modifier = Modifier.weight(0.8f))
+                    }
+                    Button(
+                        onClick = onArrived,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF08817E),
+                            contentColor = Color.White
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(vertical = 8.dp, horizontal = 16.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Person,
-                            contentDescription = null,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = primaryAction,
-                            fontWeight = FontWeight.Medium,
-                            fontSize = 12.sp
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Person,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = primaryAction,
+                                fontWeight = FontWeight.Medium,
+                                fontSize = 12.sp
+                            )
+                        }
                     }
                 }
             } else {
                 // Botones completos cuando está expandido
+                navigationTarget?.let { (latitude, longitude) ->
+                    com.intu.taxi.ui.components.NavigateButton(latitude, longitude, compact = false, modifier = Modifier.fillMaxWidth())
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)

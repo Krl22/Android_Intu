@@ -15,6 +15,12 @@
     <!-- Pasajero con un viaje abierto: la app sigue al día minimizada (servicio de uso especial) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
+    <!-- Conductor: saber si tiene Google Maps o Waze instalados para navegar hasta el recojo o el destino -->
+    <queries>
+        <package android:name="com.google.android.apps.maps" />
+        <package android:name="com.waze" />
+    </queries>
+
     <application
         android:name=".IntuApp"
         android:allowBackup="true"
