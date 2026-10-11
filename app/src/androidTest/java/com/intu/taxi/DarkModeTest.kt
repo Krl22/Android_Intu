@@ -203,6 +203,15 @@ class DarkModeTest {
         compose.runOnIdle { assertTrue(closed) }
     }
 
+    @Test fun darkTermsAndPrivacyCardsAreReadable() {
+        compose.setContent { IntuTheme(darkTheme = true) { TermsDialog(onDismiss = {}) } }
+        compose.onNodeWithText("Uso de Intu").assertIsDisplayed()
+        captureNativeScreenshot(compose, "dark-terms.png")
+        compose.onNodeWithText("Privacidad").performClick()
+        compose.onNodeWithText("Datos que usamos").assertIsDisplayed()
+        captureNativeScreenshot(compose, "dark-privacy.png")
+    }
+
     private fun mapView(): MapView {
         lateinit var map: MapView
         onView(isAssignableFrom(MapView::class.java)).check { view, noMatch ->

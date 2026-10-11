@@ -63,11 +63,12 @@ fun TermsDialog(onDismiss: () -> Unit) {
 
 @Composable
 private fun LegalSection(title: String, vararg paragraphs: String) {
-    Surface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), color = Color.White) {
+    // Blanco en modo claro; en modo oscuro, una superficie oscura con texto claro
+    Surface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), color = AppearanceColors.tint(Color.White)) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = AppearanceColors.ink)
             paragraphs.forEach { paragraph ->
-                Text(paragraph, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(paragraph, style = MaterialTheme.typography.bodyMedium, color = AppearanceColors.muted)
             }
         }
     }
