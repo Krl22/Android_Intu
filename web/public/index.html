@@ -98,6 +98,10 @@
     }
     .btn-download:hover { background: var(--teal-dark); transform: translateY(-1px); }
     .btn-download svg { width: 24px; height: 24px; flex: none; }
+    button.btn { font-family: inherit; }
+    /* Descarga del APK: opción secundaria para quien no usa Play Store */
+    .apk-link { font-size: 15px; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
+    .apk-link:hover { color: var(--teal); }
     .btn-light { background: #fff; color: var(--indigo); padding: 16px 26px; font-size: 17px; }
     .btn-light:hover { background: var(--gold-soft); }
     :focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; }
@@ -225,7 +229,8 @@
     }
     .final h2 { color: #fff; max-width: 640px; }
     .final p { color: #D5F0EE; max-width: 520px; }
-    .final .meta { color: #D5F0EE; justify-content: center; }
+    .final .apk-link { color: #D5F0EE; }
+    .final .apk-link:hover { color: #fff; }
     footer { padding: 40px 0 48px; color: var(--muted); font-size: 14px; }
     .foot { display: flex; flex-wrap: wrap; gap: 12px 24px; justify-content: space-between; align-items: center; }
 
@@ -285,34 +290,75 @@
     .hero-photo img { animation: drift 18s ease-in-out infinite alternate; transform-origin: 62% 45%; }
     @keyframes drift { from { transform: scale(1.02); } to { transform: scale(1.08) translate(-1%, -1%); } }
 
-    /* Cierre: cerros de Satipo al amanecer con el gallito posado, como en el splash de la app */
-    .final { position: relative; overflow: hidden; padding-bottom: 170px; }
+    /* Cierre: selva de Satipo al amanecer, con el gallito posado en la rama de un árbol */
+    .final { position: relative; overflow: hidden; padding-bottom: 190px; }
     .final > :not(.final-scene) { position: relative; z-index: 1; }
-    .final-scene { position: absolute; left: 0; right: 0; bottom: 0; height: 150px; pointer-events: none; }
-    .final-scene svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+    .final-scene { position: absolute; left: 0; right: 0; bottom: 0; height: 170px; pointer-events: none; }
+    .final-scene > svg { position: absolute; inset: 0; width: 100%; height: 100%; }
     .final-scene .sun { animation: glow 6s ease-in-out infinite; }
     @keyframes glow { 0%, 100% { opacity: .7; } 50% { opacity: 1; } }
-    .final-bird { position: absolute; right: 14%; bottom: 74px; height: 100px; width: auto; transform: scaleX(-1); transform-origin: 50% 100%; }
+    /* El árbol y el gallito comparten un mismo cuadro: el ave siempre calza sobre la rama */
+    .final-tree { position: absolute; right: 4%; bottom: 0; width: 270px; height: 300px; }
+    .final-tree svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+    .final-bird { position: absolute; left: 11.1%; top: 22%; width: 37%; height: auto; transform: scaleX(-1); transform-origin: 50% 100%; }
     .final.in .final-bird { animation: breathe 4.5s 1.4s ease-in-out infinite; }
     @keyframes breathe { 0%, 100% { transform: scaleX(-1) scaleY(1); } 50% { transform: scaleX(-1) scaleY(1.035); } }
     .js .final .hill { transform: translateY(46px); transition: transform 1.1s cubic-bezier(.2, .8, .2, 1) var(--hd, 0ms); }
     .js .final.in .hill { transform: none; }
+    .js .final .final-tree { opacity: 0; transform: translateY(24px); transition: opacity .9s ease .35s, transform 1.1s cubic-bezier(.2, .8, .2, 1) .35s; }
+    .js .final.in .final-tree { opacity: 1; transform: none; }
     .js .final .sun-wrap { opacity: 0; transition: opacity 1.4s ease .2s; }
     .js .final.in .sun-wrap { opacity: 1; }
     .js .final .final-bird { opacity: 0; transition: opacity .6s ease .9s; }
     .js .final.in .final-bird { opacity: 1; }
     @media (max-width: 719px) {
-      .final { padding-bottom: 150px; }
-      .final-scene { height: 116px; }
-      .final-bird { height: 74px; bottom: 58px; right: 8%; }
+      .final { padding-bottom: 170px; }
+      .final-scene { height: 130px; }
+      .final-tree { right: 0; width: 169px; height: 188px; }
     }
 
     @media (prefers-reduced-motion: reduce) {
-      .js .reveal, .js .final .hill, .js .final .sun-wrap, .js .final .final-bird { opacity: 1; transform: none; }
+      .js .reveal, .js .final .hill, .js .final .final-tree, .js .final .sun-wrap, .js .final .final-bird { opacity: 1; transform: none; }
       .final-bird { transform: scaleX(-1); }
       *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
     }
     .btn-play { background:#fff; color:var(--teal, #08817e); border:2px solid #08817e; cursor:pointer; font:inherit; font-weight:700; padding:14px 22px; }
+    /* Chat de ayuda */
+    .help-launcher { position: fixed; right: 18px; bottom: 18px; z-index: 40; display: inline-flex; align-items: center; gap: 8px;
+      padding: 13px 18px; border: 0; border-radius: 999px; background: var(--indigo); color: #fff; font: inherit; font-weight: 700;
+      cursor: pointer; box-shadow: 0 12px 28px -10px rgba(30, 31, 71, .55); }
+    .help-launcher svg { width: 20px; height: 20px; }
+    .help-launcher[hidden], .help-panel[hidden] { display: none; }
+    .help-panel { position: fixed; right: 18px; bottom: 84px; z-index: 41; width: min(380px, calc(100vw - 36px));
+      height: min(560px, calc(100vh - 110px)); display: flex; flex-direction: column; background: #fff; border-radius: 22px;
+      box-shadow: 0 24px 70px -18px rgba(30, 31, 71, .45); overflow: hidden; }
+    .help-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 18px;
+      background: linear-gradient(135deg, var(--teal), var(--indigo)); color: #fff; }
+    .help-head h2 { font-size: 18px; color: #fff; }
+    .help-head p { font-size: 13px; color: #D5F0EE; }
+    .help-close { background: none; border: 0; color: #fff; font-size: 28px; line-height: 1; cursor: pointer; padding: 4px 8px; }
+    .help-messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; background: #F7F8F6; }
+    .help-msg { max-width: 86%; padding: 10px 14px; border-radius: 16px; font-size: 15px; line-height: 1.45; white-space: pre-wrap; }
+    .help-assistant { align-self: flex-start; background: #fff; color: var(--ink); border: 1px solid var(--line); border-bottom-left-radius: 6px; }
+    .help-user { align-self: flex-end; background: var(--teal); color: #fff; border-bottom-right-radius: 6px; }
+    .help-typing { color: var(--muted); font-style: italic; }
+    .help-error { background: #FDECEC; border-color: #F3C4C4; color: #8A1F1F; }
+    .help-suggestions { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 16px 12px; background: #F7F8F6; }
+    .help-suggestions button { font: inherit; font-size: 14px; padding: 7px 12px; border-radius: 999px; border: 1px solid var(--teal);
+      background: #fff; color: var(--teal); cursor: pointer; }
+    .help-form { display: flex; gap: 8px; padding: 12px 12px 6px; border-top: 1px solid var(--line); }
+    .help-form input { flex: 1; min-width: 0; font: inherit; font-size: 15px; padding: 11px 14px; border: 1px solid #C9D3D1; border-radius: 999px; }
+    .help-form button { width: 44px; height: 44px; flex: none; border: 0; border-radius: 50%; background: var(--teal); color: #fff; cursor: pointer;
+      display: grid; place-items: center; }
+    .help-form button:disabled { opacity: .5; cursor: wait; }
+    .help-form button svg { width: 20px; height: 20px; }
+    .help-note { font-size: 12px; color: var(--muted); padding: 0 16px 12px; }
+    .help-note a { color: var(--teal); }
+    .help-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+    @media (max-width: 519px) {
+      .help-panel { right: 0; left: 0; bottom: 0; width: 100%; height: min(86vh, 640px); border-radius: 22px 22px 0 0; }
+      body.help-open .help-launcher { display: none; }
+    }
     .tester-dialog { border:0; border-radius:24px; padding:28px; width:min(92vw,500px); color:#243c3c; box-shadow:0 24px 80px #0003; }
     .tester-dialog::backdrop { background:#163c3cbc; }
     .tester-dialog h2 { margin:0 0 14px; font-size:26px; }
@@ -344,7 +390,7 @@
         <a href="#conductores">Conductores</a>
         <a href="#zonas">Zonas</a>
         <a href="#instalar">Instalar</a>
-        <a class="btn btn-sm" href="/descargar" data-download>Descargar</a>
+        <button class="btn btn-sm" type="button" data-testers>Descargar</button>
       </nav>
     </div>
   </header>
@@ -357,12 +403,11 @@
           <h1>Tu mototaxi,<br><em>a un toque.</em></h1>
           <p class="lede">Pide un mototaxi desde tu celular, ve cuánto cuesta antes de pedir y míralo llegar en el mapa. Pagas en efectivo o con Yape/Plin. La app es gratis.</p>
           <div class="cta">
-            <a class="btn btn-download" href="/descargar" data-download>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
-              Descargar para Android
-            </a>
-            <button class="btn btn-play" type="button" data-testers>Probar en Google Play</button>
-            <div class="meta" data-apk-meta><span>Android 7 o superior</span><span>Archivo APK</span></div>
+            <button class="btn btn-download" type="button" data-testers>
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5 3.5v17a1 1 0 0 0 1.5.87l14.5-8.5a1 1 0 0 0 0-1.74L6.5 2.63A1 1 0 0 0 5 3.5z"/></svg>
+              Descargar en Google Play
+            </button>
+            <a class="apk-link" href="/descargar" data-download>¿No usas Play Store? Descarga el APK</a>
             <p class="platform-note" data-ios-note>Intu por ahora es solo para Android. Abre esta página desde un celular Android para descargarla.</p>
           </div>
           <div class="trust">
@@ -474,7 +519,7 @@
                 <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg>Ve tus ganancias del día, de la semana y del mes.</li>
                 <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg>Solo necesitas tu DNI, tu licencia y los datos de tu mototaxi.</li>
               </ul>
-              <div><a class="btn btn-light" href="/descargar" data-download>Descargar la app</a></div>
+              <div><button class="btn btn-light" type="button" data-testers>Descargar la app</button></div>
             </div>
             <div class="drivers-photo">
               <img src="/img/conductor-rionegro-900.webp" srcset="/img/conductor-rionegro-560.webp 560w, /img/conductor-rionegro-900.webp 900w" sizes="(min-width: 900px) 42vw, 100vw" width="900" height="1117" loading="lazy" alt="Conductor de mototaxi sonriendo con su celular junto a su torito turquesa y blanco, en la plaza de Río Negro">
@@ -489,22 +534,27 @@
         <div class="section-head reveal">
           <span class="eyebrow">Instalar</span>
           <h2>Instálala en 1 minuto</h2>
-          <p>Estos pasos son para instalar el APK desde esta página. También puedes registrar tu correo en «Probar en Google Play» y unirte al grupo de testers.</p>
+          <p>Instálala desde Google Play: así se actualiza sola. Durante las pruebas te unes con tu cuenta de Google en tres pasos.</p>
         </div>
         <div class="install-grid">
           <div style="display: grid; gap: 14px;">
             <ol class="install-steps">
-              <li class="reveal"><div><b>Toca «Descargar»</b><p>Si Chrome te pregunta, elige «Descargar de todos modos».</p></div></li>
-              <li class="reveal"><div><b>Abre el archivo Intu.apk</b><p>Tócalo en la notificación de descarga o en tu carpeta de Descargas.</p></div></li>
-              <li class="reveal"><div><b>Permite la instalación</b><p>Si aparece «Instalar apps desconocidas», toca «Configuración», activa «Permitir de esta fuente» y vuelve atrás.</p></div></li>
-              <li class="reveal"><div><b>Toca «Instalar» y abre Intu</b><p>Si Play Protect muestra un aviso, toca «Más detalles» y luego «Instalar de todos modos». Entra con tu número de celular o con Google.</p></div></li>
+              <li class="reveal"><div><b>Toca «Descargar en Google Play»</b><p>Escribe el correo de la cuenta de Google que usas en Play Store.</p></div></li>
+              <li class="reveal"><div><b>Únete al grupo de testers</b><p>Toca «Unirme al grupo» y confirma con esa misma cuenta. Es gratis y no tienes que esperar aprobación.</p></div></li>
+              <li class="reveal"><div><b>Instala desde Play Store</b><p>Toca «Participar e instalar en Play», acepta ser tester y luego toca «Instalar».</p></div></li>
+              <li class="reveal"><div><b>Abre Intu</b><p>Entra con tu número de celular o con Google.</p></div></li>
             </ol>
-            <p class="tip reveal"><b>Para actualizar:</b> descarga Intu de nuevo desde esta página e instálala encima. No pierdes tu cuenta ni tus viajes.</p>
+            <p class="tip reveal"><b>Para actualizar:</b> Play Store actualiza Intu sola y la app te avisa cuando hay una versión nueva. No pierdes tu cuenta ni tus viajes.</p>
+            <details class="reveal">
+              <summary>¿No usas Play Store? Instala el APK</summary>
+              <p>Toca «Descarga el APK» y, si Chrome pregunta, elige «Descargar de todos modos». Abre el archivo Intu.apk; si aparece «Instalar apps desconocidas», toca «Configuración», activa «Permitir de esta fuente» y vuelve atrás. Toca «Instalar»; si Play Protect muestra un aviso, toca «Más detalles» y luego «Instalar de todos modos». Para actualizar, descárgala de nuevo desde esta página e instálala encima.</p>
+              <p><a class="apk-link" href="/descargar" data-download>Descarga el APK</a></p>
+            </details>
           </div>
           <aside class="qr-card reveal" aria-label="Código QR para descargar">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 29 29" shape-rendering="crispEdges" role="img" aria-label="Código QR de viajaconintu.pages.dev/descargar"><path stroke="#1E1F47" d="M0 0.5h7m4 0h1m2 0h1m1 0h1m1 0h3m1 0h7M0 1.5h1m5 0h1m2 0h2m2 0h1m1 0h2m1 0h1m3 0h1m5 0h1M0 2.5h1m1 0h3m1 0h1m1 0h1m1 0h3m2 0h1m6 0h1m1 0h3m1 0h1M0 3.5h1m1 0h3m1 0h1m1 0h4m1 0h3m1 0h1m2 0h1m1 0h1m1 0h3m1 0h1M0 4.5h1m1 0h3m1 0h1m1 0h3m5 0h1m1 0h3m1 0h1m1 0h3m1 0h1M0 5.5h1m5 0h1m1 0h1m1 0h2m1 0h5m4 0h1m5 0h1M0 6.5h7m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h7M8 7.5h1m1 0h1m1 0h1m1 0h1m4 0h2M0 8.5h1m1 0h5m3 0h1m1 0h4m1 0h1m1 0h1m2 0h5M2 9.5h2m1 0h1m1 0h1m4 0h1m3 0h1m1 0h2m1 0h4m3 0h1M0 10.5h4m2 0h1m1 0h3m4 0h2m3 0h2M0 11.5h2m2 0h2m1 0h1m2 0h1m1 0h1m1 0h1m5 0h1m4 0h1m1 0h1M4 12.5h1m1 0h3m2 0h7m2 0h1m4 0h2M0 13.5h3m1 0h1m3 0h2m2 0h1m1 0h1m1 0h1m2 0h6m3 0h1M1 14.5h2m3 0h1m1 0h1m1 0h4m1 0h4m2 0h1m1 0h4M1 15.5h2m2 0h1m1 0h1m1 0h3m3 0h2m3 0h1m1 0h1m1 0h1m2 0h1M2 16.5h3m1 0h1m1 0h1m1 0h3m2 0h1m1 0h2m1 0h1m4 0h2M0 17.5h1m3 0h2m1 0h3m2 0h2m2 0h9m1 0h1m1 0h1M0 18.5h1m1 0h1m1 0h4m1 0h7m1 0h1m4 0h3m1 0h1M0 19.5h1m8 0h1m1 0h1m1 0h1m1 0h2m1 0h3m1 0h1m4 0h1M0 20.5h1m1 0h6m2 0h3m1 0h2m1 0h1m1 0h6m1 0h3M8 21.5h2m1 0h1m4 0h1m1 0h1m1 0h1m3 0h5M0 22.5h7m3 0h3m2 0h2m2 0h2m1 0h1m1 0h3M0 23.5h1m5 0h1m1 0h1m1 0h3m1 0h1m1 0h1m1 0h3m3 0h1m2 0h1M0 24.5h1m1 0h3m1 0h1m1 0h1m1 0h3m4 0h1m2 0h5m1 0h3M0 25.5h1m1 0h3m1 0h1m1 0h3m1 0h3m3 0h2m5 0h4M0 26.5h1m1 0h3m1 0h1m1 0h4m1 0h1m1 0h1m4 0h8M0 27.5h1m5 0h1m3 0h5m1 0h1m3 0h1m1 0h1m2 0h1m1 0h1M0 28.5h7m1 0h1m1 0h1m1 0h1m1 0h4m1 0h1m1 0h6"/></svg>
             <h3>¿Estás en la computadora?</h3>
-            <p>Escanea este código con la cámara de tu celular Android para descargar Intu.</p>
+            <p>Escanea este código con la cámara de tu celular Android para descargar el APK. Para Google Play, abre esta página desde tu celular.</p>
           </aside>
         </div>
       </div>
@@ -523,7 +573,7 @@
           </details>
           <details class="reveal">
             <summary>¿Cómo participo en las pruebas de Google Play?</summary>
-            <p>Pulsa «Probar en Google Play», registra tu correo y únete libremente al grupo de testers con la cuenta que usas en Play Store. Estamos preparando la publicación de la prueba; mientras tanto, la descarga del APK sigue disponible aquí.</p>
+            <p>Pulsa «Descargar en Google Play», registra tu correo y únete libremente al grupo de testers con la cuenta que usas en Play Store. Luego instala Intu desde Play Store. Si no usas Play Store, puedes descargar el APK desde esta página.</p>
           </details>
           <details class="reveal">
             <summary>¿Funciona en iPhone?</summary>
@@ -550,19 +600,35 @@
         <div class="final reveal">
           <h2>Tu próximo viaje en Satipo empieza aquí</h2>
           <p>Descarga Intu y pide tu primer mototaxi en minutos.</p>
-          <a class="btn btn-light" href="/descargar" data-download>Descargar gratis para Android</a>
-          <div class="meta" data-apk-meta><span>Android 7 o superior</span><span>Archivo APK</span></div>
+          <button class="btn btn-light" type="button" data-testers>Descargar gratis en Google Play</button>
+          <a class="apk-link" href="/descargar" data-download>¿No usas Play Store? Descarga el APK</a>
           <div class="final-scene" aria-hidden="true">
-            <svg viewBox="0 0 300 120" preserveAspectRatio="none">
-              <defs>
-                <radialGradient id="final-sun"><stop offset="0" stop-color="#EFB11B" stop-opacity=".55"/><stop offset="1" stop-color="#EFB11B" stop-opacity="0"/></radialGradient>
-              </defs>
-              <g class="sun-wrap"><ellipse class="sun" cx="120" cy="40" rx="90" ry="60" fill="url(#final-sun)"/></g>
-              <path class="hill" style="--hd: 0ms" d="M0,50 C55,22 105,34 150,18 C200,2 245,24 300,10 L300,120 L0,120 Z" fill="#fff" fill-opacity=".08"/>
-              <path class="hill" style="--hd: 120ms" d="M0,78 C48,58 95,70 140,54 C188,38 236,66 300,50 L300,120 L0,120 Z" fill="#076966"/>
-              <path class="hill" style="--hd: 240ms" d="M0,104 C65,86 112,104 178,90 C225,80 262,94 300,88 L300,120 L0,120 Z" fill="#055755"/>
+            <svg viewBox="0 0 1200 220" preserveAspectRatio="xMidYMax slice">
+            <defs><radialGradient id="final-sun"><stop offset="0" stop-color="#EFB11B" stop-opacity=".55"/><stop offset="1" stop-color="#EFB11B" stop-opacity="0"/></radialGradient></defs>
+            <g class="sun-wrap"><ellipse class="sun" cx="430" cy="70" rx="300" ry="120" fill="url(#final-sun)"/></g>
+            <path class="hill" style="--hd: 0ms" d="M0,96 C110,58 210,80 320,56 C430,32 520,74 650,52 C770,30 860,70 980,50 C1080,34 1150,52 1200,44 L1200,220 L0,220 Z" fill="#fff" fill-opacity=".07"/>
+            <g class="hill" style="--hd: 80ms" fill="#5FC2A2" fill-opacity=".22"><rect x="0" y="118" width="1200" height="102"/><circle cx="-20" cy="112.6" r="13"/><circle cx="1.5" cy="114.2" r="15.3"/><circle cx="25.9" cy="114" r="16.6"/><circle cx="52.9" cy="114.5" r="19"/><circle cx="78.6" cy="118.1" r="22"/><circle cx="101" cy="114.4" r="20.8"/><circle cx="119.7" cy="116.3" r="20.5"/><circle cx="148.8" cy="119" r="21.9"/><circle cx="172.9" cy="114.5" r="23.2"/><circle cx="198.6" cy="112.7" r="19.4"/><circle cx="227.5" cy="117.3" r="17.1"/><circle cx="255.6" cy="118.8" r="16.7"/><circle cx="277.2" cy="117.6" r="17.7"/><circle cx="306.4" cy="114.2" r="19.1"/><circle cx="334.9" cy="117.8" r="13.6"/><circle cx="359.7" cy="116.6" r="18.6"/><circle cx="380" cy="119.6" r="23"/><circle cx="402.4" cy="114.7" r="16.8"/><circle cx="431.5" cy="118.7" r="18.7"/><circle cx="454.3" cy="117.1" r="16.1"/><circle cx="477.4" cy="115.7" r="16.7"/><circle cx="502.8" cy="112.7" r="15.6"/><circle cx="526.3" cy="114.9" r="22.5"/><circle cx="551.9" cy="116" r="18.7"/><circle cx="578.2" cy="116.8" r="23.3"/><circle cx="604.7" cy="115.3" r="15.8"/><circle cx="626.9" cy="116.9" r="16.6"/><circle cx="654.4" cy="119.1" r="22.7"/><circle cx="682.2" cy="116.7" r="13.9"/><circle cx="702.1" cy="112" r="13.9"/><circle cx="722.7" cy="118.8" r="20"/><circle cx="746.2" cy="118.9" r="19.5"/><circle cx="775.3" cy="112.9" r="22.7"/><circle cx="803.9" cy="113.9" r="23"/><circle cx="825.2" cy="118" r="13.1"/><circle cx="844.1" cy="115.1" r="13"/><circle cx="864.9" cy="116.1" r="21.2"/><circle cx="891.1" cy="112.9" r="15.6"/><circle cx="912" cy="112.8" r="17.1"/><circle cx="931.4" cy="120" r="18.4"/><circle cx="960.3" cy="112.6" r="20"/><circle cx="978.6" cy="118.5" r="22.9"/><circle cx="1008.2" cy="114.6" r="19.2"/><circle cx="1029.4" cy="118.3" r="15.5"/><circle cx="1054.2" cy="113.8" r="13.6"/><circle cx="1080.6" cy="116" r="20.9"/><circle cx="1099" cy="112.6" r="14.2"/><circle cx="1118.5" cy="112.9" r="20.6"/><circle cx="1137" cy="113.1" r="22.7"/><circle cx="1166.9" cy="113.9" r="23.5"/><circle cx="1189.9" cy="114.2" r="15.7"/><circle cx="1218.5" cy="118.1" r="17.4"/></g>
+            <g class="hill" style="--hd: 160ms"><g fill="#0D7563"><rect x="0" y="150" width="1200" height="70"/><circle cx="-20" cy="146.4" r="28.4"/><circle cx="7.8" cy="144.7" r="24.7"/><circle cx="35.3" cy="147.8" r="26.2"/><circle cx="60.8" cy="142.1" r="20.4"/><circle cx="98.2" cy="143.3" r="24.9"/><circle cx="134.5" cy="145.5" r="18.8"/><circle cx="159" cy="146.4" r="23"/><circle cx="193.1" cy="147.2" r="29.2"/><circle cx="218.4" cy="150.3" r="22.3"/><circle cx="250.8" cy="146.4" r="23.3"/><circle cx="280.9" cy="148.4" r="26.6"/><circle cx="314.7" cy="149" r="16.4"/><circle cx="345.3" cy="144.8" r="18.8"/><circle cx="372.2" cy="145.4" r="19.3"/><circle cx="401.1" cy="144.3" r="17.1"/><circle cx="435.9" cy="142.9" r="28.8"/><circle cx="468.7" cy="151.7" r="29.4"/><circle cx="502.6" cy="144.8" r="24.4"/><circle cx="538.6" cy="150.6" r="16.5"/><circle cx="562.3" cy="151.2" r="17.5"/><circle cx="584.9" cy="142.5" r="24.5"/><circle cx="610.3" cy="150" r="17.9"/><circle cx="642.9" cy="147.4" r="19.4"/><circle cx="680.3" cy="145.3" r="21.9"/><circle cx="714.4" cy="147.8" r="21.6"/><circle cx="737.9" cy="143.9" r="19.2"/><circle cx="775" cy="142.7" r="18.1"/><circle cx="805.1" cy="149.9" r="17.7"/><circle cx="836.6" cy="151.2" r="18.4"/><circle cx="863.2" cy="146.4" r="25.1"/><circle cx="892.9" cy="151.2" r="29.9"/><circle cx="921.6" cy="152" r="20.4"/><circle cx="944.2" cy="151.1" r="21.8"/><circle cx="970.2" cy="144.2" r="28.9"/><circle cx="1004.2" cy="143.5" r="22.1"/><circle cx="1041.1" cy="145.4" r="27.2"/><circle cx="1072.2" cy="147.9" r="20.9"/><circle cx="1102.2" cy="146.3" r="22.9"/><circle cx="1135.5" cy="145.7" r="25.3"/><circle cx="1168.9" cy="143.5" r="28.4"/><circle cx="1206.3" cy="147.1" r="22.1"/></g><g fill="#0A6455"><path d="M90,158 Q92,112.9 100,76" stroke="#0A6455" stroke-width="5" fill="none" stroke-linecap="round"/><path d="M100,76 Q75.5,57.7 51,81.5 Q75.5,70.7 100,76Z"/><path d="M100,76 Q83.3,48 66.6,67 Q83.3,61 100,76Z"/><path d="M100,76 Q92.4,43.1 84.7,59.6 Q92.4,56.1 100,76Z"/><path d="M100,76 Q101.5,40.3 103,55.5 Q101.5,53.3 100,76Z"/><path d="M100,76 Q112.2,40.9 124.4,56.3 Q112.2,53.9 100,76Z"/><path d="M100,76 Q119.5,48.8 139,68.3 Q119.5,61.8 100,76Z"/><path d="M100,76 Q123.5,58.7 146.9,83.1 Q123.5,71.7 100,76Z"/></g><g fill="#0A6455"><path d="M360,160 Q357.6,107.2 348,64" stroke="#0A6455" stroke-width="5" fill="none" stroke-linecap="round"/><path d="M348,64 Q323.6,45.7 299.2,69.5 Q323.6,58.7 348,64Z"/><path d="M348,64 Q329.7,34.6 311.3,52.9 Q329.7,47.6 348,64Z"/><path d="M348,64 Q340.1,30.5 332.2,46.7 Q340.1,43.5 348,64Z"/><path d="M348,64 Q349.5,28.9 351,44.3 Q349.5,41.9 348,64Z"/><path d="M348,64 Q360,29.2 372,44.8 Q360,42.2 348,64Z"/><path d="M348,64 Q365,38.5 382,58.8 Q365,51.5 348,64Z"/><path d="M348,64 Q372.3,46.6 396.7,70.9 Q372.3,59.6 348,64Z"/></g><g fill="#0A6455"><path d="M610,160 Q611.6,119.3 618,86" stroke="#0A6455" stroke-width="5" fill="none" stroke-linecap="round"/><path d="M618,86 Q594.4,67.8 570.7,91.7 Q594.4,80.8 618,86Z"/><path d="M618,86 Q600.2,57.1 582.5,75.7 Q600.2,70.1 618,86Z"/><path d="M618,86 Q609.2,50.2 600.4,65.2 Q609.2,63.2 618,86Z"/><path d="M618,86 Q619.6,49.4 621.2,64.1 Q619.6,62.4 618,86Z"/><path d="M618,86 Q629.1,52.8 640.2,69.1 Q629.1,65.8 618,86Z"/><path d="M618,86 Q638.2,58.4 658.4,77.6 Q638.2,71.4 618,86Z"/><path d="M618,86 Q640.6,68.8 663.2,93.2 Q640.6,81.8 618,86Z"/></g><g fill="#0A6455"><path d="M880,160 Q878.4,110.5 872,70" stroke="#0A6455" stroke-width="5" fill="none" stroke-linecap="round"/><path d="M872,70 Q848,51.8 824,75.7 Q848,64.8 872,70Z"/><path d="M872,70 Q855.6,42.3 839.3,61.4 Q855.6,55.3 872,70Z"/><path d="M872,70 Q863.2,34.3 854.4,49.4 Q863.2,47.3 872,70Z"/><path d="M872,70 Q873.5,33.9 875.1,48.8 Q873.5,46.9 872,70Z"/><path d="M872,70 Q883,37 894,53.5 Q883,50 872,70Z"/><path d="M872,70 Q889.4,44.3 906.7,64.4 Q889.4,57.3 872,70Z"/><path d="M872,70 Q894.7,52.8 917.4,77.2 Q894.7,65.8 872,70Z"/></g><g fill="#0A6455"><path d="M1120,160 Q1122,116 1130,80" stroke="#0A6455" stroke-width="5" fill="none" stroke-linecap="round"/><path d="M1130,80 Q1109.2,62.3 1088.3,86.5 Q1109.2,75.3 1130,80Z"/><path d="M1130,80 Q1111.2,50.3 1092.5,68.4 Q1111.2,63.3 1130,80Z"/><path d="M1130,80 Q1121,43.6 1111.9,58.5 Q1121,56.6 1130,80Z"/><path d="M1130,80 Q1131.5,44.4 1133,59.5 Q1131.5,57.4 1130,80Z"/><path d="M1130,80 Q1141.7,45.7 1153.4,61.6 Q1141.7,58.7 1130,80Z"/><path d="M1130,80 Q1150.2,52.4 1170.4,71.5 Q1150.2,65.4 1130,80Z"/><path d="M1130,80 Q1150.4,63.1 1170.8,87.7 Q1150.4,76.1 1130,80Z"/></g></g>
+            <g class="hill" style="--hd: 240ms" fill="#085B4E"><rect x="0" y="184" width="1200" height="36"/><circle cx="-20" cy="176.8" r="22.9"/><circle cx="8.5" cy="182" r="20.1"/><circle cx="37.4" cy="177" r="29.1"/><circle cx="69.2" cy="176.5" r="21.4"/><circle cx="111" cy="184.8" r="20.8"/><circle cx="151.4" cy="177.9" r="18.3"/><circle cx="191.2" cy="184.7" r="30"/><circle cx="226" cy="176.4" r="29.4"/><circle cx="264.9" cy="178.2" r="27.4"/><circle cx="306.7" cy="180" r="29.7"/><circle cx="337.1" cy="179.9" r="18.7"/><circle cx="369.9" cy="183.5" r="27.3"/><circle cx="402.6" cy="179.7" r="27.9"/><circle cx="446.6" cy="176.9" r="21.8"/><circle cx="476.1" cy="181.9" r="29.1"/><circle cx="519.6" cy="178" r="28.6"/><circle cx="550.1" cy="181" r="32.7"/><circle cx="594.2" cy="177.3" r="24.8"/><circle cx="637.8" cy="176.9" r="29.6"/><circle cx="682.6" cy="178.8" r="21"/><circle cx="714" cy="176.5" r="20"/><circle cx="760.7" cy="185.2" r="18.9"/><circle cx="794.1" cy="177.3" r="33.1"/><circle cx="840.8" cy="184" r="22.4"/><circle cx="869.9" cy="180.4" r="25.5"/><circle cx="901.1" cy="181.2" r="23.2"/><circle cx="933.9" cy="185.6" r="18.9"/><circle cx="964.1" cy="181.3" r="28.1"/><circle cx="1008" cy="180.9" r="29.6"/><circle cx="1049.8" cy="179.9" r="24.2"/><circle cx="1096.6" cy="176.4" r="30.3"/><circle cx="1138.7" cy="178" r="27.7"/><circle cx="1170.4" cy="178.7" r="19"/><circle cx="1211.2" cy="180.6" r="24.9"/></g>
+            <g class="hill" style="--hd: 320ms"><path d="M0,206 C140,196 300,210 460,200 C640,190 820,208 1000,198 C1090,194 1150,200 1200,198 L1200,220 L0,220 Z" fill="#05473F"/><g fill="#04574A"><path d="M39.88888191519719,210 Q24.7,197.2 26.1,202.1 Q30.7,200.2 39.88888191519719,210Z"/><path d="M39.88888191519719,210 Q27.3,193.7 31.9,196.2 Q33.3,196.7 39.88888191519719,210Z"/><path d="M39.88888191519719,210 Q42.2,191.2 38.3,192 Q48.2,194.2 39.88888191519719,210Z"/><path d="M39.88888191519719,210 Q45.7,191.8 46.1,193.1 Q51.7,194.8 39.88888191519719,210Z"/><path d="M39.88888191519719,210 Q48.7,195.5 52.8,199.1 Q54.7,198.5 39.88888191519719,210Z"/><path d="M162.7983880847685,210 Q147.6,197.3 149.1,202.1 Q153.6,200.3 162.7983880847685,210Z"/><path d="M162.7983880847685,210 Q150.3,194 155.1,196.6 Q156.3,197 162.7983880847685,210Z"/><path d="M162.7983880847685,210 Q164.9,188.9 160.9,188.2 Q170.9,191.9 162.7983880847685,210Z"/><path d="M162.7983880847685,210 Q169.2,189.5 170.4,189.2 Q175.2,192.5 162.7983880847685,210Z"/><path d="M162.7983880847685,210 Q171.2,195.9 174.9,199.9 Q177.2,198.9 162.7983880847685,210Z"/><path d="M275.36302519746266,210 Q258.4,195.9 257.7,199.8 Q264.4,198.9 275.36302519746266,210Z"/><path d="M275.36302519746266,210 Q260.8,189.2 263,188.7 Q266.8,192.2 275.36302519746266,210Z"/><path d="M275.36302519746266,210 Q277.4,187.8 273.3,186.4 Q283.4,190.8 275.36302519746266,210Z"/><path d="M275.36302519746266,210 Q281,192.4 281.2,194 Q287,195.4 275.36302519746266,210Z"/><path d="M275.36302519746266,210 Q287.1,192.2 294.8,193.7 Q293.1,195.2 275.36302519746266,210Z"/><path d="M414.10976718371256,210 Q395.9,194.9 393.6,198.1 Q401.9,197.9 414.10976718371256,210Z"/><path d="M414.10976718371256,210 Q400.6,191.7 404.2,192.8 Q406.6,194.7 414.10976718371256,210Z"/><path d="M414.10976718371256,210 Q416.3,189.3 412.3,188.9 Q422.3,192.3 414.10976718371256,210Z"/><path d="M414.10976718371256,210 Q421.3,186.8 423.3,184.7 Q427.3,189.8 414.10976718371256,210Z"/><path d="M414.10976718371256,210 Q426.4,191.6 434.7,192.7 Q432.4,194.6 414.10976718371256,210Z"/><path d="M534.9822782748296,210 Q514.3,193 509.1,195 Q520.3,196 534.9822782748296,210Z"/><path d="M534.9822782748296,210 Q520.4,189.2 522.7,188.7 Q526.4,192.2 534.9822782748296,210Z"/><path d="M534.9822782748296,210 Q537,186.4 532.7,184 Q543,189.4 534.9822782748296,210Z"/><path d="M534.9822782748296,210 Q541.7,188.2 543.3,187 Q547.7,191.2 534.9822782748296,210Z"/><path d="M534.9822782748296,210 Q546.2,192.8 553.3,194.6 Q552.2,195.8 534.9822782748296,210Z"/><path d="M657.6305944368386,210 Q637.5,193.4 632.9,195.7 Q643.5,196.4 657.6305944368386,210Z"/><path d="M657.6305944368386,210 Q642.6,188.1 644.3,186.9 Q648.6,191.1 657.6305944368386,210Z"/><path d="M657.6305944368386,210 Q659.4,183.7 655,179.5 Q665.4,186.7 657.6305944368386,210Z"/><path d="M657.6305944368386,210 Q665.3,185 667.9,181.7 Q671.3,188 657.6305944368386,210Z"/><path d="M657.6305944368386,210 Q671,190.4 680.6,190.7 Q677,193.4 657.6305944368386,210Z"/><path d="M805.2138636890863,210 Q784.6,193.1 779.4,195.1 Q790.6,196.1 805.2138636890863,210Z"/><path d="M805.2138636890863,210 Q790.5,188.8 792.6,188.1 Q796.5,191.8 805.2138636890863,210Z"/><path d="M805.2138636890863,210 Q807,184 802.6,180.1 Q813,187 805.2138636890863,210Z"/><path d="M805.2138636890863,210 Q812.2,187.5 814,185.8 Q818.2,190.5 805.2138636890863,210Z"/><path d="M805.2138636890863,210 Q819.2,189.8 829.5,189.6 Q825.2,192.8 805.2138636890863,210Z"/><path d="M903.2591721803226,210 Q883.3,193.6 878.9,195.9 Q889.3,196.6 903.2591721803226,210Z"/><path d="M903.2591721803226,210 Q887.6,186.5 888.4,184.2 Q893.6,189.5 903.2591721803226,210Z"/><path d="M903.2591721803226,210 Q905.2,186.4 901,184 Q911.2,189.4 903.2591721803226,210Z"/><path d="M903.2591721803226,210 Q910.8,185.3 913.4,182.2 Q916.8,188.3 903.2591721803226,210Z"/><path d="M903.2591721803226,210 Q916.6,190.5 926.2,190.8 Q922.6,193.5 903.2591721803226,210Z"/><path d="M1040.8511118222266,210 Q1024.9,196.6 1025.4,201.1 Q1030.9,199.6 1040.8511118222266,210Z"/><path d="M1040.8511118222266,210 Q1028.2,193.5 1032.6,195.8 Q1034.2,196.5 1040.8511118222266,210Z"/><path d="M1040.8511118222266,210 Q1043,189.5 1039,189.1 Q1049,192.5 1040.8511118222266,210Z"/><path d="M1040.8511118222266,210 Q1047.4,189.1 1048.7,188.5 Q1053.4,192.1 1040.8511118222266,210Z"/><path d="M1040.8511118222266,210 Q1051.2,193.8 1057.2,196.3 Q1057.2,196.8 1040.8511118222266,210Z"/><path d="M1187.0689182621747,210 Q1166.4,193 1161.1,195 Q1172.4,196 1187.0689182621747,210Z"/><path d="M1187.0689182621747,210 Q1172.8,189.8 1175.3,189.6 Q1178.8,192.8 1187.0689182621747,210Z"/><path d="M1187.0689182621747,210 Q1189,185.7 1184.7,182.8 Q1195,188.7 1187.0689182621747,210Z"/><path d="M1187.0689182621747,210 Q1194.1,187.2 1196,185.4 Q1200.1,190.2 1187.0689182621747,210Z"/><path d="M1187.0689182621747,210 Q1198.8,192.2 1206.6,193.6 Q1204.8,195.2 1187.0689182621747,210Z"/></g></g>
             </svg>
-            <img class="final-bird" src="/img/gallito-posado.webp" alt="" width="420" height="484" loading="lazy">
+            <div class="final-tree">
+              <svg viewBox="0 0 270 300">
+              <g fill="#0B5E4C"><circle cx="170" cy="70" r="60"/><circle cx="115" cy="82" r="40"/><circle cx="222" cy="92" r="40"/><circle cx="150" cy="30" r="40"/><circle cx="204" cy="34" r="36"/><circle cx="112" cy="120" r="26"/><circle cx="230" cy="140" r="24"/><circle cx="180" cy="126" r="34"/></g>
+              <g stroke="#0B5A48" stroke-width="2.2" fill="none" stroke-linecap="round"><path d="M112,140 C108,162 116,182 110,206"/><path d="M232,160 C236,184 228,204 232,232"/><path d="M204,150 C206,166 200,176 204,190"/></g>
+              <path d="M150,300 C144,291 128,295 116,300 Z M184,300 C190,289 206,293 218,300 Z" fill="#5A3A22"/>
+              <path d="M141,300 C146,250 150,200 147,150 C145,128 150,112 156,100 L168,104 C165,120 166,140 168,165 C171,210 172,255 182,300 Z" fill="#6E4A2C"/>
+              <path d="M160,110 C158,150 160,210 164,255 C166,272 170,288 175,300 L182,300 C172,256 171,210 168,165 C166,140 165,120 168,104 Z" fill="#583820"/>
+              <g fill="#0F7A5C"><circle cx="140" cy="66" r="32"/><circle cx="196" cy="72" r="32"/><circle cx="168" cy="34" r="26"/><circle cx="226" cy="108" r="22"/><circle cx="122" cy="102" r="22"/><circle cx="176" cy="112" r="24"/></g>
+              <g fill="#17946A"><circle cx="152" cy="48" r="15"/><circle cx="204" cy="56" r="13"/><circle cx="128" cy="84" r="11"/><circle cx="186" cy="96" r="11"/><circle cx="222" cy="120" r="8"/></g>
+              <path d="M150,214 C126,204 98,192 64,180 C50,175 36,170 26,165 L24,159 C38,162 52,166 66,171 C100,182 128,193 152,203 Z" fill="#6E4A2C"/>
+              <path d="M118,192 C110,182 104,176 100,168 L104,166 C108,173 114,180 122,189 Z" fill="#6E4A2C"/>
+              <g fill="#17946A"><ellipse cx="100" cy="162" rx="9" ry="4" transform="rotate(-35 100 162)"/><ellipse cx="108" cy="164" rx="8" ry="3.6" transform="rotate(20 108 164)"/><ellipse cx="30" cy="158" rx="8" ry="3.6" transform="rotate(-25 30 158)"/></g>
+              <g fill="#13855F"><path d="M170,236 C160,222 156,214 158,206 C164,214 168,222 172,232 Z"/><path d="M172,234 C176,220 182,212 188,208 C186,218 180,226 175,236 Z"/><path d="M171,236 C170,222 171,212 174,204 C176,214 176,224 174,236 Z"/></g>
+              </svg>
+              <img class="final-bird" src="/img/gallito-posado.webp" alt="" width="420" height="484" loading="lazy">
+            </div>
+          </div>
           </div>
         </div>
       </div>
@@ -580,6 +646,7 @@
   <dialog id="tester-dialog" class="tester-dialog" aria-labelledby="tester-title">
     <h2 id="tester-title">Prueba Intu en Google Play</h2>
     <p id="tester-notice" role="status">Comprobando acceso a las pruebas…</p>
+    <p id="tester-apk" hidden><a class="apk-link" href="/descargar" data-download>Descargar el APK</a></p>
     <form id="tester-form" hidden>
       <label for="tester-email">Tu correo de Google Play</label>
       <input id="tester-email" name="email" type="email" autocomplete="email" maxlength="254" required placeholder="tu@gmail.com">
@@ -594,12 +661,40 @@
       <a id="tester-group" class="btn btn-play" target="_blank" rel="noopener noreferrer">1. Unirme al grupo de testers</a>
       <p>En Google Groups pulsa «Unirme al grupo». No necesitas esperar aprobación.</p>
       <a id="tester-play" class="btn" target="_blank" rel="noopener noreferrer">2. Participar e instalar en Play</a>
-      <p id="tester-play-pending" hidden>La publicación de la prueba en Play sigue pendiente. Puedes unirte al grupo desde ahora y usar el botón de descarga del APK mientras tanto.</p>
+      <p id="tester-play-pending" hidden>La publicación de la prueba en Play sigue pendiente. Puedes unirte al grupo desde ahora y, mientras tanto, <a class="apk-link" href="/descargar" data-download>descargar el APK</a>.</p>
       <p>Primero debes unirte al grupo. Después, acepta participar en la prueba de Play. Registrar tu correo aquí no completa esos dos pasos.</p>
     </div>
     <button id="tester-close" class="tester-close" type="button">Cerrar</button>
   </dialog>
   <script src="/testers.js" defer></script>
+
+  <button id="help-launcher" class="help-launcher" type="button" aria-controls="help-panel" aria-expanded="false" hidden>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>
+    ¿Dudas?
+  </button>
+  <section id="help-panel" class="help-panel" role="dialog" aria-labelledby="help-title" hidden>
+    <header class="help-head">
+      <div><h2 id="help-title">Ayuda de Intu</h2><p>Respuestas automáticas, al toque</p></div>
+      <button id="help-close" class="help-close" type="button" aria-label="Cerrar el chat">×</button>
+    </header>
+    <div id="help-messages" class="help-messages" aria-live="polite">
+      <div class="help-msg help-assistant">¡Hola! Soy el asistente de Intu. Pregúntame cómo instalar la app, pedir un mototaxi o ser conductor.</div>
+    </div>
+    <div id="help-suggestions" class="help-suggestions">
+      <button type="button">¿Cómo instalo Intu?</button>
+      <button type="button">¿Cuánto cuesta un viaje?</button>
+      <button type="button">¿Cómo me hago conductor?</button>
+    </div>
+    <form id="help-form" class="help-form">
+      <label class="help-sr" for="help-input">Tu pregunta</label>
+      <input id="help-input" type="text" maxlength="1000" autocomplete="off" placeholder="Escribe tu pregunta" required>
+      <button id="help-send" type="submit" aria-label="Enviar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+      </button>
+    </form>
+    <p class="help-note">Responde una IA con la información de Intu. No escribas datos personales ni de pago. <a href="/privacidad" target="_blank" rel="noopener noreferrer">Privacidad</a></p>
+  </section>
+  <script src="/ayuda.js" defer></script>
   <script>
     // Borde del encabezado al bajar
     const header = document.querySelector('header');
@@ -668,22 +763,6 @@
       });
     }
     if (document.readyState === 'complete') setTimeout(introFlight, 350);
-    else addEventListener('load', () => setTimeout(introFlight, 350));
-
-    // Tamaño y fecha del APK publicado
-    fetch('/api/apk').then(r => r.ok ? r.json() : null).then(info => {
-      if (!info) return;
-      const size = (info.size / 1048576).toFixed(0) + ' MB';
-      const date = new Date(info.uploaded).toLocaleDateString('es-PE', { day: 'numeric', month: 'long', year: 'numeric' });
-      document.querySelectorAll('[data-apk-meta]').forEach(el => {
-        el.innerHTML = '';
-        for (const text of ['Android 7 o superior', size, 'Actualizada el ' + date]) {
-          const span = document.createElement('span');
-          span.textContent = text;
-          el.appendChild(span);
-        }
-      });
-    }).catch(() => {});
-  </script>
+    else addEventListener('load', () => setTimeout(introFlight, 350));  </script>
 </body>
 </html>

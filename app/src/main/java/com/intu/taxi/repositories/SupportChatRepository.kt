@@ -17,7 +17,12 @@ data class SupportChatAdmin(
     val questions30d: Int,
     val people30d: Int,
     val failed30d: Int,
-    val estimatedCostUsd30d: Double
+    val estimatedCostUsd30d: Double,
+    // Chat de la página web: interruptor propio (además del general) y límites para visitantes sin cuenta
+    val webEnabled: Boolean = false,
+    val webDailyLimitPerVisitor: Int = 10,
+    val webDailyTotal: Int = 300,
+    val webQuestions30d: Int = 0
 )
 
 /** Precios de Claude Haiku 4.5 por millón de tokens (US$), para la estimación del admin. */
@@ -50,7 +55,11 @@ class SupportChatRepository {
             people30d = usage.optInt("people"),
             failed30d = usage.optInt("failed"),
             estimatedCostUsd30d = haikuCostUsd(usage.optLong("input_tokens"), usage.optLong("output_tokens"),
-                usage.optLong("cache_read_tokens"), usage.optLong("cache_write_tokens"))
+                usage.optLong("cache_read_tokens"), usage.optLong("cache_write_tokens")),
+            webEnabled = json.optBoolean("web_enabled"),
+            webDailyLimitPerVisitor = json.optInt("web_daily_limit_per_visitor", 10),
+            webDailyTotal = json.optInt("web_daily_total", 300),
+            webQuestions30d = usage.optInt("web_questions")
         )
     }
 }

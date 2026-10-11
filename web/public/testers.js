@@ -19,6 +19,8 @@
     if (!ready) result.hidden = true;
     else if (!result.hidden) showLinks(data);
     notice.hidden = !result.hidden;
+    // Mientras la prueba de Play no esté publicada, el APK queda a un toque
+    document.getElementById('tester-apk').hidden = notice.hidden || (ready && data.playReady === true);
     notice.textContent = ready ? (data.playReady ? 'Deja tu correo y sigue los dos pasos para instalar desde Play. Puedes unirte libremente.' :
       'Ya puedes unirte al grupo. Estamos preparando la publicación de la prueba en Google Play; mientras tanto, puedes descargar el APK.') :
       'Estamos preparando las pruebas en Google Play. Mientras tanto, puedes descargar el APK desde esta página.';
@@ -46,6 +48,7 @@
       if (!response.ok || data.saved !== true) throw new Error(data.error || 'No se pudo enviar. Intenta nuevamente.');
       showLinks(data);
       form.hidden = true; notice.hidden = true; result.hidden = false;
+      document.getElementById('tester-apk').hidden = true;
       result.focus();
     } catch (e) { error.textContent = e.message; }
     finally { submit.disabled = !ready; submit.textContent = 'Continuar a Google Play'; }

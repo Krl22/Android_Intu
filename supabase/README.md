@@ -66,7 +66,9 @@ App Android ── login ──► Firebase Auth (teléfono, Google, MFA)
 | `schedule_ride(scheduled_for, …, contact?)` / `my_scheduled_rides()` / `cancel_scheduled_ride(id)` | pasajero | Viajes en mototaxi programados de 20 min a 7 días antes (máx. 3). El cron `dispatch-scheduled-rides` los convierte en solicitud 10 min antes actuando como el pasajero |
 | `support_chat_status()` | ambos | Si el asistente de Ayuda está activo y cuántas preguntas quedan hoy |
 | `support_chat_begin()` / `support_chat_finish(usage_id, usage, failed?)` | Edge Function `support-chat` (con el token del usuario) | Reserva una pregunta del cupo diario y entrega el texto de ayuda; luego guarda los tokens usados |
-| `admin_get_support_chat()` / `admin_set_support_chat(settings)` | admin | Prender/apagar el asistente, límite diario, texto de ayuda y uso de 30 días |
+| `admin_get_support_chat()` / `admin_set_support_chat(settings)` | admin | Prender/apagar el asistente y su versión web, límites diarios, texto de ayuda y uso de 30 días |
+| `support_chat_web_status()` | web | Si la página debe mostrar el chat (asistente y versión web prendidos) |
+| `support_chat_web_begin(secret, visitor)` / `support_chat_web_finish(secret, usage_id, usage, failed?)` | Edge Function `support-chat` en modo web | Igual que la app, para visitantes sin cuenta: exige la clave de la web (solo se guarda su hash) y limita por visitante (hash salado de la IP) y por total diario |
 
 ### Asistente de Ayuda (Edge Function `support-chat`)
 
@@ -76,6 +78,7 @@ preguntas hizo cada cuenta y los tokens, para el límite diario y el costo estim
 
 - Secreto: `supabase secrets set ANTHROPIC_API_KEY=...` (clave de la consola de Anthropic; se cobra del saldo de la API, no de una suscripción de Claude).
 - Se despliega con `verify_jwt = false` porque los tokens son de Firebase: la función valida al usuario al llamar `support_chat_begin` con su propio token.
+- Página web: `web/functions/api/ayuda.js` llama a la función con la cabecera `x-intu-web-key` (secreto `HELP_CHAT_KEY` de Cloudflare Pages). Para cambiar la clave: genera 64 caracteres hexadecimales, guárdalos con `wrangler pages secret put HELP_CHAT_KEY` y su SHA-256 en `private.support_chat_web_gateway`.
 | `rate_ride(ride_id, rating)` | ambos | Calificar 1–5 al otro, una vez |
 | `register_device_token(token, platform?)` | ambos | Guardar el token de FCM (se borra al cerrar sesión) |
 | `admin_set_admin(user_id, is_admin)` | admin | Dar o quitar admin; siempre queda al menos uno |

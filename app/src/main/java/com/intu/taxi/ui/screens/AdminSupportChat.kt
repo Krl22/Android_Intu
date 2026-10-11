@@ -16,6 +16,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
@@ -58,6 +59,8 @@ internal fun ColumnScope.AdminSupportChatSection(reloadKey: Int) {
     var state by remember { mutableStateOf<SupportChatAdmin?>(null) }
     var knowledge by remember { mutableStateOf("") }
     var limit by remember { mutableStateOf("") }
+    var webLimit by remember { mutableStateOf("") }
+    var webTotal by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var retry by remember { mutableIntStateOf(0) }
@@ -66,6 +69,8 @@ internal fun ColumnScope.AdminSupportChatSection(reloadKey: Int) {
         state = loaded
         knowledge = loaded.knowledge
         limit = loaded.dailyLimitPerUser.toString()
+        webLimit = loaded.webDailyLimitPerVisitor.toString()
+        webTotal = loaded.webDailyTotal.toString()
     }
     LaunchedEffect(reloadKey, retry) {
         error = null
@@ -85,7 +90,7 @@ internal fun ColumnScope.AdminSupportChatSection(reloadKey: Int) {
         }
     }
 
-    AdminSectionHeading("Asistente de ayuda", "Responde dudas en Cuenta → Ayuda con Intu usando solo este texto. La opción aparece cuando lo prendes.")
+    AdminSectionHeading("Asistente de ayuda", "Responde dudas en Cuenta → Ayuda con Intu y, si lo eliges, en la página web, usando solo este texto. Aparece cuando lo prendes.")
     val current = state
     if (current == null) {
         if (error == null) CircularProgressIndicator()
@@ -108,8 +113,24 @@ internal fun ColumnScope.AdminSupportChatSection(reloadKey: Int) {
             }
             Switch(checked = current.enabled, onCheckedChange = null, enabled = !busy)
         }
+        HorizontalDivider(color = colors.outlineVariant)
+        Row(Modifier.fillMaxWidth().testTag("admin-support-chat-web")
+            .toggleable(value = current.webEnabled, enabled = !busy, role = Role.Switch,
+                onValueChange = { save(JSONObject().put("web_enabled", it)) })
+            .padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("Mostrar en la página web", style = MaterialTheme.typography.titleMedium)
+                Text(when {
+                    !current.webEnabled -> "Desactivado: la web no muestra el chat"
+                    !current.enabled -> "Se mostrará cuando prendas el asistente"
+                    else -> "Activado: botón «¿Dudas?» en viajaconintu.pages.dev"
+                }, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+            }
+            Switch(checked = current.webEnabled, onCheckedChange = null, enabled = !busy)
+        }
     }
     Text("Últimos 30 días: ${current.questions30d} preguntas de ${current.people30d} personas" +
+        (if (current.webQuestions30d > 0) ", ${current.webQuestions30d} desde la web" else "") +
         (if (current.failed30d > 0) " (${current.failed30d} sin respuesta)" else "") +
         " · costo estimado US$ ${String.format(Locale.US, "%.2f", current.estimatedCostUsd30d)}. " +
         "Se cobra en tu saldo de la API de Anthropic, no en la suscripción de Claude.",
@@ -117,14 +138,27 @@ internal fun ColumnScope.AdminSupportChatSection(reloadKey: Int) {
     OutlinedTextField(value = limit, onValueChange = { limit = it.filter(Char::isDigit).take(3) }, enabled = !busy,
         label = { Text("Preguntas por persona cada 24 horas") }, singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        OutlinedTextField(value = webLimit, onValueChange = { webLimit = it.filter(Char::isDigit).take(2) }, enabled = !busy,
+            label = { Text("Web: por visitante") }, singleLine = true, supportingText = { Text("1 a 50 al día") },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f))
+        OutlinedTextField(value = webTotal, onValueChange = { webTotal = it.filter(Char::isDigit).take(4) }, enabled = !busy,
+            label = { Text("Web: total diario") }, singleLine = true, supportingText = { Text("1 a 5000") },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f))
+    }
     OutlinedTextField(value = knowledge, onValueChange = { knowledge = it.take(60_000) }, enabled = !busy,
         label = { Text("Texto de ayuda") }, minLines = 8, maxLines = 18,
         supportingText = { Text("${knowledge.length} de 60.000 caracteres. Revisa precios y reglas antes de activarlo.") },
         modifier = Modifier.fillMaxWidth().testTag("admin-support-knowledge"))
     val limitValue = limit.toIntOrNull()
-    val changed = knowledge != current.knowledge || limitValue != current.dailyLimitPerUser
-    Button(enabled = !busy && changed && limitValue != null, modifier = Modifier.fillMaxWidth(), onClick = {
-        save(JSONObject().put("knowledge", knowledge).put("daily_limit_per_user", limitValue))
-    }) { Text(if (busy) "Guardando…" else "Guardar texto y límite") }
+    val webLimitValue = webLimit.toIntOrNull()?.takeIf { it in 1..50 }
+    val webTotalValue = webTotal.toIntOrNull()?.takeIf { it in 1..5000 }
+    val changed = knowledge != current.knowledge || limitValue != current.dailyLimitPerUser ||
+        webLimitValue != current.webDailyLimitPerVisitor || webTotalValue != current.webDailyTotal
+    Button(enabled = !busy && changed && limitValue != null && webLimitValue != null && webTotalValue != null,
+        modifier = Modifier.fillMaxWidth(), onClick = {
+        save(JSONObject().put("knowledge", knowledge).put("daily_limit_per_user", limitValue)
+            .put("web_daily_limit_per_visitor", webLimitValue).put("web_daily_total", webTotalValue))
+    }) { Text(if (busy) "Guardando…" else "Guardar texto y límites") }
     error?.let { Text(it, color = colors.error) }
 }
