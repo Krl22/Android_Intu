@@ -50,7 +50,7 @@ internal fun AppUpdateSettingsItem(release: PublishedAppRelease?, onClick: () ->
     SettingsItemEnhanced(
         icon = Icons.Outlined.SystemUpdate,
         title = "Actualizaciones",
-        subtitle = if (release != null) "Intu ${release.versionName} disponible"
+        subtitle = if (release != null) "${release.title} disponible"
             else "Intu ${BuildConfig.VERSION_NAME} · Buscar una nueva versión",
         actionText = if (release != null) "Actualizar" else "Comprobar",
         onClick = onClick,

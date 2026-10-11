@@ -157,11 +157,19 @@ fun IntuApp(
     val currentRoute = navBackStackEntry?.destination?.route
 
     val updateContext = LocalContext.current
+    // Versión de Play: pregunta a Google Play. APK de la web/QA: consulta viajaconintu.pages.dev.
+    val playUpdates = remember {
+        if (BuildConfig.PLAY_STORE_BUILD) com.intu.taxi.updates.PlayAppUpdates(updateContext, BuildConfig.VERSION_CODE) else null
+    }
     val updater = remember {
         val repository = com.intu.taxi.updates.AppUpdateRepository(
             updateContext.packageName, android.os.Build.VERSION.SDK_INT)
-        com.intu.taxi.updates.AppUpdateController(repository::latest)
+        com.intu.taxi.updates.AppUpdateController(playUpdates?.let { it::latest } ?: repository::latest)
     }
+    // Play muestra su propia pantalla de actualización; al volver sin terminar, se consulta de nuevo
+    val playUpdateLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartIntentSenderForResult()
+    ) { scope.launch { updater.check(force = true) } }
     val updateState by updater.state.collectAsState()
     var updateDialogRequested by rememberSaveable { mutableStateOf(false) }
     val riderNotice by com.intu.taxi.rider.RiderTrip.notice.collectAsState()
@@ -192,6 +200,14 @@ fun IntuApp(
             // Recheck at the tap: a ride may have started since the dialog was composed.
             if (com.intu.taxi.rider.RiderTrip.notice.value != null ||
                 com.intu.taxi.driver.DriverSession.activeRideId != null) false
+            else if (release.fromPlay) (playUpdates?.start(playUpdateLauncher) == true).also { started ->
+                if (!started) {
+                    android.widget.Toast.makeText(updateContext,
+                        "No se pudo abrir la actualización de Google Play. Intenta de nuevo.",
+                        android.widget.Toast.LENGTH_LONG).show()
+                    scope.launch { updater.check(force = true) }
+                }
+            }
             else com.intu.taxi.updates.openPublishedUpdate(updateContext, release).also { opened ->
                 if (!opened) android.widget.Toast.makeText(updateContext,
                     "No se pudo abrir la descarga. Revisa que tengas un navegador instalado.",

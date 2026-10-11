@@ -50,11 +50,14 @@ internal fun AppUpdateDialog(
                         Text("Buscando actualizaciones…")
                     }
                     release != null -> {
-                        Text("Intu ${release.versionName}", style = MaterialTheme.typography.titleLarge,
+                        Text(release.title, style = MaterialTheme.typography.titleLarge,
                             color = ink, fontWeight = FontWeight.Bold)
-                        Text("Descarga: ${String.format(Locale.US, "%.0f", release.size / 1048576.0)} MB")
-                        Text(if (tripActive) "Termina tu viaje o envío antes de actualizar."
-                            else "Se abrirá la descarga. Cuando termine, abre el archivo y confirma la actualización en Android.")
+                        if (release.size > 0) Text("Descarga: ${String.format(Locale.US, "%.0f", release.size / 1048576.0)} MB")
+                        Text(when {
+                            tripActive -> "Termina tu viaje o envío antes de actualizar."
+                            release.fromPlay -> "Google Play descargará e instalará la actualización. Intu se reiniciará al terminar."
+                            else -> "Se abrirá la descarga. Cuando termine, abre el archivo y confirma la actualización en Android."
+                        })
                     }
                     state.error != null -> Unit
                     state.checked -> Text("Ya tienes la versión más reciente.")

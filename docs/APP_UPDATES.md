@@ -1,5 +1,13 @@
 # Avisos de actualización por APK
 
+## Versión de Google Play
+
+La compilación `release` (el AAB que genera `scripts/prepare-play-bundle.ps1`) tiene `BuildConfig.PLAY_STORE_BUILD = true`: no consulta `/api/apk`, no programa la comprobación horaria (la cancela si existía) y nunca abre la descarga del APK, porque las políticas de Google Play prohíben actualizarse por otra vía. El mismo aviso y la opción de Cuenta preguntan a Google Play con la API In-app updates (`PlayAppUpdates`); «Actualizar» abre la pantalla de Play que descarga, instala y reinicia Intu (actualización inmediata). Fuera de un viaje, igual que el APK. La API solo responde en instalaciones hechas desde Play (pistas de prueba o producción); en otras, la comprobación muestra el error habitual.
+
+Una instalación solo se actualiza desde Play si su firma coincide con la clave de firma de la app en Play Console (SHA-256 `15:97:36:AD:…:ED:B9`). Los APK de QA/web van firmados con la clave debug: esas instalaciones necesitan desinstalar e instalar Intu una vez desde Play.
+
+El resto de este documento describe el APK de QA/web (`debug`, `PLAY_STORE_BUILD = false`), que conserva su funcionamiento.
+
 Desde 1.28/código 29, Intu consulta `/api/apk` al entrar y al volver al primer plano. Desde 1.33/código 34 también comprueba mientras la app permanece visible: el ciclo de un minuto respeta un intervalo de quince minutos entre consultas exitosas, o cinco minutos tras un fallo. Se pausa al pasar a segundo plano. Cuenta → Actualizaciones comprueba inmediatamente y muestra cargando, versión actual, actualización disponible o error con reintento. Si existe una versión nueva, Cuenta muestra «Intu [versión] disponible» y «Actualizar», incluso después de posponer el aviso.
 
 El aviso de nueva versión puede posponerse hasta el siguiente inicio del proceso; no bloquea el acceso. Se muestra en login, Cuenta o Inicio de pasajero/conductor con los controles normales visibles, fuera de viajes/envíos activos. El viaje del conductor se observa como StateFlow para retirar o habilitar el aviso en cuanto cambia. No abre automáticamente la descarga. Actualizar abre el APK de esa versión en el navegador; al terminar el usuario abre el archivo y confirma la actualización en Android. La app conserva el flujo de sesión y las direcciones.

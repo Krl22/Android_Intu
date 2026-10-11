@@ -40,5 +40,8 @@ class AppUpdateWorker(context: Context, parameters: WorkerParameters) : Coroutin
                 .build()
             return WorkManager.getInstance(context).enqueueUniquePeriodicWork(WORK_NAME, ExistingPeriodicWorkPolicy.KEEP, request)
         }
+
+        fun cancel(context: Context): androidx.work.Operation =
+            WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME)
     }
 }

@@ -22,8 +22,8 @@ android {
         applicationId = "com.intu.taxi"
         minSdk = 24
         targetSdk = 36
-        versionCode = 37
-        versionName = "1.36"
+        versionCode = 38
+        versionName = "1.37"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -43,7 +43,13 @@ android {
     }
 
     buildTypes {
+        debug {
+            // APK de QA y de la web: se actualiza con la descarga propia de viajaconintu.pages.dev
+            buildConfigField("boolean", "PLAY_STORE_BUILD", "false")
+        }
         release {
+            // AAB de Google Play: solo se actualiza por Play (sus políticas prohíben otra vía)
+            buildConfigField("boolean", "PLAY_STORE_BUILD", "true")
             if (releaseKeystore != null) signingConfig = signingConfigs.getByName("release")
             // Solo celulares (ARM): las librerías x86 son para emuladores y casi duplican el tamaño del APK
             ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
@@ -84,6 +90,8 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation("androidx.work:work-runtime-ktx:2.11.2")
+    // Actualizaciones dentro de la app desde Google Play (solo en la versión de Play)
+    implementation("com.google.android.play:app-update-ktx:2.1.0")
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)

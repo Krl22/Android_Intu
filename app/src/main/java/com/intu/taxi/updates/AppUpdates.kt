@@ -23,9 +23,14 @@ data class PublishedAppRelease(
     val versionName: String,
     val size: Long,
     val sha256: String,
+    // Versión ofrecida por Google Play: sin nombre ni hash, se instala con el flujo de Play.
+    val fromPlay: Boolean = false,
 ) {
     // The server cannot supply an arbitrary download host or path.
     val downloadUrl: String get() = "$UPDATE_SITE/descargar?versionCode=$versionCode"
+
+    /** "Intu 1.37" o, si Play no da el nombre de la versión, "Nueva versión de Intu". */
+    val title: String get() = if (versionName.isBlank()) "Nueva versión de Intu" else "Intu $versionName"
 }
 
 /** Reject incomplete metadata, another app and incompatible Android releases. */

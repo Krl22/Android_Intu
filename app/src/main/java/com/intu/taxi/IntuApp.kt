@@ -14,7 +14,9 @@ import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderF
 class IntuApp : Application() {
     override fun onCreate() {
         super.onCreate()
-        com.intu.taxi.updates.AppUpdateWorker.schedule(this)
+        // La versión de Play la actualiza Google Play; la comprobación horaria de la web es solo para el APK
+        if (BuildConfig.PLAY_STORE_BUILD) com.intu.taxi.updates.AppUpdateWorker.cancel(this)
+        else com.intu.taxi.updates.AppUpdateWorker.schedule(this)
         FirebaseApp.initializeApp(this)
         FirebaseAppCheck.getInstance().installAppCheckProviderFactory(
             if (BuildConfig.DEBUG) DebugAppCheckProviderFactory.getInstance()
