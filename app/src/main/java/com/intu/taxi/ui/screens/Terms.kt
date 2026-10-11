@@ -9,12 +9,14 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 @Composable
 fun TermsDialog(onDismiss: () -> Unit) {
+    val uriHandler = LocalUriHandler.current
     var selected by rememberSaveable { mutableIntStateOf(0) }
     val termsScroll = rememberScrollState()
     val privacyScroll = rememberScrollState()
@@ -37,7 +39,7 @@ fun TermsDialog(onDismiss: () -> Unit) {
         Column(Modifier.weight(1f, fill = false).verticalScroll(if (selected == 0) termsScroll else privacyScroll)
             .padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Surface(shape = RoundedCornerShape(12.dp), color = AccountTeal.copy(alpha = .08f)) {
-                Text("Versión de prueba · Borrador para revisión", Modifier.padding(12.dp), style = MaterialTheme.typography.labelMedium, color = AppearanceColors.highlight(AccountTeal))
+                Text("Intu · Información del servicio", Modifier.padding(12.dp), style = MaterialTheme.typography.labelMedium, color = AppearanceColors.highlight(AccountTeal))
             }
             if (selected == 0) {
                 LegalSection("Uso de Intu", "Intu permite solicitar viajes en mototaxi y conectar pasajeros con conductores aprobados. La disponibilidad depende de los conductores conectados y de la cobertura. La ubicación, el tiempo de llegada y la tarifa mostrada son estimaciones; revisa el recojo, el destino y el importe antes de confirmar. Puedes programar un viaje con 20 minutos a 7 días de anticipación: buscaremos conductor unos minutos antes de la hora elegida, pero no podemos garantizar que haya uno disponible; te avisaremos si no lo encontramos.")
@@ -49,7 +51,11 @@ fun TermsDialog(onDismiss: () -> Unit) {
                 LegalSection("Ubicación y permisos", "La ubicación permite definir el recojo y seguir el viaje. Cuando un conductor está en línea, su ubicación puede actualizarse con la app minimizada. El seguimiento del pasajero mantiene actualizado su viaje abierto. Los participantes ven la información necesaria de la otra persona durante el servicio. La cámara sirve para tu foto y las notificaciones para avisos de viajes; puedes gestionar estos permisos en Android.")
                 LegalSection("Proveedores y lugares guardados", "Firebase proporciona acceso, fotos y notificaciones; Supabase almacena cuentas, solicitudes, viajes y reportes; Mapbox proporciona mapas y rutas; Anthropic (Claude) responde las preguntas que escribes en Ayuda con Intu. Estos proveedores pueden procesar los datos necesarios para esas funciones. Intu no guarda el texto de tus preguntas al asistente; no escribas en él datos personales ni de pago. Los lugares favoritos y los contactos que elegiste para otros viajes se guardan por cuenta en este teléfono; puedes quitarlos desde Direcciones guardadas y desde la lista de contactos recientes.")
                 LegalSection("Tus datos y soporte", "Para solicitar la eliminación de tu cuenta y los datos personales asociados, abre Cuenta → Eliminar cuenta → Solicitar eliminación. Recibirás una confirmación de envío cuando la solicitud llegue al panel privado del equipo de Intu. Durante las pruebas se atiende manualmente; enviar la solicitud no significa que la cuenta ya se haya eliminado. El equipo informará del plazo de atención y de los datos que deban conservarse antes de completarla.", "Puedes solicitar acceso, rectificación, cancelación u oposición al tratamiento de tus datos desde Cuenta → Reportar un error, con el título «Solicitud sobre mis datos». El equipo administrador la recibirá para atenderla. Evita contraseñas o información de otras personas.")
-                LegalSection("Sobre este borrador", "Antes de publicar la política final deben definirse el responsable y domicilio, el contacto de soporte y los plazos de conservación. Este texto de pruebas no establece todavía una política final de conservación ni garantiza que los registros de viajes queden anonimizados al eliminar una cuenta.")
+                LegalSection("Responsable y conservación", "Intu, Arturo Duray 255. Soporte: carthe5kboy@gmail.com. Atendemos solicitudes de eliminación manualmente en un máximo de 30 días. El perfil y los datos de conductor se conservan hasta eliminar la cuenta; el chat, 30 días; los servicios cerrados y los reportes, hasta 12 meses. Al eliminar la cuenta se desvinculan las identidades del historial, pero las rutas e incidencias pueden conservarse durante ese plazo para revisar reclamos. El identificador técnico de una cuenta eliminada se conserva hasta 12 meses para impedir que vuelva a crear un perfil con un acceso antiguo.")
+                LegalSection("Testers de Google Play", "El correo que registras en la web se muestra únicamente al equipo administrador para gestionar tu interés en las pruebas, hasta que solicites su eliminación. Unirte al grupo y aceptar la prueba son pasos separados en los servicios de Google; puedes salir del grupo desde Google Groups.")
+                TextButton(onClick = { uriHandler.openUri("https://viajaconintu.pages.dev/privacidad") }) {
+                    Text("Leer la política de privacidad completa")
+                }
             }
         }
     }

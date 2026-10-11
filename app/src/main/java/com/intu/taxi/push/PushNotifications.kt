@@ -41,6 +41,7 @@ object PushNotifications {
     @Volatile var openChatRideId: String? = null
     const val ADMIN_TYPE_EXTRA = "intu_admin_type"
     const val ADMIN_UID_EXTRA = "intu_admin_uid"
+    const val ADMIN_EVENT_EXTRA = "intu_admin_event"
 
     fun createChannel(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
@@ -160,6 +161,7 @@ class IntuMessagingService : FirebaseMessagingService() {
             .setData(android.net.Uri.Builder().scheme("intu").authority("admin-activity").appendPath(activity.eventId).build())
             .putExtra(PushNotifications.ADMIN_TYPE_EXTRA, activity.type.key)
             .putExtra(PushNotifications.ADMIN_UID_EXTRA, activity.recipientUid)
+            .putExtra(PushNotifications.ADMIN_EVENT_EXTRA, activity.eventId)
         val built = NotificationCompat.Builder(this, PushNotifications.ADMIN_CHANNEL)
             .setSmallIcon(R.drawable.ic_stat_intu)
             .setColor(ContextCompat.getColor(this, R.color.intu_teal))

@@ -1,0 +1,11 @@
+{
+  "responsibleName": "Intu",
+  "responsibleAddress": "Arturo Duray 255",
+  "supportEmail": "carthe5kboy@gmail.com",
+  "profileRetention": "hasta que se complete la eliminación de la cuenta. Incluye documentos y datos del vehículo del conductor; la ubicación actual del conductor se elimina junto con esos datos.",
+  "rideRetention": "hasta 12 meses desde que el servicio termine o se cancele, para historial, reclamos y prevención de abusos. Los servicios abiertos se conservan mientras se resuelven. Los registros cerrados se revisan y purgan diariamente al cumplirse ese plazo.",
+  "reportRetention": "hasta 12 meses desde su envío, para atender incidencias y coordinar objetos perdidos. Los reportes de errores enviados por una cuenta también se borran al eliminar su perfil.",
+  "deletionTimeframe": "máximo de 30 días desde la solicitud; se verifica la identidad antes de completarla. El equipo te contactará si necesita información para identificar tu cuenta.",
+  "retainedAfterDeletion": "los servicios y sus incidencias pueden conservarse hasta 12 meses para atender reclamos de sus participantes y prevenir abusos. Se desvinculan los identificadores de cuenta, pero las direcciones, coordenadas, rutas y textos de incidencias pueden seguir presentes durante ese plazo: no se consideran totalmente anónimos. El identificador técnico de una cuenta eliminada se conserva hasta 12 meses para impedir recrear su perfil con un acceso antiguo. El equipo verifica la eliminación en autenticación, fotos y posibles registros históricos antes de confirmar el cierre de la solicitud. Las copias de seguridad de los proveedores siguen sus ciclos de eliminación y no se utilizan para volver a activar la cuenta.",
+  "effectiveDate": "8 de octubre de 2026"
+}

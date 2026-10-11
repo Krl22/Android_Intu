@@ -3,6 +3,13 @@ name = "viajaconintu"
 pages_build_output_dir = "public"
 compatibility_date = "2026-09-01"
 
+[vars]
+TESTER_GROUP_URL = "https://groups.google.com/g/viajaconintu-satipo-testers"
+TESTER_PLAY_URL = "https://play.google.com/apps/testing/com.intu.taxi"
+TESTER_ACCESS_READY = "true"
+# Enable only after the closed track is actually available to group members.
+TESTER_PLAY_READY = "false"
+
 # El APK vive en R2 (Pages no acepta archivos de más de 25 MB); /descargar lo entrega
 [[r2_buckets]]
 binding = "APK"

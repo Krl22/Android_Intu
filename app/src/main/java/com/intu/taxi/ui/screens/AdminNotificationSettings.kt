@@ -150,7 +150,7 @@ fun AdminNotificationSettingsContent(settings: AdminNotificationPreferences?, bu
                             onChange(settings.copy(driverApplications = it))
                         }
                         HorizontalDivider()
-                        NotificationToggle("Reportes de errores y servicios", "Cuando un usuario reporta un error, un problema del servicio o un objeto perdido.", settings.bugReports, enabled) {
+                        NotificationToggle("Reportes y testers", "Errores, problemas de servicios, objetos perdidos y nuevos interesados en probar Intu desde Play.", settings.bugReports, enabled) {
                             onChange(settings.copy(bugReports = it))
                         }
                     }

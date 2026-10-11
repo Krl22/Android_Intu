@@ -35,11 +35,11 @@ fun AccountDeletionDialog(
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 if (sent) {
                     Text("Tu solicitud de eliminación de cuenta y datos personales se envió al equipo de Intu. La cuenta sigue activa hasta que el equipo complete la eliminación.")
-                    Text("El equipo puede pedirte que confirmes tu identidad y te informará sobre los datos que deban conservarse y el plazo de atención.")
+                    Text("El equipo comprobará tu identidad y atenderá la solicitud en un máximo de 30 días. Los registros de servicios e incidencias pueden conservarse hasta 12 meses para atender reclamos, según la política de privacidad.")
                 } else {
                     Text("Puedes solicitar que el equipo de Intu elimine tu cuenta y los datos personales asociados. Enviar esta solicitud no elimina tu cuenta inmediatamente.")
                     Text("Una vez completada la eliminación, perderás el acceso a esta cuenta. Si tienes un viaje abierto, termina o cancela el viaje antes de que el equipo la procese.")
-                    Text("El equipo te informará sobre cualquier dato que deba conservarse y el plazo de atención. Durante las pruebas, la solicitud se gestiona manualmente.")
+                    Text("La solicitud se gestiona manualmente en un máximo de 30 días. Los registros de servicios e incidencias pueden conservarse hasta 12 meses para atender reclamos, según la política de privacidad.")
                     OutlinedTextField(
                         value = note,
                         onValueChange = { note = it.take(1200); error = null },

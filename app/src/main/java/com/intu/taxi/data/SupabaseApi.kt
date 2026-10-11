@@ -88,6 +88,7 @@ object SupabaseApi {
         message == "cancellation_block" -> "Por cancelar varias veces, tu cuenta está en pausa " +
             (formatBlockedUntil(details) ?: "por un tiempo") + "."
         message == "too_many_requests" -> "Hiciste muchas solicitudes seguidas. Espera unos minutos e intenta de nuevo."
+        message == "tester_request_not_found" -> "Este correo ya no está en la bandeja. Actualiza la lista."
         message == "invalid_service_report" -> "Elige un motivo válido y describe lo ocurrido entre 10 y 2000 caracteres."
         message == "service_report_exists" -> "Ya tienes un reporte abierto con ese motivo para este servicio. Consúltalo en Reportes y objetos perdidos."
         message == "too_many_reports" -> "Llegaste al límite de reportes de hoy. Intenta mañana."

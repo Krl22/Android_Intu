@@ -57,6 +57,7 @@ import androidx.compose.ui.Alignment
 
 class MainActivity : ComponentActivity() {
     private var adminNotificationUid by mutableStateOf<String?>(null)
+    private var adminNotificationEvent by mutableStateOf<String?>(null)
     private var updateNotificationRequested by mutableStateOf(false)
     private var serviceReportNotification by mutableStateOf<com.intu.taxi.push.ServiceReportNotification?>(null)
 
@@ -70,6 +71,7 @@ class MainActivity : ComponentActivity() {
         if (com.intu.taxi.push.AdminActivityType.fromKey(intent?.getStringExtra(
                 com.intu.taxi.push.PushNotifications.ADMIN_TYPE_EXTRA)) != null) {
             adminNotificationUid = intent?.getStringExtra(com.intu.taxi.push.PushNotifications.ADMIN_UID_EXTRA)
+            adminNotificationEvent = intent?.getStringExtra(com.intu.taxi.push.PushNotifications.ADMIN_EVENT_EXTRA)
         }
     }
 
@@ -102,7 +104,13 @@ class MainActivity : ComponentActivity() {
             com.intu.taxi.ui.theme.IntuAppearanceHost {
                 IntuApp(
                     adminNotificationUid = adminNotificationUid,
-                    onAdminNotificationConsumed = { adminNotificationUid = null },
+                    adminNotificationEvent = adminNotificationEvent,
+                    onAdminNotificationConsumed = {
+                        adminNotificationUid = null
+                        adminNotificationEvent = null
+                        intent?.removeExtra(com.intu.taxi.push.PushNotifications.ADMIN_UID_EXTRA)
+                        intent?.removeExtra(com.intu.taxi.push.PushNotifications.ADMIN_EVENT_EXTRA)
+                    },
                     serviceReportNotification = serviceReportNotification,
                     onServiceReportNotificationConsumed = {
                         serviceReportNotification = null
@@ -125,6 +133,7 @@ fun IntuApp(
     serviceReportNotification: com.intu.taxi.push.ServiceReportNotification? = null,
     onServiceReportNotificationConsumed: () -> Unit = {},
     adminNotificationUid: String? = null,
+    adminNotificationEvent: String? = null,
     onAdminNotificationConsumed: () -> Unit = {},
     updateNotificationRequested: Boolean = false,
     onUpdateNotificationConsumed: () -> Unit = {},
@@ -207,6 +216,10 @@ fun IntuApp(
 
     // Cuenta con sesión; cambia al cerrar sesión, al entrar con otra cuenta o si un admin la elimina
     var currentUid by androidx.compose.runtime.remember { mutableStateOf(auth.currentUser?.uid) }
+    var testerInboxUid by remember { mutableStateOf<String?>(null) }
+    if (testerInboxUid != null && testerInboxUid == currentUid && !showTerms) {
+        com.intu.taxi.ui.screens.AdminTestersDialog(onDismiss = { testerInboxUid = null })
+    }
     if (currentUid != null && !showTerms && serviceReportNotification != null) {
         com.intu.taxi.ui.screens.ServiceReportsDialog(admin = serviceReportNotification.admin,
             onDismiss = onServiceReportNotificationConsumed)
@@ -230,13 +243,14 @@ fun IntuApp(
             }
         }
     }
-    LaunchedEffect(adminNotificationUid, currentUid, currentRoute) {
+    LaunchedEffect(adminNotificationUid, adminNotificationEvent, currentUid, currentRoute) {
         val target = adminNotificationUid ?: return@LaunchedEffect
         if (target != currentUid) { onAdminNotificationConsumed(); return@LaunchedEffect }
         if (currentRoute !in setOf(NavItem.Home.route, NavItem.Trips.route, NavItem.Account.route, "admin")) return@LaunchedEffect
         val allowed = runCatching { com.intu.taxi.repositories.AdminRepository().isAdmin() }.getOrDefault(false)
         if (allowed && auth.currentUser?.uid == target) {
-            navController.navigate("admin") { launchSingleTop = true }
+            if (com.intu.taxi.push.AdminActivityMessage.isTesterEvent(adminNotificationEvent)) testerInboxUid = target
+            else navController.navigate("admin") { launchSingleTop = true }
         }
         onAdminNotificationConsumed()
     }

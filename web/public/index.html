@@ -312,6 +312,21 @@
       .final-bird { transform: scaleX(-1); }
       *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
     }
+    .btn-play { background:#fff; color:var(--teal, #08817e); border:2px solid #08817e; cursor:pointer; font:inherit; font-weight:700; padding:14px 22px; }
+    .tester-dialog { border:0; border-radius:24px; padding:28px; width:min(92vw,500px); color:#243c3c; box-shadow:0 24px 80px #0003; }
+    .tester-dialog::backdrop { background:#163c3cbc; }
+    .tester-dialog h2 { margin:0 0 14px; font-size:26px; }
+    .tester-dialog p { margin:12px 0; line-height:1.6; }
+    .tester-dialog label { display:block; margin:16px 0 8px; }
+    .tester-dialog input[type=email] { width:100%; padding:14px; border:1px solid #9aafad; border-radius:12px; font:inherit; }
+    .tester-dialog .tester-consent { display:flex; align-items:flex-start; gap:10px; font-size:14px; }
+    .tester-consent input { margin-top:4px; flex-shrink:0; }
+    .tester-dialog .btn { width:100%; margin-top:12px; text-align:center; justify-content:center; }
+    .tester-dialog button:disabled { opacity:.5; cursor:wait; }
+    .tester-close { display:block; margin:18px auto 0; background:none; border:0; padding:10px; cursor:pointer; font:inherit; color:#526c69; }
+    .tester-error { color:#9d2727; font-size:14px; }
+    .tester-trap { position:absolute; left:-10000px; }
+    [hidden] { display:none !important; }
   </style>
 </head>
 <body>
@@ -346,6 +361,7 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
               Descargar para Android
             </a>
+            <button class="btn btn-play" type="button" data-testers>Probar en Google Play</button>
             <div class="meta" data-apk-meta><span>Android 7 o superior</span><span>Archivo APK</span></div>
             <p class="platform-note" data-ios-note>Intu por ahora es solo para Android. Abre esta página desde un celular Android para descargarla.</p>
           </div>
@@ -473,7 +489,7 @@
         <div class="section-head reveal">
           <span class="eyebrow">Instalar</span>
           <h2>Instálala en 1 minuto</h2>
-          <p>Intu se descarga desde aquí, no desde Play Store. Por eso tu celular te pedirá un permiso la primera vez.</p>
+          <p>Estos pasos son para instalar el APK desde esta página. También puedes registrar tu correo en «Probar en Google Play» y unirte al grupo de testers.</p>
         </div>
         <div class="install-grid">
           <div style="display: grid; gap: 14px;">
@@ -506,8 +522,8 @@
             <p>Descargar e instalar Intu es gratis. Solo pagas tus viajes, y ves el precio antes de pedir cada uno.</p>
           </details>
           <details class="reveal">
-            <summary>¿Por qué no está en Play Store?</summary>
-            <p>Estamos empezando en Satipo y por ahora la compartimos directamente desde esta página. Es la misma app, firmada por Intu, y se actualiza descargándola de nuevo desde aquí.</p>
+            <summary>¿Cómo participo en las pruebas de Google Play?</summary>
+            <p>Pulsa «Probar en Google Play», registra tu correo y únete libremente al grupo de testers con la cuenta que usas en Play Store. Estamos preparando la publicación de la prueba; mientras tanto, la descarga del APK sigue disponible aquí.</p>
           </details>
           <details class="reveal">
             <summary>¿Funciona en iPhone?</summary>
@@ -556,10 +572,34 @@
   <footer>
     <div class="wrap foot">
       <a class="brand" href="#" style="font-size: 20px;"><img src="/favicon.svg" alt="" width="28" height="28" style="width: 28px; height: 28px;">intu</a>
-      <span><a href="mailto:contacto@viajaconintu.com" style="color: inherit;">contacto@viajaconintu.com</a> · © 2026 Intu</span>
+      <span><a href="mailto:carthe5kboy@gmail.com" style="color: inherit;">carthe5kboy@gmail.com</a> · © 2026 Intu</span>
+      <span><a href="/privacidad">Privacidad</a> · <a href="/eliminar-cuenta">Eliminar mi cuenta</a></span>
     </div>
   </footer>
 
+  <dialog id="tester-dialog" class="tester-dialog" aria-labelledby="tester-title">
+    <h2 id="tester-title">Prueba Intu en Google Play</h2>
+    <p id="tester-notice" role="status">Comprobando acceso a las pruebas…</p>
+    <form id="tester-form" hidden>
+      <label for="tester-email">Tu correo de Google Play</label>
+      <input id="tester-email" name="email" type="email" autocomplete="email" maxlength="254" required placeholder="tu@gmail.com">
+      <div class="tester-trap" aria-hidden="true"><input name="website" tabindex="-1" autocomplete="off"></div>
+      <label class="tester-consent"><input name="consent" type="checkbox" required> <span>Acepto que Intu guarde este correo y lo muestre a sus administradores para gestionar mi interés en las pruebas.</span></label>
+      <p><a href="/privacidad" target="_blank" rel="noopener noreferrer">Política de privacidad</a> · Puedes pedir que eliminemos tu correo escribiendo a <a href="mailto:carthe5kboy@gmail.com">carthe5kboy@gmail.com</a>.</p>
+      <p id="tester-error" class="tester-error" role="alert"></p>
+      <button id="tester-submit" class="btn btn-play" type="submit" disabled>Continuar a Google Play</button>
+    </form>
+    <div id="tester-result" hidden tabindex="-1">
+      <p><strong>Tu correo quedó registrado.</strong> Ahora completa estos pasos con la misma cuenta que usas en Play Store:</p>
+      <a id="tester-group" class="btn btn-play" target="_blank" rel="noopener noreferrer">1. Unirme al grupo de testers</a>
+      <p>En Google Groups pulsa «Unirme al grupo». No necesitas esperar aprobación.</p>
+      <a id="tester-play" class="btn" target="_blank" rel="noopener noreferrer">2. Participar e instalar en Play</a>
+      <p id="tester-play-pending" hidden>La publicación de la prueba en Play sigue pendiente. Puedes unirte al grupo desde ahora y usar el botón de descarga del APK mientras tanto.</p>
+      <p>Primero debes unirte al grupo. Después, acepta participar en la prueba de Play. Registrar tu correo aquí no completa esos dos pasos.</p>
+    </div>
+    <button id="tester-close" class="tester-close" type="button">Cerrar</button>
+  </dialog>
+  <script src="/testers.js" defer></script>
   <script>
     // Borde del encabezado al bajar
     const header = document.querySelector('header');

@@ -6,6 +6,13 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class AdminActivityTest {
+    @Test fun testerNotificationsUseOnlyTheirOwnValidEventReferences() {
+        val id = "tester:94aeb10e-c2ea-4405-93c4-4b03f28224e6"
+        assertTrue(AdminActivityMessage.isTesterEvent(id))
+        assertFalse(AdminActivityMessage.isTesterEvent("tester:foo"))
+        assertFalse(AdminActivityMessage.isTesterEvent("bug_report:94aeb10e-c2ea-4405-93c4-4b03f28224e6"))
+        assertFalse(AdminActivityMessage.isTesterEvent(null))
+    }
     private val data = mapOf("kind" to "admin_activity", "eventType" to "ride_request",
         "eventId" to "ride_request:qa", "recipientUid" to "admin-qa", "title" to "QA", "body" to "Test")
 

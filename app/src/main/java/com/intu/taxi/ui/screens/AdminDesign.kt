@@ -111,7 +111,7 @@ internal fun AdminPanelLayout(padding: PaddingValues, tab: Int, isAdmin: Boolean
                     "Reportes" to Icons.Outlined.BugReport, "Lugares" to Icons.Outlined.Place,
                     "Notificaciones" to Icons.Outlined.Notifications, "Seguridad" to Icons.Outlined.Shield,
                     "Negocios" to Icons.Outlined.Storefront, "Asistente" to Icons.Outlined.QuestionAnswer,
-                    "Tarifas" to Icons.Outlined.Settings)
+                    "Tarifas" to Icons.Outlined.Settings, "Testers" to Icons.Outlined.People)
                 Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     sections.forEachIndexed { index, (label, icon) ->

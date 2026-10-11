@@ -25,7 +25,10 @@ data class AdminActivityMessage(
     val type: AdminActivityType, val eventId: String, val recipientUid: String,
     val title: String, val body: String
 ) {
+    val isTesterRequest: Boolean get() = type == AdminActivityType.BUG_REPORT && isTesterEvent(eventId)
     companion object {
+        fun isTesterEvent(eventId: String?): Boolean = eventId != null &&
+            Regex("^tester:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$").matches(eventId)
         fun parse(data: Map<String, String>): AdminActivityMessage? {
             if (data["kind"] != "admin_activity") return null
             val type = AdminActivityType.fromKey(data["eventType"]) ?: return null
