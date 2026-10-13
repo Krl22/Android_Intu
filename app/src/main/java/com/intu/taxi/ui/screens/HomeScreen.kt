@@ -132,11 +132,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.LinearEasing
-import android.Manifest
-import android.content.pm.PackageManager
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.BackHandler
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.intu.taxi.R
@@ -242,7 +238,8 @@ fun HomeScreen(
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
 
-    var hasLocationPermission by rememberSaveable { mutableStateOf(false) }
+    val permissions = com.intu.taxi.permissions.LocalAppPermissions.current
+    val hasLocationPermission = com.intu.taxi.permissions.rememberLocationPermissionGranted()
     // No persistir el modo pin entre recomposiciones/navegaciones para no ocultar el BottomBar al iniciar
     var isSelectingDestination by remember { mutableStateOf(false) }
     var selectedDestination by remember { mutableStateOf<Point?>(null) }
@@ -807,25 +804,11 @@ fun HomeScreen(
         label = "headerShiftFractionGlobal"
     )
 
-    // Comprobar permisos actuales
     LaunchedEffect(Unit) {
-        val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-        val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
-        hasLocationPermission = fine || coarse
-        
         // Iniciar animaciones de entrada
         headerVisible = true
         kotlinx.coroutines.delay(300)
         contentVisible = true
-    }
-
-    // Lanzador para solicitar permisos de ubicación en tiempo de ejecución
-    val locationPermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        hasLocationPermission =
-            (permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true) ||
-            (permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true)
     }
 
     val isPreparingTrip = showPlanner || isSelectingPoint || isRideOptionsVisible || isSearchingDriver || activeRide != null ||
@@ -864,11 +847,6 @@ fun HomeScreen(
                         iconIgnorePlacement = true
                     }
                 }
-            }
-        }
-        LaunchedEffect(isStyleLoaded, testLocation) {
-            if (isStyleLoaded && !hasLocationPermission && testLocation == null && locationProvider == null) {
-                locationPermissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
             }
         }
         MapLocationBinding(mapView, isStyleLoaded, hasLocationPermission || locationProvider != null,
@@ -1303,6 +1281,10 @@ fun HomeScreen(
                 onBusinessRetry = { businessRefresh++ },
                 onBusiness = { previewBusiness = it },
                 autoAdvanceAds = previewBusiness == null,
+                locationNotice = {
+                    if (permissions != null && testLocation == null && locationProvider == null)
+                        LocationAccessNotice(permissions, Modifier.padding(bottom = 8.dp))
+                },
                 onTravel = { openPlanner() },
                 onDelivery = { openPlanner(delivery = true) },
                 searchContent = {

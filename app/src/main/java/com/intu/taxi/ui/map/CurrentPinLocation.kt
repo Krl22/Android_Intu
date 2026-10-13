@@ -1,13 +1,11 @@
 package com.intu.taxi.ui.map
 
-import android.Manifest
 import android.animation.ValueAnimator
-import android.content.pm.PackageManager
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalContext
-import androidx.core.content.ContextCompat
+import com.intu.taxi.permissions.LocalAppPermissions
+import com.intu.taxi.permissions.rememberAppPermissions
 import com.intu.taxi.location.AdminLocationSimulation
 import com.mapbox.common.location.LocationError
 import com.mapbox.geojson.Point
@@ -29,20 +27,24 @@ fun rememberPinStartLocation(
 ): PinStartLocation {
     val context = LocalContext.current
     val preset = remember { AdminLocationSimulation.currentPreset() }
-    fun hasPermission() = listOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
-        .any { ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED }
-    var permitted by remember { mutableStateOf(hasPermission()) }
-    var permissionResolved by remember { mutableStateOf(!useCurrentLocation || permitted || preset != null || locationProvider != null) }
+    val permissions = LocalAppPermissions.current ?: rememberAppPermissions(autoRequest = false, needsLocation = false)
+    val permitted = permissions.locationGranted
+    var permissionRequested by rememberSaveable(useCurrentLocation) { mutableStateOf(false) }
+    var permissionResolved by rememberSaveable(useCurrentLocation) {
+        mutableStateOf(!useCurrentLocation || permitted || preset != null || locationProvider != null)
+    }
     var start by remember(fallback, useCurrentLocation) {
         mutableStateOf(if (useCurrentLocation) PinStartLocation() else PinStartLocation(fallback))
     }
-    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
-        permitted = permissions.values.any { it }
-        permissionResolved = true
-    }
-    LaunchedEffect(useCurrentLocation) {
+    LaunchedEffect(useCurrentLocation, permissions.requestInProgress, permitted) {
         if (useCurrentLocation && !permissionResolved) {
-            permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+            if (permissionRequested) {
+                // After recreation the activity still owns the result, but the old callback is gone.
+                if (!permissions.requestInProgress) permissionResolved = true
+            } else {
+                permissionRequested = true
+                permissions.requestLocation { permissionResolved = true }
+            }
         }
     }
     LaunchedEffect(fallback, useCurrentLocation, permissionResolved) {

@@ -33,7 +33,8 @@ internal fun CommercialHome(
     businessError: String? = null,
     onBusinessRetry: () -> Unit = {},
     onBusiness: (com.intu.taxi.models.BusinessAd) -> Unit = {},
-    autoAdvanceAds: Boolean = true
+    autoAdvanceAds: Boolean = true,
+    locationNotice: @Composable () -> Unit = {},
 ) {
     val colors = MaterialTheme.colorScheme
     // Search stays mounted over the map so moving the header preserves focus and typing.
@@ -65,6 +66,7 @@ internal fun CommercialHome(
                     style = MaterialTheme.typography.bodyMedium)
                 Spacer(Modifier.height(16.dp))
             }
+            locationNotice()
             searchContent()
         }
         if (!searchActive) {

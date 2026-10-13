@@ -1,8 +1,6 @@
 package com.intu.taxi.ui.screens
 
 import com.intu.taxi.ui.theme.AppearanceColors
-import android.Manifest
-import android.content.pm.PackageManager
 import android.widget.Toast
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -30,8 +28,6 @@ import com.mapbox.android.gestures.MoveGestureDetector
 import com.mapbox.maps.EdgeInsets
 import com.mapbox.maps.plugin.gestures.OnMoveListener
 import com.mapbox.maps.plugin.gestures.gestures
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
@@ -102,7 +98,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.content.ContextCompat
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
@@ -182,7 +177,8 @@ fun DriverHomeScreen(
     // Ganancias de hoy para la pantalla de inicio (null mientras cargan o si no hay conexión)
     var todayEarnings by remember { mutableStateOf<com.intu.taxi.repositories.EarningsSummary?>(null) }
 
-    var hasLocationPermission by rememberSaveable { mutableStateOf(false) }
+    val permissions = com.intu.taxi.permissions.LocalAppPermissions.current
+    val hasLocationPermission = com.intu.taxi.permissions.rememberLocationPermissionGranted()
     // "En línea": se mantiene entre viajes y al reabrir la app, hasta que el conductor pulse "Parar"
     val driverPrefs = remember { context.getSharedPreferences("intu_driver", android.content.Context.MODE_PRIVATE) }
     var isSearching by rememberSaveable { mutableStateOf(driverPrefs.getBoolean("online", false)) }
@@ -393,10 +389,6 @@ fun DriverHomeScreen(
     var contentVisible by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
-        val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-        val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
-        hasLocationPermission = fine || coarse
-        
         // Iniciar animaciones de entrada
         headerVisible = true
         kotlinx.coroutines.delay(300)
@@ -406,7 +398,7 @@ fun DriverHomeScreen(
     // Barra inferior solo fuera de línea y sin viaje. El servicio en segundo plano corre mientras
     // esté en línea o en un viaje: mantiene el GPS y avisa de solicitudes con la app minimizada.
     val hasActiveRide = activeRideRequest != null
-    LaunchedEffect(isSearching, hasActiveRide) {
+    LaunchedEffect(isSearching, hasActiveRide, hasLocationPermission) {
         headerVisible = true
         onBottomBarVisibilityChanged(!isSearching && !hasActiveRide)
         if (isSearching || hasActiveRide) {
@@ -510,36 +502,15 @@ fun DriverHomeScreen(
         }
     }
 
-    val locationPermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        hasLocationPermission =
-            (permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true) ||
-            (permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true)
-    }
-
-    // Android 13+: sin este permiso no se ven los avisos de solicitudes con la app minimizada
-    val notificationPermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (!granted) {
-            Toast.makeText(context, "Sin notificaciones no verás solicitudes con la app minimizada", Toast.LENGTH_LONG).show()
-        }
-    }
-    fun askNotificationPermissionIfNeeded() {
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
-            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        ) {
-            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-        }
-    }
-
     fun goOnline() {
+        if (testLocation == null && permissions != null) {
+            if (!hasLocationPermission) { permissions.requestLocation {}; return }
+            if (!permissions.locationEnabled) { permissions.enableLocation(); return }
+        }
         scope.launch {
             try {
                 currentLocation?.let { location ->
                     driverAvailabilityRepository.createAvailableDriver(location)
-                    askNotificationPermissionIfNeeded()
                     isSearching = true
                     onBottomBarVisibilityChanged(false)
                     val pausedUntil = runCatching { com.intu.taxi.repositories.CancellationRepository().driverStanding() }
@@ -577,14 +548,6 @@ fun DriverHomeScreen(
         LaunchedEffect(mapView, mapStyle) {
             mapView.mapboxMap.loadStyleUri(mapStyle) {
                 val view = mapView
-                if (!isStyleLoaded && !hasLocationPermission) {
-                    locationPermissionLauncher.launch(
-                        arrayOf(
-                            Manifest.permission.ACCESS_FINE_LOCATION,
-                            Manifest.permission.ACCESS_COARSE_LOCATION
-                        )
-                    )
-                }
                 // Habilitar puck si hay permiso y personalizar icono de geolocalización
                 view.location.updateSettings {
                     locationPuck = LocationPuck2D(
@@ -834,7 +797,10 @@ fun DriverHomeScreen(
                     .fillMaxWidth()
                     .padding(top = padding.calculateTopPadding() + 12.dp, start = 16.dp, end = 16.dp)
             ) {
-                if (isSearching) DriverOnlineBar(onRest = ::goOffline) else DriverTodayCard(todayEarnings)
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (isSearching) DriverOnlineBar(onRest = ::goOffline) else DriverTodayCard(todayEarnings)
+                    if (permissions != null && testLocation == null) LocationAccessNotice(permissions)
+                }
             }
             Box(
                 modifier = Modifier

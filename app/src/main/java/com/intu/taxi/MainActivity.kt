@@ -16,6 +16,7 @@ import com.intu.taxi.location.AdminLocationSimulation
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -145,7 +146,6 @@ fun IntuApp(
     // Visibilidad específica de Home, controlada por HomeScreen (pin/ruta)
     var homeBarVisible by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(true) }
     var isDriverMode by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
-    var notificationPermissionAsked by rememberSaveable { mutableStateOf(false) }
     var showTerms by rememberSaveable { mutableStateOf(false) }
     if (showTerms) com.intu.taxi.ui.screens.TermsDialog(onDismiss = { showTerms = false })
     val auth = FirebaseAuth.getInstance()
@@ -232,6 +232,10 @@ fun IntuApp(
 
     // Cuenta con sesión; cambia al cerrar sesión, al entrar con otra cuenta o si un admin la elimina
     var currentUid by androidx.compose.runtime.remember { mutableStateOf(auth.currentUser?.uid) }
+    val permissions = com.intu.taxi.permissions.rememberAppPermissions(
+        autoRequest = currentUid != null && currentRoute == NavItem.Home.route && !showTerms,
+        needsLocation = testLocation == null,
+    )
     var testerInboxUid by remember { mutableStateOf<String?>(null) }
     if (testerInboxUid != null && testerInboxUid == currentUid && !showTerms) {
         com.intu.taxi.ui.screens.AdminTestersDialog(onDismiss = { testerInboxUid = null })
@@ -304,6 +308,7 @@ fun IntuApp(
         }
     }
 
+    CompositionLocalProvider(com.intu.taxi.permissions.LocalAppPermissions provides permissions) {
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
@@ -566,31 +571,10 @@ fun IntuApp(
                     bottomBarVisible = true
                     homeBarVisible = true
                 }
-                // Avisos push del viaje: registra este teléfono y, en Android 13+, pide permiso una vez
-                val homeContext = LocalContext.current
-                val notificationPermission = androidx.activity.compose.rememberLauncherForActivityResult(
-                    androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
-                ) { granted ->
-                    if (!granted) {
-                        android.widget.Toast.makeText(
-                            homeContext,
-                            "Sin notificaciones no sabrás cuándo llega tu conductor con la app minimizada",
-                            android.widget.Toast.LENGTH_LONG
-                        ).show()
-                    }
-                }
+                // Token registration must never delay or overlap the activity's permission queue.
                 LaunchedEffect(currentUid) {
                     if (currentUid == null) return@LaunchedEffect
                     runCatching { com.intu.taxi.push.PushNotifications.registerToken() }
-                    if (!notificationPermissionAsked &&
-                        android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
-                        androidx.core.content.ContextCompat.checkSelfPermission(
-                            homeContext, android.Manifest.permission.POST_NOTIFICATIONS
-                        ) != android.content.pm.PackageManager.PERMISSION_GRANTED
-                    ) {
-                        notificationPermissionAsked = true
-                        notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
-                    }
                 }
                 if (isDriverMode) {
                     DriverHomeScreen(
@@ -682,5 +666,6 @@ fun IntuApp(
                 )
             }
         }
+    }
     }
 }
