@@ -9,6 +9,11 @@ TESTER_PLAY_URL = "https://play.google.com/apps/testing/com.intu.taxi"
 TESTER_ACCESS_READY = "true"
 # Enable only after the closed track is actually available to group members.
 TESTER_PLAY_READY = "false"
+# Guía «Descubre Satipo»: adónde va «Ir con Intu» si la app no está instalada.
+# Cambiar a https://play.google.com/store/apps/details?id=com.intu.taxi cuando Intu esté en producción en Play.
+GUIDE_INSTALL_URL = "https://viajaconintu.pages.dev/#instalar"
+# "false" cierra el formulario /comercios sin desplegar código.
+GUIDE_FORM_READY = "true"
 
 # El APK vive en R2 (Pages no acepta archivos de más de 25 MB); /descargar lo entrega
 [[r2_buckets]]

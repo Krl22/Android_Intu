@@ -29,6 +29,9 @@ data class AdminActivityMessage(
     companion object {
         fun isTesterEvent(eventId: String?): Boolean = eventId != null &&
             Regex("^tester:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$").matches(eventId)
+        /** Comercio nuevo desde el formulario de la guía web (eventId «guide:<uuid>»). */
+        fun isGuideEvent(eventId: String?): Boolean = eventId != null &&
+            Regex("^guide:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$").matches(eventId)
         fun parse(data: Map<String, String>): AdminActivityMessage? {
             if (data["kind"] != "admin_activity") return null
             val type = AdminActivityType.fromKey(data["eventType"]) ?: return null

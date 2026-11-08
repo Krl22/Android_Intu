@@ -256,6 +256,11 @@
       .pin { right: 12px; bottom: 12px; }
     }
     /* Zonas: Satipo y Río Negro */
+    .discover { margin-top: 18px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px;
+      padding: 24px; border-radius: var(--radius); background: var(--gold-soft); border: 1px solid #F4DFA8; }
+    .discover p { color: var(--muted); max-width: 520px; margin-top: 4px; }
+    .discover-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; font-weight: 600; }
+    .discover-actions a:not(.btn) { color: var(--teal-dark); }
     .zones { display: grid; gap: 18px; }
     .zone { position: relative; margin: 0; border-radius: var(--radius); overflow: hidden; background: var(--indigo); aspect-ratio: 3 / 2; }
     .zone img { width: 100%; height: 100%; object-fit: cover; transition: transform 1.2s cubic-bezier(.2, .8, .2, 1); }
@@ -389,6 +394,7 @@
         <a href="#como-funciona">Cómo funciona</a>
         <a href="#conductores">Conductores</a>
         <a href="#zonas">Zonas</a>
+        <a href="/descubre">Descubre Satipo</a>
         <a href="#instalar">Instalar</a>
         <button class="btn btn-sm" type="button" data-testers>Descargar</button>
       </nav>
@@ -501,6 +507,16 @@
             <img src="/img/zona-rionegro-1200.webp" srcset="/img/zona-rionegro-600.webp 600w, /img/zona-rionegro-1200.webp 1200w" sizes="(min-width: 720px) 46vw, 100vw" width="1200" height="800" loading="lazy" alt="Avenida principal de Río Negro con palmeras, la plaza y mototaxis circulando">
             <figcaption><h3>Río Negro</h3><p>La avenida principal, la plaza y sus alrededores.</p></figcaption>
           </figure>
+        </div>
+        <div class="discover reveal">
+          <div>
+            <h3>Descubre Satipo</h3>
+            <p>Hospedajes, comida y paseos de la zona. Elige un lugar y llega en mototaxi con Intu.</p>
+          </div>
+          <div class="discover-actions">
+            <a class="btn btn-play" href="/descubre">Ver la guía</a>
+            <a href="/comercios">¿Tienes un negocio? Aparece aquí</a>
+          </div>
         </div>
       </div>
     </section>

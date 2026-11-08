@@ -87,6 +87,21 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- «Ir con Intu» desde la guía web: intu://destino?lat=…&lng=…&nombre=… -->
+        <activity
+            android:name=".guide.GuideLinkActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="intu" android:host="destino" />
+            </intent-filter>
+        </activity>
     </application>
 
 </manifest>

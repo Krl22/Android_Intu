@@ -6,6 +6,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -35,6 +36,7 @@ internal fun CommercialHome(
     onBusiness: (com.intu.taxi.models.BusinessAd) -> Unit = {},
     autoAdvanceAds: Boolean = true,
     locationNotice: @Composable () -> Unit = {},
+    onDiscover: () -> Unit = {},
 ) {
     val colors = MaterialTheme.colorScheme
     // Search stays mounted over the map so moving the header preserves focus and typing.
@@ -79,7 +81,28 @@ internal fun CommercialHome(
                     HomeServiceCard(MotoOption.ANY, "Viajar", "En mototaxi", onTravel, Modifier.weight(1f))
                     HomeServiceCard(MotoOption.DELIVERY, "Enviar", "Paquetes pequeños", onDelivery, Modifier.weight(1f))
                 }
+                DiscoverSatipoCard(onDiscover)
             }
+        }
+    }
+}
+
+/** Acceso a la guía web «Descubre Satipo»; desde ahí «Ir con Intu» vuelve a la app con el destino. */
+@Composable
+private fun DiscoverSatipoCard(onClick: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    Card(onClick = onClick, modifier = Modifier.fillMaxWidth().testTag("home-discover-satipo")
+            .intuCardBackground(emphasized = false),
+        shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = Color.Transparent)) {
+        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Icon(Icons.Outlined.Explore, contentDescription = null, tint = colors.primary, modifier = Modifier.size(32.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("Descubre Satipo", color = colors.onSurface, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("Hospedajes, comida y paseos. Elige un lugar y llega con Intu.",
+                    color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            }
+            Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, tint = colors.primary)
         }
     }
 }

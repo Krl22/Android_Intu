@@ -204,6 +204,7 @@ import com.intu.taxi.ui.map.TripMap
 import com.intu.taxi.ui.map.TripRoute
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.distinctUntilChanged
 import com.mapbox.maps.CoordinateBounds
 import com.google.firebase.auth.FirebaseAuth
@@ -223,7 +224,9 @@ fun HomeScreen(
     locationProvider: com.mapbox.maps.plugin.locationcomponent.LocationProvider? = null,
     businessFeedLoader: (suspend () -> com.intu.taxi.models.BusinessFeed)? = null,
     fareSettingsLoader: (suspend () -> com.intu.taxi.models.FareSettings)? = null,
-    onBottomBarVisibilityChanged: (Boolean) -> Unit = {}
+    onBottomBarVisibilityChanged: (Boolean) -> Unit = {},
+    externalDestination: com.intu.taxi.guide.GuideDestination? = null,
+    onExternalDestinationConsumed: () -> Unit = {},
 ) {
     val mapboxToken = stringResource(id = com.intu.taxi.R.string.mapbox_access_token)
     val context = LocalContext.current
@@ -375,15 +378,18 @@ fun HomeScreen(
             .substringBefore(' ')
     }
 
+    var activeRideChecked by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return@LaunchedEffect
-        runCatching { activeRideRepository.findOpenRideForRider(uid) }
-            .getOrNull()?.let { ride ->
-                currentRideRequestId = ride.rideId
-                isDelivery = ride.isDelivery
-                isSearchingDriver = ride.status == "searching"
-                activeRide = if (ride.status == "searching") null else ride
-            }
+        try {
+            runCatching { activeRideRepository.findOpenRideForRider(uid) }
+                .getOrNull()?.let { ride ->
+                    currentRideRequestId = ride.rideId
+                    isDelivery = ride.isDelivery
+                    isSearchingDriver = ride.status == "searching"
+                    activeRide = if (ride.status == "searching") null else ride
+                }
+        } finally { activeRideChecked = true }
     }
 
     // Viajes programados: el servidor crea la solicitud unos minutos antes. Con la app abierta se
@@ -501,6 +507,30 @@ fun HomeScreen(
         showPickupPicker = false
         isCalculatingDestinationRoute = true
         pendingDestination = destination
+    }
+
+    // Destino elegido en la guía web «Descubre Satipo»: abre el planificador como si el pasajero lo
+    // hubiera buscado. Nunca reemplaza un servicio en curso y siempre pide confirmar el viaje.
+    LaunchedEffect(externalDestination, activeRideChecked) {
+        val target = externalDestination ?: return@LaunchedEffect
+        if (!activeRideChecked) return@LaunchedEffect
+        if (activeRide != null || currentRideRequestId != null || isCreatingRideRequest || isSearchingDriver) {
+            Toast.makeText(context, "Ya tienes un servicio en curso. Pide tu viaje a ${target.name} cuando termine.",
+                Toast.LENGTH_LONG).show()
+            onExternalDestinationConsumed()
+            return@LaunchedEffect
+        }
+        // Unos segundos para el GPS, así el recojo queda en «Mi ubicación».
+        if (userLocation == null) kotlinx.coroutines.withTimeoutOrNull(5_000) {
+            androidx.compose.runtime.snapshotFlow { userLocation }.first { it != null }
+        }
+        openPlanner()
+        val point = Point.fromLngLat(target.longitude, target.latitude)
+        selectedDestination = point
+        searchQuery = target.name
+        if (pickupLocation != null && hasPlannedPickup) confirmDestination(point)
+        else { planningField = PlanningField.PICKUP; errorMessage = "Elige primero el punto de recojo." }
+        onExternalDestinationConsumed()
     }
 
     LaunchedEffect(pendingDestination, pickupLocation, userLocation != null) {
@@ -1287,6 +1317,13 @@ fun HomeScreen(
                 },
                 onTravel = { openPlanner() },
                 onDelivery = { openPlanner(delivery = true) },
+                onDiscover = {
+                    val opened = runCatching {
+                        context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
+                            android.net.Uri.parse(com.intu.taxi.guide.GuideDestination.GUIDE_URL)))
+                    }.isSuccess
+                    if (!opened) Toast.makeText(context, "No encontramos un navegador para abrir la guía.", Toast.LENGTH_LONG).show()
+                },
                 searchContent = {
                     HeaderSearchBar(
                         value = searchQuery,

@@ -72,6 +72,23 @@ tipo `bug_report` de la función push ya desplegada, sin incluir el correo en el
 
 Pruebas del endpoint: `node --test web/test/testers.test.mjs`.
 
+## Guía «Descubre Satipo»
+
+- `/comercios`: formulario para negocios. `functions/api/comercios.js` valida y envía a `submit_guide_business`
+  con la misma clave `TESTER_GATEWAY_KEY` (y el mismo límite por resumen de IP, nunca la IP). `GUIDE_FORM_READY = "false"`
+  cierra el formulario sin desplegar código.
+- `/descubre`: guía pública. `functions/api/guia.js` lee `guide_listings()`, que solo devuelve comercios **publicados**
+  y nunca el nombre de contacto, el correo ni la nota interna. El celular aparece solo si el comercio lo autorizó.
+- «Ir con Intu» (Android): `intent://destino?lat=…&lng=…&nombre=…#Intent;scheme=intu;package=com.intu.taxi;…`.
+  Si Intu está instalada (1.41 o superior), abre el planificador con ese destino; si no, el navegador va a `GUIDE_INSTALL_URL`.
+  Hoy apunta a `/#instalar` porque la ficha pública de Play aún no existe; al salir a producción, cambiarla a
+  `https://play.google.com/store/apps/details?id=com.intu.taxi`. En iPhone/computadora el botón abre Google Maps.
+- Administración: app → Admin → **Guía**. Muestra cada registro con contacto (WhatsApp, llamar), permite editar,
+  fijar la ubicación (pegando la de Google Maps o con el GPS estando en el negocio), publicar, destacar, archivar
+  o eliminar los datos. Publicar exige ubicación. Cada registro nuevo envía un aviso a los administradores.
+- Base de datos: `supabase/migrations/20261108150000_guide_businesses.sql`; prueba con rollback en
+  `supabase/tests/guide_businesses.sql`. Pruebas del endpoint: `node --test web/test/comercios.test.mjs`.
+
 ## Dominio propio
 
 Cuando compres `viajaconintu.com`: Cloudflare → Workers & Pages → viajaconintu → Custom domains.

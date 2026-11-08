@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Descubre Satipo · Guía de Intu</title>
+  <meta name="description" content="Hospedajes, restaurantes, paseos y tiendas de Satipo y Río Negro. Elige a dónde ir y llega en mototaxi con Intu.">
+  <meta property="og:title" content="Descubre Satipo">
+  <meta property="og:description" content="La guía de Intu: dónde dormir, comer y pasear en Satipo, y cómo llegar en mototaxi.">
+  <meta property="og:image" content="https://viajaconintu.pages.dev/og.jpg">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/guia.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="wrap">
+      <a class="brand" href="/"><img src="/favicon.svg" alt="" width="32" height="32">intu</a>
+      <nav aria-label="Secciones">
+        <a href="/descubre" aria-current="page">Descubre Satipo</a>
+        <a href="/comercios">Para negocios</a>
+        <a class="hide-sm" href="/">Inicio</a>
+      </nav>
+    </div>
+  </header>
+  <section class="hero">
+    <img src="/img/portada-satipo-1100.webp" srcset="/img/portada-satipo-640.webp 640w, /img/portada-satipo-1100.webp 1100w" sizes="100vw" alt="">
+    <div class="wrap">
+      <span class="eyebrow">Satipo · Río Negro</span>
+      <h1>Descubre Satipo</h1>
+      <p>Dónde dormir, comer y pasear en la selva central. Elige un lugar y llega en mototaxi con Intu.</p>
+    </div>
+  </section>
+  <main class="wrap">
+    <div class="section toolbar">
+      <input id="search" class="search" type="search" placeholder="Buscar hospedaje, comida, paseos…" aria-label="Buscar en la guía" autocomplete="off">
+      <div id="chips" class="chips" role="group" aria-label="Filtrar por tipo"></div>
+    </div>
+    <p id="status" class="section muted" role="status">Cargando la guía…</p>
+    <div id="grid" class="grid"></div>
+    <div class="cta-band">
+      <div><h2>¿Tienes un negocio en Satipo?</h2><p>Aparece en la guía y recibe clientes que llegan en mototaxi.</p></div>
+      <a class="btn btn-light" href="/comercios">Registrar mi negocio</a>
+    </div>
+  </main>
+  <footer>
+    <div class="wrap"><span>© 2026 Intu · Satipo</span><span><a href="/privacidad">Privacidad</a> · <a href="/">Descargar Intu</a></span></div>
+  </footer>
+  <template id="card-template">
+    <article class="card">
+      <div class="card-top"><span class="tag" data-category></span><span class="tag gold" data-featured hidden>Destacado</span></div>
+      <h3 data-name></h3>
+      <p data-description></p>
+      <p class="place" data-place></p>
+      <div class="actions">
+        <a class="btn btn-small" data-go>Ir con Intu</a>
+        <a class="btn btn-ghost btn-small" data-whatsapp target="_blank" rel="noopener noreferrer" hidden>WhatsApp</a>
+        <a class="btn btn-ghost btn-small" data-social target="_blank" rel="noopener noreferrer nofollow" hidden>Redes</a>
+      </div>
+    </article>
+  </template>
+  <script src="/descubre.js" defer></script>
+</body>
+</html>

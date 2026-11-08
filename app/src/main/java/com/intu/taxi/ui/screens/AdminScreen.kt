@@ -145,7 +145,8 @@ fun AdminScreen(
                 6 -> AdminBusinesses(reloadKey)
                 7 -> AdminSupportChatTab(reloadKey)
                 8 -> AdminFareSettings(reloadKey)
-                else -> AdminTestersTab(reloadKey)
+                9 -> AdminTestersTab(reloadKey)
+                else -> AdminGuideTab(reloadKey)
             }
         }
     }

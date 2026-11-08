@@ -61,8 +61,17 @@ class MainActivity : ComponentActivity() {
     private var adminNotificationEvent by mutableStateOf<String?>(null)
     private var updateNotificationRequested by mutableStateOf(false)
     private var serviceReportNotification by mutableStateOf<com.intu.taxi.push.ServiceReportNotification?>(null)
+    private var guideDestination by mutableStateOf<com.intu.taxi.guide.GuideDestination?>(null)
 
     private fun readNotificationIntent(intent: android.content.Intent?) {
+        // Destino elegido en la guía web (entregado por GuideLinkActivity); se valida otra vez.
+        if (intent?.hasExtra(com.intu.taxi.guide.GuideDestination.EXTRA_LATITUDE) == true) {
+            com.intu.taxi.guide.GuideDestination.fromValues(
+                intent.getDoubleExtra(com.intu.taxi.guide.GuideDestination.EXTRA_LATITUDE, Double.NaN),
+                intent.getDoubleExtra(com.intu.taxi.guide.GuideDestination.EXTRA_LONGITUDE, Double.NaN),
+                intent.getStringExtra(com.intu.taxi.guide.GuideDestination.EXTRA_NAME),
+            )?.let { guideDestination = it }
+        }
         com.intu.taxi.push.ServiceReportNotification.parse(mapOf(
             "status" to intent?.getStringExtra("status").orEmpty(), "rideId" to intent?.getStringExtra("rideId").orEmpty()))
             ?.let { serviceReportNotification = it }
@@ -123,6 +132,13 @@ class MainActivity : ComponentActivity() {
                         updateNotificationRequested = false
                         intent?.removeExtra(com.intu.taxi.updates.AppUpdateNotifications.OPEN_UPDATE_EXTRA)
                     },
+                    guideDestination = guideDestination,
+                    onGuideDestinationConsumed = {
+                        guideDestination = null
+                        intent?.removeExtra(com.intu.taxi.guide.GuideDestination.EXTRA_LATITUDE)
+                        intent?.removeExtra(com.intu.taxi.guide.GuideDestination.EXTRA_LONGITUDE)
+                        intent?.removeExtra(com.intu.taxi.guide.GuideDestination.EXTRA_NAME)
+                    },
                 )
             }
         }
@@ -138,6 +154,8 @@ fun IntuApp(
     onAdminNotificationConsumed: () -> Unit = {},
     updateNotificationRequested: Boolean = false,
     onUpdateNotificationConsumed: () -> Unit = {},
+    guideDestination: com.intu.taxi.guide.GuideDestination? = null,
+    onGuideDestinationConsumed: () -> Unit = {},
 ) {
     val activity = checkNotNull(LocalActivity.current)
     val navController = rememberNavController()
@@ -240,6 +258,10 @@ fun IntuApp(
     if (testerInboxUid != null && testerInboxUid == currentUid && !showTerms) {
         com.intu.taxi.ui.screens.AdminTestersDialog(onDismiss = { testerInboxUid = null })
     }
+    var guideInboxUid by remember { mutableStateOf<String?>(null) }
+    if (guideInboxUid != null && guideInboxUid == currentUid && !showTerms) {
+        com.intu.taxi.ui.screens.AdminGuideDialog(onDismiss = { guideInboxUid = null })
+    }
     if (currentUid != null && !showTerms && serviceReportNotification != null) {
         com.intu.taxi.ui.screens.ServiceReportsDialog(admin = serviceReportNotification.admin,
             onDismiss = onServiceReportNotificationConsumed)
@@ -270,6 +292,7 @@ fun IntuApp(
         val allowed = runCatching { com.intu.taxi.repositories.AdminRepository().isAdmin() }.getOrDefault(false)
         if (allowed && auth.currentUser?.uid == target) {
             if (com.intu.taxi.push.AdminActivityMessage.isTesterEvent(adminNotificationEvent)) testerInboxUid = target
+            else if (com.intu.taxi.push.AdminActivityMessage.isGuideEvent(adminNotificationEvent)) guideInboxUid = target
             else navController.navigate("admin") { launchSingleTop = true }
         }
         onAdminNotificationConsumed()
@@ -296,6 +319,7 @@ fun IntuApp(
     }
 
     // Cargar el modo conductor de la cuenta con sesión
+    var driverModeLoadedUid by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(currentUid) {
         val uid = currentUid
         if (uid != null) {
@@ -304,6 +328,26 @@ fun IntuApp(
             } catch (e: Exception) {
                 // Si hay error, mantener el estado por defecto (false)
                 isDriverMode = false
+            }
+            driverModeLoadedUid = uid
+        }
+    }
+
+    // «Ir con Intu» desde la guía web: espera la sesión y el modo de la cuenta, y lleva al Inicio
+    // del pasajero, que abre el planificador con ese destino.
+    val guideReady = guideDestination != null && currentUid != null && driverModeLoadedUid == currentUid && !showTerms &&
+        currentRoute in setOf(NavItem.Home.route, NavItem.Trips.route, NavItem.Account.route, "admin")
+    LaunchedEffect(guideReady, isDriverMode, currentRoute) {
+        val destination = guideDestination
+        if (!guideReady || destination == null) return@LaunchedEffect
+        if (isDriverMode) {
+            android.widget.Toast.makeText(updateContext,
+                "Para ir a ${destination.name}, cambia a modo pasajero en Cuenta.", android.widget.Toast.LENGTH_LONG).show()
+            onGuideDestinationConsumed()
+        } else if (currentRoute != NavItem.Home.route) {
+            navController.navigate(NavItem.Home.route) {
+                popUpTo(navController.graph.startDestinationId) { saveState = true }
+                launchSingleTop = true
             }
         }
     }
@@ -584,7 +628,9 @@ fun IntuApp(
                 } else {
                     HomeScreen(
                         padding = innerPadding,
-                        onBottomBarVisibilityChanged = { visible -> homeBarVisible = visible }
+                        onBottomBarVisibilityChanged = { visible -> homeBarVisible = visible },
+                        externalDestination = guideDestination.takeIf { guideReady },
+                        onExternalDestinationConsumed = onGuideDestinationConsumed,
                     )
                 }
             }
