@@ -1,0 +1,35 @@
+name: Web (viajaconintu.pages.dev)
+
+# Publica la página de descarga en Cloudflare Pages cada vez que cambia algo en web/ en main.
+# El proyecto de Pages se creó con subida directa, así que no admite la integración Git de Cloudflare:
+# este workflow hace lo mismo que `npx wrangler pages deploy --branch main` desde web/.
+# Necesita el secreto CLOUDFLARE_API_TOKEN (token de cuenta con permiso "Cloudflare Pages: Edit").
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "web/**"
+      - ".github/workflows/web-deploy.yml"
+
+concurrency:
+  group: web-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Tests de las funciones
+        run: node --test web/test/*.test.mjs scripts/app-updates.test.cjs
+      - name: Publicar en Cloudflare Pages
+        working-directory: web
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 96053b37700320add3d30ae82f228873
+        run: npx --yes wrangler@4 pages deploy --branch main --commit-hash "$GITHUB_SHA" --commit-message "$(git log -1 --format=%s)"

@@ -29,6 +29,13 @@ Para la distribución de QA, usa `app/build/outputs/apk/debug/app-debug.apk` con
 
 ## Publicar la página
 
+**Automático:** cada push a `main` que cambie algo en `web/` corre los tests y publica la página con el workflow
+`.github/workflows/web-deploy.yml` (GitHub Actions → `wrangler pages deploy --branch main`). Usa el secreto
+`CLOUDFLARE_API_TOKEN` del repositorio (token de cuenta con permiso «Cloudflare Pages: Edit»). También se puede
+lanzar a mano desde la pestaña Actions de GitHub. El APK no pasa por aquí: sigue subiéndose a R2 con `publish-apk.ps1`.
+
+A mano, desde esta PC:
+
 ```powershell
 npx.cmd wrangler pages deploy --branch main
 ```
